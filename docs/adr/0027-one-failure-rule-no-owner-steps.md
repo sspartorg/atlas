@@ -1,7 +1,7 @@
 # 0027. One Failure Rule, No Owner Steps in Templates
 
 **Date:** 2026-10-08
-**Status:** Accepted
+**Status:** Accepted — the "Check" label and "the user types no command" half superseded by [ADR 0028](0028-script-steps-no-ai-checks.md)
 
 ## Context
 

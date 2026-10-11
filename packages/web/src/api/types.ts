@@ -341,13 +341,15 @@ export interface GateResultRow {
     node_id: string | null;
     repo_id: string | null;
     repo_name: string | null;
-    /** The checker agent for a gate node, or `pre-push`. */
+    /** The Script step's node id. */
     script_id: string;
-    /** ADR 0024 — what Atlas actually ran. Null on rows from before migration 020. */
+    /** What Atlas actually ran. */
     command: string | null;
     verdict: 'pass' | 'fail' | 'skipped' | 'unavailable' | 'needs_review';
     exit_code: number | null;
     output_tail: string | null;
+    /** Where the full output was written, under `.atlas/checks/`. */
+    log_path: string | null;
     created_at: string;
 }
 

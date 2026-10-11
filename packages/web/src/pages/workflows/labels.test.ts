@@ -128,23 +128,22 @@ describe('subtasksLabel', () => {
 });
 
 describe('graphAgentIds', () => {
-    it('collects agent ids from agent and gate nodes', () => {
+    it('collects agent ids from agent nodes only', () => {
         const graph: IWorkflowGraph = {
             nodes: [
                 { id: 'start', type: 'start', position: { x: 0, y: 0 } },
                 { id: 'a', type: 'agent', agent_id: 'agent-coder', position: { x: 0, y: 1 } },
                 // An agent node the Owner hasn't picked an agent for yet.
                 { id: 'b', type: 'agent', position: { x: 0, y: 2 } },
-                // ADR 0024 — a gate names its checker, and a workflow whose
-                // checker is not installed cannot run its checks.
-                { id: 'g', type: 'gate', agent_id: 'agent-tests-check', position: { x: 0, y: 3 } },
+                // A Script step names no agent: its command is typed, not picked.
+                { id: 'g', type: 'script', command: 'npm run build', position: { x: 0, y: 3 } },
                 // Invalid, but graphs are user data: a node type that cannot
                 // carry an agent_id must not contribute an install.
                 { id: 'c', type: 'owner', agent_id: 'agent-ghost', position: { x: 0, y: 4 } },
             ],
             edges: [],
         };
-        expect(graphAgentIds(graph)).toEqual(['agent-coder', 'agent-tests-check']);
+        expect(graphAgentIds(graph)).toEqual(['agent-coder']);
     });
 });
 

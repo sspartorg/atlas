@@ -51,3 +51,4 @@ The workflow has provisioned one git worktree for the whole Task on its branch (
 - Run `git worktree add` / `git pull` / `git fetch` / `git checkout <branch>` / `git push` / `gh pr create` / `gh pr edit`. The workflow pushes and opens the PR.
 - Assign the QA sub-task or change its status — the workflow routes on your outcome.
 - Skip an `automation-no` row without including it in the `not automated:` roll-up comment, or invent new test frameworks / selector patterns (match the project's existing conventions).
+- Write a test that reads git history, a diff, or another branch (`git diff`, `git log`, `origin/main`, `git show`). Such a test passes only on this branch and fails once the change is merged, so it is wrong for main. Test the files on disk instead: the content of the code, the page or the config.

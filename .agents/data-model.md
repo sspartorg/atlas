@@ -166,12 +166,12 @@ Fields: `id, name, issue_key_prefix, description, status, guardrails_md, default
 - A project with **no** repos is a normal state (its last repo was removed, or it was created before one was added): it can hold Tasks but cannot queue them.
 
 ### IProjectRepo (ADR 0017, migrations 043 + 045)
-A git repo of a project. Fields: `id, project_id, name, git_url, git_path, credential_id, default_branch, clone_status, setup_sh_body, setup_ps1_body, verify_command`.
+A git repo of a project. Fields: `id, project_id, name, git_url, git_path, credential_id, default_branch, clone_status, setup_sh_body, setup_ps1_body`. (`verify_command` was dropped by migration 006, ADR 0028.)
 - Every repo is an ordinary `project_repos` row; **there is no primary**. A repo that predates ADR 0018 carries its project's id, which is what kept its worktrees, git-lock key and Jira sources valid through migration 045.
 - `name` is a slug unique within the project and is the repo's folder name in a multi-repo workspace. Each repo has its own credential, default branch, clone status, setup scripts and auto-fetch schedule.
 - **Order matters**: `position, created_at`. The *first* repo of a Task holds Task-wide files, hosts the multi-repo workspace folder, and lends its credential to the agents as `GH_TOKEN`.
 - `clone_status` âˆˆ `pending | cloning | ready | error`
-- `verify_command` (migration 020, ADR 0024) — what Atlas runs in this checkout before pushing it, and believes the exit code of. Owner-set in the project's Setup tab, or written back by `agent-tests-check` the first time it names one (`WHERE verify_command = ''`, so an Owner value is never overwritten). Empty is not "skip": the run parks rather than pushing unverified, because Atlas does not guess a stack's test command.
+- Verification is no longer a per-repo field. It is the workflow's **Script** steps (`graph` nodes of type `script` with a typed `command`, ADR 0028). Migration 006 dropped `project_repos.verify_command` and rewrote every saved `gate` node (in `workflows.graph` and `workflow_runs.graph_snapshot`) to an empty `script` step.
 
 ### ITask (ADR 0015)
 **Why this entity exists**: The Task is the unit the Owner schedules and verifies. One Task = one workflow run = one branch = one PR (or one push to the default branch): its workflow does everything the Task needs, including creating and working its sub-tasks, and the Owner verifies the one result. It replaced the epic (migration 037).
@@ -445,12 +445,12 @@ Table `workflow_run_events`: `id, workflow_run_id (FK → workflow_runs, ON DELE
 ### Gate result (migration 011)
 **Why this entity exists**: ADR 0020 moved the test-suite verdict from the agent's own `atlas-outcome` checklist to Atlas's exit code, but the answer was never stored. `deliver()` turns a failure into prose in `workflow_runs.park_reason` and a pass into a line in the delivery log, so the one quality signal an agent cannot author about itself — a machine check going red AFTER that agent reported `done` — could not be queried. The agent scorecard (`evals/`, `src/scripts/eval-score.ts`) reads this table for its `gate_catch` metric.
 
-Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), node_id, repo_id, script_id, command (migration 020, nullable), verdict, exit_code, output_tail, created_at`. Since ADR 0024 `script_id` holds the **checker agent's id** for a gate node, or the literal `pre-push` for the ADR-0020 delivery gate — a key stable across projects, which is what the scorecard groups on — and `command` holds what Atlas actually ran. `command` is also the memo: the newest row for a `(workflow_run_id, node_id)` carrying one is what a fixer loop-back re-runs, so the repair loop costs no second checker dispatch and the audit trail *is* the cache.
+Table `run_gate_results`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), node_id, repo_id, script_id, command, verdict, exit_code, output_tail, log_path (migration 006, nullable), created_at`. Since ADR 0028 `script_id` holds the **Script step's node id** (the name is kept from the checker era); the ADR-0020 pre-push gate is gone.
 
 - `verdict` ∈ `pass | fail | unavailable | needs_review`. `unavailable` carries ADR 0020's rule that "could not run" is absence of evidence, never a red suite. `needs_review` is for a check that produced output but has no baseline to compare against.
-- `node_id` is **null** for the pre-push verification gate — it runs inside `deliver()` and belongs to the run, not to any node. It is set when a graph step ran the script.
+- `node_id` is the Script step that ran. It is null only for a run-level check with no step.
 - `repo_id` is **null** for a workspace-wide script; ADR 0017 runs the gate per repo, so it is normally set.
-- `output_tail` is the same 4000-char tail `verification-gate.ts` already clips and secret-redacts. The full output stays in the run log.
+- `output_tail` is the 4000-char tail `verification-gate.ts` clips and secret-redacts. `log_path` points at the **whole** redacted output, written under `.atlas/checks/` (ADR 0028), which is what a fixer reads.
 - Writes are **best-effort** (`services/run-gate-results.ts`): a gate verdict is evidence about the run, not part of it, so a failed audit write must never turn a green gate into a parked run.
 
 ### `items_live` (migration 016, filter dropped by 002)

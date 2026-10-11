@@ -64,7 +64,7 @@ describe('WorkflowInspector', () => {
             ['agent', 'Agent step'],
             ['owner', 'Owner'],
             ['subtasks', 'Sub-tasks step'],
-            ['gate', 'Check step'],
+            ['script', 'Script step'],
             ['end', 'End'],
         ];
         for (const [type, title] of titles) {
@@ -89,34 +89,38 @@ describe('WorkflowInspector', () => {
         expect(screen.getByText(/comes back to you as Waiting for info/)).toBeInTheDocument();
     });
 
-    // ─── Gate step ──────────────────────────────────────────────────────────
+    // ─── Script step ────────────────────────────────────────────────────────
 
-    it('explains that the checker names the command and Atlas runs it', () => {
-        mount({
-            node: node('gate', { agent_id: 'agent-tests-check' }),
-            agents: [makeAgent({ id: 'agent-tests-check', name: 'Tests Check' })],
-        });
-        expect(screen.getByText(/You don.t type a command/)).toBeInTheDocument();
-        expect(screen.getByText(/trusts the exit code/)).toBeInTheDocument();
-        // The honest half: a project with no such tooling is not a pass.
-        expect(screen.getByText(/marked skipped/)).toBeInTheDocument();
+    it('explains that the Owner types the command and Atlas runs it with no AI', () => {
+        mount({ node: node('script', { command: 'npm run build', label: 'Build' }) });
+        expect(screen.getByDisplayValue('npm run build')).toBeInTheDocument();
+        expect(screen.getByDisplayValue('Build')).toBeInTheDocument();
+        expect(screen.getByText(/Atlas runs it itself with no AI/)).toBeInTheDocument();
+        expect(screen.getByText(/Exit 0 takes the green pass/)).toBeInTheDocument();
     });
 
-    it('flags a gate pointing at a checker that is not installed', () => {
-        // At run time the step parks rather than failing — so it reads as a
-        // stuck workflow, not a typo. Say so here, where it can be fixed.
-        mount({
-            node: node('gate', { agent_id: 'agent-gone' }),
-            agents: [makeAgent({ id: 'agent-tests-check', name: 'Tests Check' })],
-        });
-        expect(screen.getByText(/isn't installed/)).toBeInTheDocument();
+    it('says a step with no command yet needs one', () => {
+        mount({ node: node('script', { command: '' }) });
+        expect(screen.getByText('Type the command this step runs, e.g. npm run build')).toBeInTheDocument();
     });
 
-    it('says what a gate does when no checker is picked yet', () => {
-        mount({ node: node('gate') });
-        expect(
-            screen.getByText('Reads the repo and picks the command this project already uses'),
-        ).toBeInTheDocument();
+    it('saves what is typed on the command, and clears the name when emptied', () => {
+        const onNodeData = vi.fn();
+        renderWithProviders(
+            <WorkflowInspector
+                workflow={makeWorkflow()}
+                node={node('script', { command: '', label: 'Build' })}
+                agents={[makeAgent()]}
+                projects={[makeProject()]}
+                workflows={[]}
+                onChange={vi.fn()}
+                onNodeData={onNodeData}
+            />,
+        );
+        fireEvent.change(screen.getByLabelText('Command'), { target: { value: 'npm test' } });
+        expect(onNodeData).toHaveBeenLastCalledWith({ command: 'npm test' });
+        fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } });
+        expect(onNodeData).toHaveBeenLastCalledWith({ label: undefined });
     });
 
     // ─── Agent step ─────────────────────────────────────────────────────────

@@ -131,7 +131,7 @@ async function create(): Promise<string> {
     // needs at least one repo to be created at all.
     if ((await projectReposService.list(projectId)).length === 0) {
         const path = await ensureSampleRepo(await workspaceRoot());
-        const repo = await projectReposService.insert({
+        await projectReposService.insert({
             project_id: projectId,
             name: SAMPLE_REPO_NAME,
             git_url: '',
@@ -139,7 +139,6 @@ async function create(): Promise<string> {
             credential_id: null,
             default_branch: 'main',
         });
-        await projectReposService.update(projectId, repo.id, { verify_command: 'npm test' });
     }
     return projectId;
 }

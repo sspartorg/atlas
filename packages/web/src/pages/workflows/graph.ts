@@ -33,6 +33,8 @@ export interface IWfNodeData extends Record<string, unknown> {
     agent_id?: string | undefined;
     sub_workflow_id?: string | undefined;
     label?: string | undefined;
+    /** Script steps only: the command Atlas runs. */
+    command?: string | undefined;
 }
 export type WfNode = Node<IWfNodeData, WorkflowNodeType>;
 /** `pathOptions` is a render-time lane assignment (see `routeEdges`); `toGraph` drops it. */
@@ -162,6 +164,7 @@ export function toFlow(graph: IWorkflowGraph): { nodes: WfNode[]; edges: WfEdge[
                 ...(n.agent_id ? { agent_id: n.agent_id } : {}),
                 ...(n.sub_workflow_id ? { sub_workflow_id: n.sub_workflow_id } : {}),
                 ...(n.label ? { label: n.label } : {}),
+                ...(n.command !== undefined ? { command: n.command } : {}),
             },
             deletable: n.type !== 'start',
         })),
@@ -178,6 +181,9 @@ export function toGraph(nodes: WfNode[], edges: WfEdge[]): IWorkflowGraph {
             ...(n.data.agent_id ? { agent_id: n.data.agent_id } : {}),
             ...(n.data.sub_workflow_id ? { sub_workflow_id: n.data.sub_workflow_id } : {}),
             ...(n.data.label?.trim() ? { label: n.data.label.trim() } : {}),
+            // An empty command is kept on a Script step: "not typed yet" is what
+            // the run page reads, and dropping the key would look like a bug.
+            ...(n.type === 'script' ? { command: n.data.command ?? '' } : {}),
         })),
         edges: edges.map((e) => ({
             id: e.id,

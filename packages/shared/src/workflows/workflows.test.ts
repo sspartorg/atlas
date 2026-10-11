@@ -86,10 +86,10 @@ describe('validateWorkflowGraph', () => {
         graph.nodes[1] = node('coder', 'agent', { sub_workflow_id: 'wf-x' });
         graph.nodes[2] = node('review', 'agent', { agent_id: 'agent-reviewer', label: 'qa' });
         expect(errorsOf(graph)).toEqual([
-            'start: Only agent and gate steps reference an agent',
+            'start: Only agent steps reference an agent',
             'coder: Choose an agent for this node',
-            'coder: Only Sub-tasks steps take a sub-workflow or label',
-            'review: Only Sub-tasks steps take a sub-workflow or label',
+            'coder: Only Sub-tasks steps take a sub-workflow',
+            'review: Only Sub-tasks and Script steps take a label',
         ]);
     });
 
@@ -117,74 +117,75 @@ describe('validateWorkflowGraph', () => {
         graph.edges.push(edge('test', 'po', 'fail'));
         expect(errorsOf(graph)).toEqual([
             'build: Choose the sub-workflow for these sub-tasks',
-            'test: Only agent and gate steps can have a fail connection',
+            'test: Only agent and script steps can have a fail connection',
         ]);
     });
 
-    describe('gate steps', () => {
-        // Start -> gate -> End, with the gate failing to a fixer that loops back.
-        // This shape is the entire point of the node type: the checker names the
-        // command, Atlas runs it, and the fixer is dispatched only when it says no.
-        function gateGraph(): IWorkflowGraph {
+    describe('script steps', () => {
+        // Start -> script -> End, with the script failing to a fixer that loops back.
+        // The Owner types the command; Atlas runs it. No AI picks it.
+        function scriptGraph(): IWorkflowGraph {
             return {
                 nodes: [
                     node('start', 'start'),
-                    node('cov', 'gate', { agent_id: 'agent-tests-check' }),
-                    node('fixer', 'agent', { agent_id: 'agent-coverage-fixer' }),
+                    node('build', 'script', { command: 'npm run build' }),
+                    node('fixer', 'agent', { agent_id: 'agent-coder' }),
                     node('end', 'end'),
                 ],
                 edges: [
-                    edge('start', 'cov'),
-                    edge('cov', 'end'),
-                    edge('cov', 'fixer', 'fail'),
-                    edge('fixer', 'cov'),
+                    edge('start', 'build'),
+                    edge('build', 'end'),
+                    edge('build', 'fixer', 'fail'),
+                    edge('fixer', 'build'),
                 ],
             };
         }
 
-        it('accepts a gate that fails to a fixer which loops back to it', () => {
+        it('accepts a script that fails to a fixer which loops back to it', () => {
             // The cycle runs through a fail edge, so `loop_count` advances on
-            // every traversal and `max_loops` bounds it. `findPassLoop` walks
-            // pass edges only, which is why this is not rejected as a loop.
-            expect(errorsOf(gateGraph())).toEqual([]);
+            // every traversal and `max_loops` bounds it.
+            expect(errorsOf(scriptGraph())).toEqual([]);
         });
 
-        it('requires a checker agent on a gate step', () => {
-            const graph = gateGraph();
-            graph.nodes[1] = node('cov', 'gate');
-            expect(errorsOf(graph)).toEqual(['cov: Choose the checker agent for this gate']);
+        it('accepts a script saved with an empty command (it parks at run time, not here)', () => {
+            const graph = scriptGraph();
+            graph.nodes[1] = node('build', 'script', { command: '' });
+            expect(errorsOf(graph)).toEqual([]);
         });
 
-        it('still rejects an agent_id on a step that can carry neither', () => {
-            const graph = gateGraph();
-            graph.nodes.push(node('ask', 'owner', { agent_id: 'agent-coder' }));
-            graph.edges.push(edge('ask', 'end'));
-            expect(errorsOf(graph)).toContain('ask: Only agent and gate steps reference an agent');
+        it('rejects an agent on a script step and a command on any other step', () => {
+            const graph = scriptGraph();
+            graph.nodes[1] = node('build', 'script', { agent_id: 'agent-coder', command: 'npm run build' });
+            expect(errorsOf(graph)).toContain('build: Only agent steps reference an agent');
+            const agent = scriptGraph();
+            agent.nodes[2] = node('fixer', 'agent', { agent_id: 'agent-coder', command: 'npm test' });
+            expect(errorsOf(agent)).toContain('fixer: Only Script steps take a command');
         });
 
-        it('allows a gate at most one fail connection', () => {
-            const graph = gateGraph();
+        it('allows a script at most one fail connection', () => {
+            const graph = scriptGraph();
             graph.nodes.push(node('other', 'agent', { agent_id: 'agent-hygiene-fixer' }));
-            graph.edges.push(edge('cov', 'other', 'fail'), edge('other', 'end'));
-            expect(errorsOf(graph)).toEqual(['cov: At most one fail connection']);
+            graph.edges.push(edge('build', 'other', 'fail'), edge('other', 'end'));
+            expect(errorsOf(graph)).toEqual(['build: At most one fail connection']);
         });
 
-        it('still requires exactly one pass connection from a gate', () => {
-            const graph = gateGraph();
-            graph.edges = graph.edges.filter((e) => !(e.source === 'cov' && e.kind === 'pass'));
-            expect(errorsOf(graph)).toContain('cov: Needs exactly one pass connection');
+        it('still requires exactly one pass connection from a script', () => {
+            const graph = scriptGraph();
+            graph.edges = graph.edges.filter((e) => !(e.source === 'build' && e.kind === 'pass'));
+            expect(errorsOf(graph)).toContain('build: Needs exactly one pass connection');
         });
 
-        it('parses a gate node through the graph schema', () => {
-            const parsed = WorkflowGraphSchema.safeParse(gateGraph());
+        it('parses a script node through the graph schema, keeping its command', () => {
+            const parsed = WorkflowGraphSchema.safeParse(scriptGraph());
             expect(parsed.success).toBe(true);
+            expect(parsed.success && parsed.data.nodes[1]?.command).toBe('npm run build');
         });
 
         // ADR 0024 deleted the field. A saved graph that still carries one is
         // rewritten by migration 020; anything else is a graph Atlas never
         // wrote, and the schema drops the key rather than honouring it.
         it('does not carry a script_id through the schema any more', () => {
-            const graph = gateGraph() as IWorkflowGraph & { nodes: Array<Record<string, unknown>> };
+            const graph = scriptGraph() as IWorkflowGraph & { nodes: Array<Record<string, unknown>> };
             graph.nodes[1] = { ...graph.nodes[1], script_id: 'gate-coverage' } as never;
             const parsed = WorkflowGraphSchema.safeParse(graph);
             expect(parsed.success).toBe(true);
@@ -226,7 +227,7 @@ describe('validateWorkflowGraph', () => {
             edge('coder', 'end', 'fail'),
         );
         expect(errorsOf(graph)).toEqual([
-            'start: Only agent and gate steps can have a fail connection',
+            'start: Only agent and script steps can have a fail connection',
             'coder: Needs exactly one pass connection',
             'coder: At most one fail connection',
             'owner: Needs exactly one pass connection',

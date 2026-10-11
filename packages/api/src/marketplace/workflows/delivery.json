@@ -1,8 +1,8 @@
 {
   "id": "delivery",
   "name": "Delivery",
-  "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Four checks then cover hygiene, tests, performance and visuals: a checker agent reads the repo and names the command this project already trusts, Atlas runs it and believes the exit code, and when one goes red a specialist fixes it and a reviewer checks the fix was made at the cause rather than by defeating the check. A project that has no such tooling is told so plainly rather than given a number Atlas invented. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
-  "version": 1,
+  "description": "PO Writer splits a Task into sub-tasks and the Architect specs them. Every dev sub-task is built, every [QA] sub-task tested and every [DOC] sub-task documented, one at a time on the Task's branch. Then three Script steps run the commands you typed on them, in order: Lint, Build and Tests. Atlas runs each command itself, with no AI in the loop, and saves its full output under .atlas/checks/. When one goes red, a fixer reads that log, and a reviewer checks the fix was made at the cause rather than by defeating the check. The Script steps ship empty: type each project's own command into the step in the workflow builder before a run, or the run parks. A release reviewer reads the whole change before it becomes one pull request; a gap it finds becomes a fix sub-task that is built and re-verified without waking you. Unclear Tasks come back to you.",
+  "version": 3,
   "input_kind": "item",
   "trigger": "item_ready",
   "use_worktree": true,
@@ -85,9 +85,10 @@
         }
       },
       {
-        "id": "gate-hygiene",
-        "type": "gate",
-        "agent_id": "agent-hygiene-check",
+        "id": "check-lint",
+        "type": "script",
+        "label": "Lint",
+        "command": "",
         "position": {
           "x": 0,
           "y": 1260
@@ -112,25 +113,26 @@
         }
       },
       {
-        "id": "gate-tests",
-        "type": "gate",
-        "agent_id": "agent-tests-check",
+        "id": "check-build",
+        "type": "script",
+        "label": "Build",
+        "command": "",
         "position": {
           "x": 0,
           "y": 1680
         }
       },
       {
-        "id": "fix-coverage",
+        "id": "fix-build",
         "type": "agent",
-        "agent_id": "agent-coverage-fixer",
+        "agent_id": "agent-coder",
         "position": {
           "x": 320,
           "y": 1820
         }
       },
       {
-        "id": "review-fix-coverage",
+        "id": "review-fix-build",
         "type": "agent",
         "agent_id": "agent-fix-reviewer",
         "position": {
@@ -139,25 +141,26 @@
         }
       },
       {
-        "id": "gate-perf",
-        "type": "gate",
-        "agent_id": "agent-perf-check",
+        "id": "check-tests",
+        "type": "script",
+        "label": "Tests",
+        "command": "",
         "position": {
           "x": 0,
           "y": 2100
         }
       },
       {
-        "id": "fix-perf",
+        "id": "fix-coverage",
         "type": "agent",
-        "agent_id": "agent-perf-fixer",
+        "agent_id": "agent-coverage-fixer",
         "position": {
           "x": 320,
           "y": 2240
         }
       },
       {
-        "id": "review-fix-perf",
+        "id": "review-fix-coverage",
         "type": "agent",
         "agent_id": "agent-fix-reviewer",
         "position": {
@@ -166,39 +169,12 @@
         }
       },
       {
-        "id": "gate-visual",
-        "type": "gate",
-        "agent_id": "agent-visual-check",
-        "position": {
-          "x": 0,
-          "y": 2520
-        }
-      },
-      {
-        "id": "fix-visual",
-        "type": "agent",
-        "agent_id": "agent-visual-reviewer",
-        "position": {
-          "x": 320,
-          "y": 2660
-        }
-      },
-      {
-        "id": "review-fix-visual",
-        "type": "agent",
-        "agent_id": "agent-fix-reviewer",
-        "position": {
-          "x": 320,
-          "y": 2800
-        }
-      },
-      {
         "id": "release-review",
         "type": "agent",
         "agent_id": "agent-release-reviewer",
         "position": {
           "x": 0,
-          "y": 2940
+          "y": 2520
         }
       },
       {
@@ -206,7 +182,7 @@
         "type": "end",
         "position": {
           "x": 0,
-          "y": 3080
+          "y": 2660
         }
       }
     ],
@@ -266,14 +242,20 @@
         "kind": "pass"
       },
       {
-        "id": "e-docs-pass-gate-hygiene",
+        "id": "e-docs-pass-check-lint",
         "source": "docs",
-        "target": "gate-hygiene",
+        "target": "check-lint",
         "kind": "pass"
       },
       {
-        "id": "e-gate-hygiene-fail-fix-hygiene",
-        "source": "gate-hygiene",
+        "id": "e-check-lint-pass-check-build",
+        "source": "check-lint",
+        "target": "check-build",
+        "kind": "pass"
+      },
+      {
+        "id": "e-check-lint-fail-fix-hygiene",
+        "source": "check-lint",
         "target": "fix-hygiene",
         "kind": "fail"
       },
@@ -284,14 +266,56 @@
         "kind": "pass"
       },
       {
-        "id": "e-gate-hygiene-pass-gate-tests",
-        "source": "gate-hygiene",
-        "target": "gate-tests",
+        "id": "e-review-fix-hygiene-pass-check-lint",
+        "source": "review-fix-hygiene",
+        "target": "check-lint",
         "kind": "pass"
       },
       {
-        "id": "e-gate-tests-fail-fix-coverage",
-        "source": "gate-tests",
+        "id": "e-review-fix-hygiene-fail-fix-hygiene",
+        "source": "review-fix-hygiene",
+        "target": "fix-hygiene",
+        "kind": "fail"
+      },
+      {
+        "id": "e-check-build-pass-check-tests",
+        "source": "check-build",
+        "target": "check-tests",
+        "kind": "pass"
+      },
+      {
+        "id": "e-check-build-fail-fix-build",
+        "source": "check-build",
+        "target": "fix-build",
+        "kind": "fail"
+      },
+      {
+        "id": "e-fix-build-pass-review-fix-build",
+        "source": "fix-build",
+        "target": "review-fix-build",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-build-pass-check-build",
+        "source": "review-fix-build",
+        "target": "check-build",
+        "kind": "pass"
+      },
+      {
+        "id": "e-review-fix-build-fail-fix-build",
+        "source": "review-fix-build",
+        "target": "fix-build",
+        "kind": "fail"
+      },
+      {
+        "id": "e-check-tests-pass-release-review",
+        "source": "check-tests",
+        "target": "release-review",
+        "kind": "pass"
+      },
+      {
+        "id": "e-check-tests-fail-fix-coverage",
+        "source": "check-tests",
         "target": "fix-coverage",
         "kind": "fail"
       },
@@ -302,46 +326,16 @@
         "kind": "pass"
       },
       {
-        "id": "e-gate-tests-pass-gate-perf",
-        "source": "gate-tests",
-        "target": "gate-perf",
+        "id": "e-review-fix-coverage-pass-check-tests",
+        "source": "review-fix-coverage",
+        "target": "check-tests",
         "kind": "pass"
       },
       {
-        "id": "e-gate-perf-fail-fix-perf",
-        "source": "gate-perf",
-        "target": "fix-perf",
+        "id": "e-review-fix-coverage-fail-fix-coverage",
+        "source": "review-fix-coverage",
+        "target": "fix-coverage",
         "kind": "fail"
-      },
-      {
-        "id": "e-fix-perf-pass-review-fix-perf",
-        "source": "fix-perf",
-        "target": "review-fix-perf",
-        "kind": "pass"
-      },
-      {
-        "id": "e-gate-perf-pass-gate-visual",
-        "source": "gate-perf",
-        "target": "gate-visual",
-        "kind": "pass"
-      },
-      {
-        "id": "e-gate-visual-fail-fix-visual",
-        "source": "gate-visual",
-        "target": "fix-visual",
-        "kind": "fail"
-      },
-      {
-        "id": "e-fix-visual-pass-review-fix-visual",
-        "source": "fix-visual",
-        "target": "review-fix-visual",
-        "kind": "pass"
-      },
-      {
-        "id": "e-gate-visual-pass-release-review",
-        "source": "gate-visual",
-        "target": "release-review",
-        "kind": "pass"
       },
       {
         "id": "e-release-review-pass-end",
@@ -353,54 +347,6 @@
         "id": "e-release-review-fail-build",
         "source": "release-review",
         "target": "build",
-        "kind": "fail"
-      },
-      {
-        "id": "e-review-fix-hygiene-pass-gate-hygiene",
-        "source": "review-fix-hygiene",
-        "target": "gate-hygiene",
-        "kind": "pass"
-      },
-      {
-        "id": "e-review-fix-hygiene-fail-fix-hygiene",
-        "source": "review-fix-hygiene",
-        "target": "fix-hygiene",
-        "kind": "fail"
-      },
-      {
-        "id": "e-review-fix-coverage-pass-gate-tests",
-        "source": "review-fix-coverage",
-        "target": "gate-tests",
-        "kind": "pass"
-      },
-      {
-        "id": "e-review-fix-coverage-fail-fix-coverage",
-        "source": "review-fix-coverage",
-        "target": "fix-coverage",
-        "kind": "fail"
-      },
-      {
-        "id": "e-review-fix-perf-pass-gate-perf",
-        "source": "review-fix-perf",
-        "target": "gate-perf",
-        "kind": "pass"
-      },
-      {
-        "id": "e-review-fix-perf-fail-fix-perf",
-        "source": "review-fix-perf",
-        "target": "fix-perf",
-        "kind": "fail"
-      },
-      {
-        "id": "e-review-fix-visual-pass-gate-visual",
-        "source": "review-fix-visual",
-        "target": "gate-visual",
-        "kind": "pass"
-      },
-      {
-        "id": "e-review-fix-visual-fail-fix-visual",
-        "source": "review-fix-visual",
-        "target": "fix-visual",
         "kind": "fail"
       }
     ]

@@ -68,7 +68,6 @@ function fromRow(r: RepoRow): IProjectRepo {
         clone_status: r.clone_status,
         setup_sh_body: r.setup_sh_body,
         setup_ps1_body: r.setup_ps1_body,
-        verify_command: r.verify_command,
     };
 }
 
@@ -158,7 +157,6 @@ async function update(
         credential_id?: string | undefined;
         setup_sh_body?: string | undefined;
         setup_ps1_body?: string | undefined;
-        verify_command?: string | undefined;
     }
 ): Promise<IProjectRepo> {
     if (patch.credential_id !== undefined) {

@@ -20,7 +20,7 @@ and the whole page — taken from real agent runs against a small sample project
 3. [Dashboard](#3-dashboard)
 4. [Credentials](#4-credentials)
 5. [Projects and repos](#5-projects-and-repos)
-6. [Setup scripts, verify commands and secrets](#6-setup-scripts-verify-commands-and-secrets)
+6. [Setup scripts, Script steps and secrets](#6-setup-scripts-script-steps-and-secrets)
 7. [Agents and the marketplace](#7-agents-and-the-marketplace)
 8. [Workflows](#8-workflows)
 9. [Tasks and sub-tasks](#9-tasks-and-sub-tasks)
@@ -163,7 +163,7 @@ added from the **Repos** tab with **Add repo**, either cloned fresh from a GitHu
 folder already on disk.
 
 **There is no primary repo.** Every repo is an ordinary row with its own clone, credential, default
-branch, auto-fetch schedule, setup scripts and verify command. A Task then picks which repos it changes,
+branch, auto-fetch schedule and setup scripts. A Task then picks which repos it changes,
 and one Task can span several.
 
 The row menu on each repo offers **Edit** (default branch and **credential** — swap a repo's credential
@@ -177,7 +177,7 @@ repo you connected from somewhere else is kept, and Atlas says so.
 
 ---
 
-## 6. Setup scripts, verify commands and secrets
+## 6. Setup scripts, Script steps and secrets
 
 ![Project — Setup tab](images/doc-10-project-setup.png)
 
@@ -192,9 +192,11 @@ PowerShell. Before any agent runs, Atlas provisions a worktree and runs the matc
 Scripts run on **every** worktree provision, so keep them idempotent. A failing script ends the run as
 `setup_failed` and no agent CLI is started.
 
-**Verify command — per repo.** Atlas runs it in the repo before any push; a non-zero exit stops the
-delivery. Leave it empty and the first delivery run fills it in from what the tests check finds (the
-sample repo above got `npm test` that way); Atlas never overwrites a command you typed.
+**Script steps — in the workflow, not here.** Verification is a step in the workflow: you add a **Script**
+step, type its command (`npm run build`, `npm test`, …), and Atlas runs it in every repo of the Task with
+no AI in the loop. Exit 0 takes the pass edge; any other exit takes the fail edge to a fixer, who reads the
+full output under `.atlas/checks/`. A Script step saved with no command parks the run rather than passing.
+A workflow with no Script step pushes what its agents reported, so add one before you rely on a PR.
 
 ![Settings — Shared Secrets](images/doc-11-settings-secrets.png)
 
@@ -301,20 +303,20 @@ exported one. The starters:
 
 | Template | Runs | What it does |
 |---|---|---|
-| **Delivery** | per Task | PO Writer splits the Task into sub-tasks, the Architect specs them, then every dev sub-task is built, every `[QA]` sub-task tested and every `[DOC]` sub-task documented on the Task's branch. Four checks (hygiene, tests, performance, visual) gate it, and a Release Reviewer reads the whole change before one pull request. Pulls in **Build**, **Test** and **Docs**. |
-| **Quick change** | per Task | For small Tasks with no breakdown: Coder → Code Reviewer → tests check (Coverage Fixer + Fix Reviewer on red) → one PR. |
+| **Delivery** | per Task | PO Writer splits the Task into sub-tasks, the Architect specs them, then every dev sub-task is built, every `[QA]` sub-task tested and every `[DOC]` sub-task documented on the Task's branch. Three Script steps then run the commands you type on them (**Lint**, **Build**, **Tests**). A Release Reviewer reads the whole change before one pull request. Pulls in **Build**, **Test** and **Docs**. The Script steps ship empty: type each project's own commands. |
+| **Quick change** | per Task | For small Tasks with no breakdown: Coder → Code Reviewer → **Tests** Script step (Coverage Fixer + Fix Reviewer on red) → one PR. |
 | **Build / Test / Docs sub-task** | per sub-task | The sub-workflows Delivery's Sub-tasks steps run. |
 | **AI Readiness** | per project | Audits a repo for AI-agent readiness and opens a PR with the scaffold it generates. |
 
 ![Workflow builder — the Delivery graph](images/doc-24-workflow-builder.png)
 
 The builder has three tabs: **Builder**, **Runs** and **Evals**. The canvas opens zoomed on the first
-nodes; **Tidy up** re-lays it out. The palette has four flow nodes plus every installed agent:
+nodes; **Tidy up** re-lays it out. The palette has these flow nodes plus every installed agent:
 
 - **Owner** — park the run and wait for you.
 - **Sub-tasks** — run each of the Task's sub-tasks through a sub-workflow.
-- **Gate** — a checker agent reads the repo and names the one command this project already trusts for
-  that check; **Atlas runs the command** and routes on its exit code. *Skipped* never counts as a pass.
+- **Script** — a command you type; **Atlas runs it itself** with no AI, in every repo of the Task, and
+  routes on its exit code. The full output is kept under `.atlas/checks/`. *Skipped* never counts as a pass.
 - **End**.
 
 Edges are **pass** or **fail**, so a reviewer rejecting work, or a red gate, sends it back rather than
@@ -438,7 +440,7 @@ across it by relative path (`../other-repo/...`): it resolves during the run and
 written that way passes once and fails in CI, in a fresh clone, and after merge. (PO Writer flags exactly
 this in the parked Task above.)
 
-On success Atlas runs the verify command, commits, pushes, opens the PR, then removes the worktree and
+On success Atlas commits, pushes, opens the PR, then removes the worktree and
 deletes the local branch. If delivery fails, or the workflow does not push, **the worktree is deliberately
 left in place** so a resumed run picks up exactly where it stopped.
 
@@ -591,7 +593,7 @@ for that project.
 only Atlas's own artifacts — worktree prerequisites, PO Writer's output, the Architect's `spec.md`, the
 QA test-plan CSV, the automation coverage report, and `Co-Authored-By` commit discipline. Agents run them
 and report the result. Whether *your project's* tests, lint or build pass is not a guard-rail script: that
-is a **Gate** node in the workflow, and Atlas runs the command itself.
+is a **Script** step in the workflow, where you type the command and Atlas runs it.
 
 ---
 

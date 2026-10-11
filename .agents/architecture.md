@@ -244,7 +244,7 @@ stop   → POST /api/workflow-runs/:id/stop, or stop / delete of a step run (a c
 
 **Git ops and locks.** `ensureWorktree` / `pushWorktree` / `openPullRequest` / `cleanupWorktreeAfterPush` each take `withProjectGitLock`, which is not re-entrant — the engine never wraps them. The worktree path lives only on `workflow_runs`, never on `items.worktree_path`.
 
-**Concurrency.** `agent_runs_one_live_per_item` (migration 003) allows one `queued` / `in_progress` step per item; `workflow_runs_one_live_per_item` (035) allows one `running` / `waiting_for_owner` workflow run per item and covers the gaps between steps. Parallelism comes from Tasks (`max_parallel_runs`), never from sub-tasks: a Task run has at most one live child, so no two steps ever share a worktree at once.
+**Concurrency.** `agent_runs_one_live_per_item` (migration 003) allows one `queued` / `in_progress` step per item; `workflow_runs_one_live_per_item` (035) allows one `running` / `waiting_for_owner` workflow run per item and covers the gaps between steps. Parallelism comes from Tasks (`max_parallel_runs`), never from sub-tasks: a Task run has at most one live child, so no two steps ever share a worktree at once. **One Task at a time per repo (ADR 0029):** a Task is not started while another top-level run on a Task that names the same repo is `running` or `waiting_for_owner`, so two PRs never edit the same checkout. A parked run keeps its repo until it is resolved.
 
 **Ad-hoc runs.** `POST /api/run` (Run-now dialog) spawns one agent with no item in a temp dir: no worktree, no routing, no push. It exists to try a prompt.
 

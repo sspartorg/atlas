@@ -438,3 +438,21 @@ describe('routeEdges', () => {
         expect(above[0]?.targetHandle).toBe('loop');
     });
 });
+
+describe('script steps', () => {
+    it('keeps an empty command on a script step through the round trip', () => {
+        const graph = {
+            nodes: [
+                { id: 'start', type: 'start' as const, position: { x: 0, y: 0 } },
+                { id: 'build', type: 'script' as const, command: '', position: { x: 0, y: 130 } },
+                { id: 'end', type: 'end' as const, position: { x: 0, y: 260 } },
+            ],
+            edges: [
+                { id: 'e1', source: 'start', target: 'build', kind: 'pass' as const },
+                { id: 'e2', source: 'build', target: 'end', kind: 'pass' as const },
+            ],
+        };
+        const flow = toFlow(graph);
+        expect(toGraph(flow.nodes, flow.edges).nodes.find((n) => n.id === 'build')).toMatchObject({ type: 'script', command: '' });
+    });
+});

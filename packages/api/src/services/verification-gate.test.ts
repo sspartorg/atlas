@@ -46,6 +46,7 @@ describe.skipIf(!posix)('runNamedCommand', () => {
         expect(await run('echo "visual: skipped - no snapshot tooling here"')).toEqual({
             kind: 'skipped',
             output: 'visual: skipped - no snapshot tooling here',
+            log: 'visual: skipped - no snapshot tooling here',
         });
     });
 
@@ -53,6 +54,7 @@ describe.skipIf(!posix)('runNamedCommand', () => {
         expect(await run('echo "perf: within budget"')).toEqual({
             kind: 'pass',
             output: 'perf: within budget',
+            log: 'perf: within budget',
         });
     });
 
@@ -181,6 +183,31 @@ describe.skipIf(!posix)('runNamedCommand', () => {
         } finally {
             spy.mockRestore();
         }
+    });
+
+    it('redacts a secret a PASSING command prints, before it reaches the log', async () => {
+        // The pass branch used to return stdout raw. A command that echoes a
+        // stored secret would have written it into the step's log file.
+        const spy = vi.spyOn(environmentSecretsService, 'decryptAll').mockResolvedValueOnce(
+            new Map([['GITHUB_TOKEN', 'ghp_realtokenvalue']]) as never,
+        );
+        try {
+            const res = await run('echo "token is ghp_realtokenvalue"');
+            expect(res.kind).toBe('pass');
+            if (res.kind !== 'pass') throw new Error('unreachable');
+            expect(res.log).not.toContain('ghp_realtokenvalue');
+            expect(res.output).not.toContain('ghp_realtokenvalue');
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('keeps the whole output in the log, past the tail the comment shows', async () => {
+        const res = await run('for i in $(seq 1 3000); do echo "line $i padding padding"; done; exit 1');
+        if (res.kind !== 'fail') throw new Error('unreachable');
+        expect(res.output.length).toBeLessThanOrEqual(4000);
+        expect(res.log.length).toBeGreaterThan(res.output.length);
+        expect(res.log).toContain('line 1 padding');
     });
 
     it('truncates a very long failure to its tail', async () => {

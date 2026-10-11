@@ -618,7 +618,6 @@ export const api = {
                 credential_id?: string;
                 setup_sh_body?: string;
                 setup_ps1_body?: string;
-                verify_command?: string;
             },
         ) => patch<IProjectRepo>(`/projects/${id}/repos/${repoId}`, data),
         removeRepo: (id: string, repoId: string) => del(`/projects/${id}/repos/${repoId}`),

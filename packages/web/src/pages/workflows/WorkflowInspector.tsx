@@ -26,7 +26,7 @@ const TITLES = {
     agent: 'Agent step',
     owner: 'Owner',
     subtasks: 'Sub-tasks step',
-    gate: 'Check step',
+    script: 'Script step',
     end: 'End',
 } as const;
 
@@ -159,52 +159,42 @@ function AgentPanel({
     );
 }
 
-function GatePanel({
+function ScriptPanel({
     node,
-    agents,
     onNodeData,
-}: Pick<Props, 'agents' | 'onNodeData'> & { node: WfNode }) {
-    const agent = agents.find((a) => a.id === node.data.agent_id);
-    // Same reasoning as the Sub-tasks panel: an agent id that is not installed
-    // is not the same as no id. At run time the step parks rather than failing,
-    // so it looks like a stuck workflow instead of a typo. Say so here, where
-    // it can be fixed.
-    const dangling = node.data.agent_id != null && !agent;
+}: Pick<Props, 'onNodeData'> & { node: WfNode }) {
+    const empty = (node.data.command ?? '').trim() === '';
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <TextField
-                select
-                label="Checker agent"
                 size="small"
-                error={dangling}
-                value={agent ? agent.id : ''}
-                onChange={(e) => onNodeData({ agent_id: e.target.value || undefined })}
+                label="Name"
+                value={node.data.label ?? ''}
+                onChange={(e) => onNodeData({ label: e.target.value || undefined })}
+                helperText="Shown on the run page and in the output file's name"
+                fullWidth
+            />
+            <TextField
+                size="small"
+                label="Command"
+                multiline
+                minRows={2}
+                maxRows={10}
+                value={node.data.command ?? ''}
+                error={empty}
+                onChange={(e) => onNodeData({ command: e.target.value })}
                 helperText={
-                    dangling
-                        ? "This check points at an agent that isn't installed — pick one."
-                        : 'Reads the repo and picks the command this project already uses'
+                    empty
+                        ? 'Type the command this step runs, e.g. npm run build'
+                        : 'Runs in each repo of the Task, in its checkout'
                 }
                 fullWidth
-            >
-                {agents.map((a) => (
-                    <MenuItem key={a.id} value={a.id}>
-                        {a.name}
-                    </MenuItem>
-                ))}
-            </TextField>
-            {agent && agent.status !== 'active' && (
-                <Explain>
-                    {agent.name} is paused, so a run will wait here until you enable it.
-                </Explain>
-            )}
+            />
             <Explain>
-                You don&apos;t type a command. The checker agent reads your repo (package.json
-                scripts, Makefile, CI config) and picks the command the project already uses — for
-                example <Box component="code">npm test</Box>. Atlas runs it itself, once per repo, and
-                trusts the exit code, so an agent can&apos;t just report green. Pass takes the green
-                connection; fail takes the red one, with the command&apos;s output handed to the fixer.
-                If the check can&apos;t run, it comes to you as Waiting for info. A repo with no such
-                tooling is marked skipped. The command that ran is shown in the run details.
+                You type the command, and Atlas runs it itself with no AI. Exit 0 takes the green pass
+                connection. Any other exit takes the red fail connection to the fixer, who reads the
+                full output in <Box component="code">.atlas/checks/</Box>. A step saved with no command
+                parks the run instead of passing.
             </Explain>
         </Box>
     );
@@ -392,8 +382,8 @@ export function WorkflowInspector(props: Props) {
                     onNodeData={props.onNodeData}
                 />
             )}
-            {type === 'gate' && props.node && (
-                <GatePanel node={props.node} agents={props.agents} onNodeData={props.onNodeData} />
+            {type === 'script' && props.node && (
+                <ScriptPanel node={props.node} onNodeData={props.onNodeData} />
             )}
             {type === 'end' && <EndPanel workflow={props.workflow} onChange={props.onChange} />}
         </Box>
