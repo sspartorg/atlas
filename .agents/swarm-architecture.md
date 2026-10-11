@@ -106,7 +106,7 @@ All `role_id: NULL`, `status: 'inactive'`. Owner enables by editing the prompt's
 
 One mode: **workflows**. A workflow run executes its agent nodes back-to-back in one worktree and delivers one push + one PR at End.
 
-- **Task workflows** (`input_kind='item'`) — the Owner queues a Task with `items.workflow_id`; `trigger='item_ready'` starts the oldest `ready` Tasks, up to `max_parallel_runs` at once, each on its own branch. Steps chain immediately, with no scheduler wait. Sub-tasks run one at a time inside the Task's run via Sub-tasks steps and their **sub-workflows** (`input_kind='sub_task'`).
+- **Task workflows** (`input_kind='item'`) — the Owner queues a Task with `items.workflow_id`; `trigger='item_ready'` starts the oldest `ready` Tasks, up to `max_parallel_runs` at once, each on its own branch, but never two Tasks that name the same repo (ADR 0029). Steps chain immediately, with no scheduler wait. Sub-tasks run one at a time inside the Task's run via Sub-tasks steps and their **sub-workflows** (`input_kind='sub_task'`).
 - **Project-level workflows** (`input_kind='none'`) — `trigger='schedule'` (cron) or `manual`. Tasks the agent creates stay as created (`draft`) until the Owner queues them.
 
 Agents escalate only by parking the workflow run with the Owner; they never assign items or change status (the API returns 409 while a run is working the item). Runtime details: [`architecture.md`](architecture.md) (Workflow runs) and [`freedom-agents.md`](freedom-agents.md).
