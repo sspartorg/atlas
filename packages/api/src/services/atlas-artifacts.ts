@@ -1,7 +1,7 @@
 // Paths the agents write for Atlas's own use. They are working notes, not
 // product code, so they must never reach a commit or a pull request. Found
 // when Apple Shop's PRs carried generated spec and QA files into the repo.
-export const ATLAS_ARTIFACT_PATHS = ['specs', 'tests/qa'] as const;
+const ATLAS_ARTIFACT_PATHS = ['specs', 'tests/qa'] as const;
 
 /**
  * The `git add` arguments that stage a worktree's real changes and leave the
