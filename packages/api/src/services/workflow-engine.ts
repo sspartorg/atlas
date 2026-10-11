@@ -55,6 +55,7 @@ import {
 import { buildGitAuth, cleanupGitConfig } from './git-credentials.js';
 import { gitInvokeEnv } from './git-env.js';
 import { runRepos } from './run-repos.js';
+import { stageArgs } from './atlas-artifacts.js';
 import { spawnAgentRun, cancelRun } from './agent-runner.js';
 import { isRetryableStepError } from './step-error-retry.js';
 
@@ -967,7 +968,7 @@ async function commitPending(worktreePath: string, credentialId: string | null, 
     try {
         const status = await exec('git', ['-C', worktreePath, 'status', '--porcelain'], { env, timeout: 60_000 });
         if (!status.stdout.trim()) return null;
-        await exec('git', ['-C', worktreePath, 'add', '-A'], { env, timeout: 60_000 });
+        await exec('git', ['-C', worktreePath, ...stageArgs()], { env, timeout: 60_000 });
         const args = ['-c', 'core.hooksPath=.husky/_', '-C', worktreePath, 'commit', '-m', `chore(atlas): uncommitted changes from workflow run ${runId.slice(0, 8)}`];
         if (auth?.humanName && auth.humanEmail) args.push('--trailer', `Co-Authored-By: ${auth.humanName} <${auth.humanEmail}>`);
         await exec('git', args, { env, timeout: 60_000 });
