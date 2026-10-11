@@ -319,7 +319,12 @@ export async function searchItems(filters: SearchFilters, limit = 50): Promise<S
     ]);
 
     if (hasQuery) {
-        qb = qb.where(sql<boolean>`search_tsv @@ websearch_to_tsquery('english', ${q})`);
+        // Full-text alone misses two things people search for: an issue key
+        // (`EVL-1`, never in the text) and a file name such as `math.js`, which
+        // the english parser keeps as one token. Both get an explicit match.
+        qb = qb.where(
+            sql<boolean>`(search_tsv @@ websearch_to_tsquery('english', ${q}) OR upper(id) = upper(${q}) OR title ILIKE ${'%' + q + '%'})`,
+        );
     }
     if (filters.types && filters.types.length > 0) {
         qb = qb.where('type', 'in', filters.types);

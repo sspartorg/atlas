@@ -55,6 +55,14 @@ describe('GET /api/search', () => {
         expect(ids).toContain('ATL-1');
     });
 
+    it('finds an item by its issue key, and by a file name inside its title', async () => {
+        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Fix src/math.js rounding' });
+        const byKey = JSON.parse((await app.inject({ method: 'GET', url: '/api/search?q=atl-1' })).body);
+        expect(byKey.map((r: { issue_id: string }) => r.issue_id)).toContain('ATL-1');
+        const byFile = JSON.parse((await app.inject({ method: 'GET', url: '/api/search?q=math' })).body);
+        expect(byFile.map((r: { issue_id: string }) => r.issue_id)).toContain('ATL-2');
+    });
+
     it('returns 200 results filtered by project_id', async () => {
         const res = await app.inject({
             method: 'GET',
