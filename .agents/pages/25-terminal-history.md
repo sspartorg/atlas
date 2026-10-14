@@ -22,8 +22,8 @@ Re-open a *closed* or *errored* terminal session's transcript by reading the JSO
 ## UI elements
 
 **Header row**
-- Back IconButton → `/terminal`.
-- History icon + session title.
+- Breadcrumb Terminal (→ `/terminal`) › session title.
+- History icon + session title (`h1`, `PAGE_TITLE_SX`).
 - CLI chip (outlined) + status chip (color-mapped).
 
 **Metadata strip**

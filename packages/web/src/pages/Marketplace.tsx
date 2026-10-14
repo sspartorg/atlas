@@ -20,7 +20,7 @@ import { useToast } from '../hooks/useToast.js';
 import { useTabParam } from '../hooks/useTabParam.js';
 import { usePublishedWorkflows, useWorkflowTemplates } from '../hooks/useWorkflows.js';
 import { MarketplaceWorkflows } from './marketplace/MarketplaceWorkflows.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const TABS = ['agents', 'workflows'] as const;
 
@@ -142,24 +142,11 @@ export function Marketplace() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box sx={{ mb: 5 }}>
-                <Typography
-                    variant="h1"
-                    sx={{
-                        fontSize: '2.25rem',
-                        fontWeight: 700,
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.01em',
-                        color: ATLAS_PALETTE.slate,
-                    }}
-                >
-                    <PageTitleIcon name="storefront" />
-                    {tab === 'workflows' ? 'Workflow Marketplace' : 'Agent Marketplace'}
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
-                    {subtitle}
-                </Typography>
-            </Box>
+            <PageHeader
+                icon="storefront"
+                title={tab === 'workflows' ? 'Workflow Marketplace' : 'Agent Marketplace'}
+                subtitle={subtitle}
+            />
 
             <Box sx={{ borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`, mb: 4 }}>
                 <Tabs

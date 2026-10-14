@@ -16,7 +16,7 @@ Every agent that took a workflow step in the window, side by side, plus what the
 
 ## UI elements
 **Header**
-- Breadcrumb `Agents / Fleet performance` (→ `/agents`).
+- Breadcrumb `Agents › Fleet performance` (→ `/agents`).
 - H1 **Fleet performance**; metadata subtitle "Workflow steps and deliveries over the last {N} days. Ad-hoc runs are not counted, and agent tests are left out of deliveries."
 - **Window** toggle (mode tier): `30 days` / `90 days` (default 90). Stored in the URL as `?days=30` (90 clears the param); pressing the selected button keeps it.
 

@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import Link from '@mui/material/Link';
 import type { IWorkflow } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { usePublishWorkflow, useUpgradeWorkflow } from '../../hooks/useWorkflows.js';
@@ -13,6 +11,8 @@ import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { INPUT_KIND_LABEL, deliveryLabel, triggerLabel } from './labels.js';
 import { WorkflowScheduleDialog } from './WorkflowScheduleDialog.js';
+import { Breadcrumb } from '../../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../../components/PageHeader.js';
 
 interface Props {
     workflow: IWorkflow;
@@ -102,19 +102,17 @@ export function WorkflowHeader({
             }}
         >
             <Box sx={{ minWidth: 0 }}>
-                <Link
-                    component={RouterLink}
-                    to="/workflows"
-                    underline="hover"
-                    sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}
-                >
-                    Workflows
-                </Link>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1, minWidth: 0 }}>
+                <Breadcrumb
+                    items={[
+                        { label: 'Workflows', to: '/workflows' },
+                        { label: wf.name || 'Untitled workflow' },
+                    ]}
+                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
                     <Typography
-                        variant="h2"
+                        variant="h1"
                         sx={{
-                            color: ATLAS_PALETTE.slate,
+                            ...PAGE_TITLE_SX,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',

@@ -96,7 +96,7 @@ describe('TerminalSession — active session', () => {
 
     it('renders session title', async () => {
         renderSession('sess-1');
-        await screen.findByText('Live Session');
+        await screen.findByRole('heading', { name: 'Live Session' });
     });
 
     it('renders status chip', async () => {
@@ -133,7 +133,7 @@ describe('TerminalSession — active session', () => {
             )
         );
         renderSession('sess-1');
-        await screen.findByText('Live Session');
+        await screen.findByRole('heading', { name: 'Live Session' });
         const dashes = screen.getAllByText('—');
         expect(dashes.length).toBeGreaterThan(0);
     });
@@ -188,7 +188,7 @@ describe('TerminalSession — paused session', () => {
             )
         );
         renderSession('sess-1');
-        await screen.findByText('Live Session');
+        await screen.findByRole('heading', { name: 'Live Session' });
         expect(screen.getByTestId('session-status-chip')).toHaveTextContent('paused');
     });
 });

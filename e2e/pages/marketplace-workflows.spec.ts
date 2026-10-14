@@ -76,7 +76,7 @@ test.describe('/agents/marketplace?tab=workflows', () => {
         );
         await expect(page.getByRole('button', { name: 'Use in a project' })).toBeVisible();
 
-        await page.getByRole('button', { name: 'Marketplace', exact: true }).click();
+        await page.getByRole('link', { name: 'Marketplace', exact: true }).click();
         await expect(page).toHaveURL(/\/agents\/marketplace\?tab=workflows$/);
     });
 });

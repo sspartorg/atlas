@@ -260,6 +260,7 @@ export function Hero({
                 {breadcrumb}
             </Box>
             <Typography
+                component="h1"
                 sx={{
                     fontSize: { xs: 22, md: 28 },
                     fontWeight: 700,

@@ -12,7 +12,6 @@ import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Alert from '@mui/material/Alert';
-import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import type { IPublishedWorkflowDetail, IWorkflowGraph, IWorkflowTemplate } from '@atlas/shared';
 import { api } from '../api/api.js';
@@ -28,6 +27,8 @@ import {
     useWorkflowTemplates,
 } from '../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { Breadcrumb } from '../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../components/PageHeader.js';
 import {
     useCliAvailability,
     findMissingCli,
@@ -262,13 +263,12 @@ export function MarketplaceWorkflowDetail() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Button
-                startIcon={<ArrowBackRounded sx={{ fontSize: 18 }} />}
-                onClick={back}
-                sx={{ textTransform: 'none', mb: 3, color: ATLAS_PALETTE.slate60 }}
-            >
-                Marketplace
-            </Button>
+            <Breadcrumb
+                items={[
+                    { label: 'Marketplace', to: '/agents/marketplace?tab=workflows' },
+                    { label: view.name },
+                ]}
+            />
 
             <Box
                 sx={{ display: 'flex', alignItems: 'flex-start', gap: 4, flexWrap: 'wrap', mb: 3 }}
@@ -289,15 +289,7 @@ export function MarketplaceWorkflowDetail() {
                 </Box>
                 {/* Real basis so the actions wrap below on a phone. */}
                 <Box sx={{ flex: '1 1 240px', minWidth: 0 }}>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: { xs: '1.5rem', sm: '2rem' },
-                            fontWeight: 700,
-                            color: ATLAS_PALETTE.slate,
-                            mb: 1,
-                        }}
-                    >
+                    <Typography variant="h1" sx={{ ...PAGE_TITLE_SX, mb: 1 }}>
                         {view.name}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

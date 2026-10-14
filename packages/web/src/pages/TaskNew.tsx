@@ -10,7 +10,6 @@ import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import type { IssuePriority } from '@atlas/shared';
-import { Breadcrumb } from '../components/index.js';
 import { AgentSelect } from '../components/AgentSelect.js';
 import { RepoSelect } from '../components/RepoSelect.js';
 import { useCreateTask, useTransitionTask } from '../hooks/useTasks.js';
@@ -24,6 +23,7 @@ import { useDraftGuard } from '../hooks/useDraftGuard.js';
 import { MOBILE_SHELL, ATLAS_PALETTE } from '../theme/tokens.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const PRIORITY_OPTIONS: Array<{ value: IssuePriority; label: string }> = [
     { value: 'low', label: 'Low' },
@@ -52,7 +52,7 @@ export function taskNewBannerCopy(workflowName: string | null): string {
 }
 
 export function TaskNew() {
-    useSetPageTitle('Draft a new task');
+    useSetPageTitle('New task');
     const navigate = useNavigate();
     const isMobile = useIsMobile();
     const [params] = useSearchParams();
@@ -181,40 +181,16 @@ export function TaskNew() {
                 },
             }}
         >
-            <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-                <Breadcrumb items={[{ label: 'Tasks', to: '/tasks' }, { label: 'New Task' }]} />
-            </Box>
-
-            <Box sx={{ mb: 5 }}>
-                <Typography
-                    sx={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        color: ATLAS_PALETTE.slate60,
-                        mb: 1,
-                    }}
-                >
-                    New Task
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: 26,
-                        fontWeight: 700,
-                        color: ATLAS_PALETTE.slate,
-                        lineHeight: 1.2,
-                        mb: 1,
-                    }}
-                >
-                    Draft a new task
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                    {workflow
+            <PageHeader
+                icon="flag"
+                title="New task"
+                breadcrumbs={[{ label: 'Tasks', to: '/tasks' }, { label: 'New task' }]}
+                subtitle={
+                    workflow
                         ? `${workflow.name} will start once you submit`
-                        : 'Nothing runs until the Task is queued for a workflow'}
-                </Typography>
-            </Box>
+                        : 'Nothing runs until the Task is queued for a workflow'
+                }
+            />
 
             <Box
                 sx={{

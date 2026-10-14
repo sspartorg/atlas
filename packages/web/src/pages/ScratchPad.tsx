@@ -11,7 +11,7 @@ import { ScratchPadEditor } from '../components/ScratchPadEditor.js';
 import { useScratchPadList, useCreateScratchPad } from '../hooks/useScratchPad.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 // P12 — Scratch Pad page. Tile-grid of free-form markdown notes that don't
 // belong to any project / agent / issue. The list is rendered as a
@@ -57,47 +57,30 @@ export function ScratchPad() {
         // `<PageFab>` self-renders as a bottom-right FAB only on mobile,
         // exactly like the Tasks page.
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    mb: 5,
-                    gap: 4,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        <PageTitleIcon name="sticky_note_2" />
-                        Scratch Pad
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 2 }}>
+            <PageHeader
+                icon="sticky_note_2"
+                title="Scratch Pad"
+                subtitle={
+                    <>
                         Free-form markdown tiles. Use them for half-formed thoughts before they
                         become a Task.
-                    </Typography>
-                </Box>
-                <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddRounded sx={{ fontSize: 16 }} />}
-                        onClick={openNew}
-                        disabled={createTile.isPending}
-                        sx={{ textTransform: 'none', fontWeight: 500 }}
-                    >
-                        {createTile.isPending ? 'Creating...' : 'New tile'}
-                    </Button>
-                </Box>
-            </Box>
+                    </>
+                }
+                hideActionsOnMobile
+                actions={
+                    <>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddRounded sx={{ fontSize: 16 }} />}
+                            onClick={openNew}
+                            disabled={createTile.isPending}
+                            sx={{ textTransform: 'none', fontWeight: 500 }}
+                        >
+                            {createTile.isPending ? 'Creating...' : 'New tile'}
+                        </Button>
+                    </>
+                }
+            />
 
             {!isLoading && tiles.length === 0 ? (
                 <HeroEmptyState

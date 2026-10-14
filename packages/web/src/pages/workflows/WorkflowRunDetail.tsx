@@ -20,6 +20,8 @@ import { useAgents } from '../../hooks/useAgents.js';
 import { useIssues } from '../../hooks/useIssues.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useSetPageTitle } from '../../components/shell/index.js';
+import { Breadcrumb } from '../../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../../components/PageHeader.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { runStatusPaletteEntry } from '../../theme/runStatusPalette.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
@@ -353,40 +355,28 @@ function RunView({ run }: { run: IWorkflowRunDetail }) {
                 }}
             >
                 <Box sx={{ minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate60 }}>
-                        <Link
-                            component={RouterLink}
-                            to="/workflows"
-                            underline="hover"
-                            color="inherit"
-                        >
-                            Workflows
-                        </Link>
-                        {' / '}
-                        <Link
-                            component={RouterLink}
-                            to={`/workflows/${run.workflow_id}?tab=runs`}
-                            underline="hover"
-                            color="inherit"
-                        >
-                            {run.workflow_name}
-                        </Link>
-                        {run.parent_workflow_run_id && (
-                            <>
-                                {' · '}
-                                {/* The run page reads only :runId, so any workflow id in the path resolves. */}
+                    <Breadcrumb
+                        items={[
+                            { label: 'Workflows', to: '/workflows' },
+                            { label: run.workflow_name, to: `/workflows/${run.workflow_id}?tab=runs` },
+                            { label: 'Run' },
+                        ]}
+                        after={
+                            run.parent_workflow_run_id && (
+                                // The run page reads only :runId, so any workflow id in the path resolves.
                                 <Link
                                     component={RouterLink}
                                     to={`/workflows/${run.workflow_id}/runs/${run.parent_workflow_run_id}`}
                                     underline="hover"
+                                    sx={{ fontSize: 13 }}
                                 >
                                     part of the Task run
                                 </Link>
-                            </>
-                        )}
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
-                        <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
+                            )
+                        }
+                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Typography variant="h1" sx={PAGE_TITLE_SX}>
                             {run.item_title ?? 'Project run'}
                         </Typography>
                         <WorkflowRunStatusChip status={run.status} />

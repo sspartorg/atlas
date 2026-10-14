@@ -93,7 +93,8 @@ describe('ProjectHeader', () => {
             />
         );
         expect(screen.getByText('2 repos')).toBeInTheDocument();
-        expect(screen.queryByRole('link')).not.toBeInTheDocument();
+        // Only the breadcrumb's Projects link — no repo url.
+        expect(screen.getAllByRole('link')).toHaveLength(1);
         expect(screen.queryByText('develop')).not.toBeInTheDocument();
     });
 

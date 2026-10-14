@@ -19,6 +19,7 @@ import {
     type AgentView,
     type AgentRuntimeStats,
 } from './agentViewModel.js';
+import { PAGE_TITLE_SX } from '../../components/PageHeader.js';
 
 function hexToRgba(hex: string, alpha: number): string {
     const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex.replace('#', ''));
@@ -189,13 +190,10 @@ export const AgentHero = memo(function AgentHero({
                                 }}
                             >
                                 <Typography
+                                    component="h1"
                                     title={agent.name}
                                     sx={{
-                                        fontSize: '2rem',
-                                        fontWeight: 700,
-                                        color: ATLAS_PALETTE.slate,
-                                        lineHeight: 1.15,
-                                        letterSpacing: '-0.01em',
+                                        ...PAGE_TITLE_SX,
                                         minWidth: 0,
                                         maxWidth: '100%',
                                         whiteSpace: 'nowrap',

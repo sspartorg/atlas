@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { useTabParam } from '../hooks/useTabParam.js';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
@@ -22,7 +21,7 @@ import { InAppFeedTab } from './notifications/InAppFeedTab.js';
 import { relativeShort } from './notifications/timeFormat.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { RefreshButton } from '../components/index.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const MONO = '"JetBrains Mono", monospace';
 const TAB_KEYS = ['external', 'in-app'] as const;
@@ -78,96 +77,87 @@ export function Notifications() {
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
             {/* Header */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    mb: 5,
-                    gap: 4,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Typography
-                    variant="h1"
-                    sx={{
-                        fontSize: '2.25rem',
-                        fontWeight: 700,
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.01em',
-                        color: ATLAS_PALETTE.slate,
-                    }}
-                >
-                    <PageTitleIcon name="notifications" />
-                    Notifications
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <RefreshButton
-                        onRefresh={handleRefresh}
-                        isFetching={notifFetching > 0}
-                        tooltipLabel="Refresh notifications"
-                    />
-                    <Button
-                        variant="outlined"
-                        startIcon={<TuneRounded sx={{ fontSize: 16 }} />}
-                        onClick={() => navigate('/settings?tab=notifications')}
-                        sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
-                    >
-                        Notification Settings
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        startIcon={<DoneAllRounded sx={{ fontSize: 16 }} />}
-                        onClick={handleMarkAllRead}
-                        disabled={markAllRead.isPending}
-                        sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
-                    >
-                        Mark All Read
-                    </Button>
-                </Box>
-            </Box>
-
-            {/* Subtitle: metadata line (status + connection info) */}
-            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 4, lineHeight: 1.6 }}>
-                External notifications are the outbound channel
-                {externalConnected && endpointLabel ? (
+            <PageHeader
+                icon="notifications"
+                title="Notifications"
+                subtitle={
                     <>
-                        {' · connected to '}
-                        <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
-                            {endpointLabel}
-                        </Box>
-                        {' · last delivery '}
-                        <Box component="span" sx={{ color: ATLAS_PALETTE.slate, fontWeight: 600 }}>
-                            {lastDeliveryLabel}
-                        </Box>
+                        External notifications are the outbound channel
+                        {externalConnected && endpointLabel ? (
+                            <>
+                                {' · connected to '}
+                                <Box
+                                    component="span"
+                                    sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}
+                                >
+                                    {endpointLabel}
+                                </Box>
+                                {' · last delivery '}
+                                <Box
+                                    component="span"
+                                    sx={{ color: ATLAS_PALETTE.slate, fontWeight: 600 }}
+                                >
+                                    {lastDeliveryLabel}
+                                </Box>
+                            </>
+                        ) : (
+                            <>
+                                {' · '}
+                                <Box
+                                    component="span"
+                                    sx={{ color: ATLAS_PALETTE.error, fontWeight: 700 }}
+                                >
+                                    not connected
+                                </Box>
+                                {' — visit '}
+                                <Box
+                                    component="a"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        navigate('/settings?tab=notifications');
+                                    }}
+                                    sx={{
+                                        color: ATLAS_PALETTE.brandBlue,
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                        textDecoration: 'none',
+                                        '&:hover': { textDecoration: 'underline' },
+                                    }}
+                                >
+                                    Settings → Notifications
+                                </Box>
+                                {' to wire your channel.'}
+                            </>
+                        )}
                     </>
-                ) : (
+                }
+                actions={
                     <>
-                        {' · '}
-                        <Box component="span" sx={{ color: ATLAS_PALETTE.error, fontWeight: 700 }}>
-                            not connected
-                        </Box>
-                        {' — visit '}
-                        <Box
-                            component="a"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                navigate('/settings?tab=notifications');
-                            }}
-                            sx={{
-                                color: ATLAS_PALETTE.brandBlue,
-                                cursor: 'pointer',
-                                fontWeight: 600,
-                                textDecoration: 'none',
-                                '&:hover': { textDecoration: 'underline' },
-                            }}
+                        <RefreshButton
+                            onRefresh={handleRefresh}
+                            isFetching={notifFetching > 0}
+                            tooltipLabel="Refresh notifications"
+                        />
+                        <Button
+                            variant="outlined"
+                            startIcon={<TuneRounded sx={{ fontSize: 16 }} />}
+                            onClick={() => navigate('/settings?tab=notifications')}
+                            sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
                         >
-                            Settings → Notifications
-                        </Box>
-                        {' to wire your channel.'}
+                            Notification Settings
+                        </Button>
+                        <Button
+                            variant="outlined"
+                            startIcon={<DoneAllRounded sx={{ fontSize: 16 }} />}
+                            onClick={handleMarkAllRead}
+                            disabled={markAllRead.isPending}
+                            sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
+                        >
+                            Mark All Read
+                        </Button>
                     </>
-                )}
-            </Typography>
+                }
+            />
 
             {/* Tab bar */}
             <Box sx={{ borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`, mb: 4 }}>

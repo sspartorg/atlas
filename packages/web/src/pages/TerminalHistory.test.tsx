@@ -104,7 +104,7 @@ describe('TerminalHistory — closed session with transcript', () => {
 
     it('renders session title', async () => {
         renderHistory('sess-hist');
-        await screen.findByText('Closed Session');
+        await screen.findByRole('heading', { name: 'Closed Session' });
     });
 
     it('renders branch info', async () => {
@@ -166,7 +166,7 @@ describe('TerminalHistory — transcript loading/error', () => {
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () => new Promise(() => {}))
         );
         renderHistory('sess-hist');
-        await screen.findByText('Closed Session');
+        await screen.findByRole('heading', { name: 'Closed Session' });
         expect(document.querySelector('[role="progressbar"]')).toBeInTheDocument();
     });
 
@@ -217,7 +217,7 @@ describe('TerminalHistory — errored session', () => {
             </Routes>,
             { initialEntries: ['/terminal/sess-err/history'] }
         );
-        await screen.findByText('Closed Session');
+        await screen.findByRole('heading', { name: 'Closed Session' });
     });
 });
 
@@ -262,7 +262,7 @@ describe('TerminalHistory — null worktree_branch and closed_at render dashes',
             </Routes>,
             { initialEntries: ['/terminal/sess-null/history'] }
         );
-        await screen.findByText('Closed Session');
+        await screen.findByRole('heading', { name: 'Closed Session' });
         // Both null fields should render as the "—" fallback
         const dashes = await screen.findAllByText('—');
         expect(dashes.length).toBeGreaterThanOrEqual(2);
@@ -281,14 +281,14 @@ describe('TerminalHistory — transcript error without message property', () => 
             )
         );
         renderHistory('sess-hist');
-        await screen.findByText('Closed Session');
+        await screen.findByRole('heading', { name: 'Closed Session' });
         // Transcript fetch fails; the error alert must appear
         await screen.findByText(/could not load transcript/i);
     });
 });
 
-describe('TerminalHistory — back button navigates to /terminal', () => {
-    it('clicks back button and navigates to /terminal list', async () => {
+describe('TerminalHistory — breadcrumb navigates to /terminal', () => {
+    it('clicks the Terminal breadcrumb and navigates to the list', async () => {
         server.use(
             http.get(`${BASE}/cli/sessions/sess-hist`, () => HttpResponse.json(makeSession())),
             http.get(`${BASE}/cli/sessions/sess-hist/transcript`, () =>
@@ -306,10 +306,8 @@ describe('TerminalHistory — back button navigates to /terminal', () => {
             { initialEntries: ['/terminal/sess-hist/history'] }
         );
         // Wait for the session to load
-        await screen.findByText('Closed Session');
-        // Click the back button (ArrowBackRounded IconButton)
-        const backBtn = screen.getByRole('button', { name: /back to sessions/i });
-        fireEvent.click(backBtn);
+        await screen.findByRole('heading', { name: 'Closed Session' });
+        fireEvent.click(screen.getByRole('link', { name: 'Terminal' }));
         // Should navigate to terminal list
         await screen.findByTestId('terminal-list');
     });

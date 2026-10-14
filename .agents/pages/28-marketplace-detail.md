@@ -16,7 +16,7 @@ handoff rules or git flags (ADR 0014: workflows own those).
 ## UI elements
 
 **Header**
-- Breadcrumb / **back** button → `/agents/marketplace` (`:193`).
+- Breadcrumb Marketplace (→ `/agents/marketplace`) › agent name; title `h1` uses `PAGE_TITLE_SX`.
 - Name, category, kind, `cli` + `model`, upgrade chip when `summaryRow.upgrade_available`.
 
 **Action row** (`:274`) — exactly one primary action, chosen by install state:

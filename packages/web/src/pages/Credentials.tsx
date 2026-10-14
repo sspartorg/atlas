@@ -1,6 +1,5 @@
 import { Suspense, useMemo, useState } from 'react';
 import { lazyNamed } from '../utils/lazyNamed.js';
-import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -25,13 +24,10 @@ const CredentialModal = lazyNamed(
     'CredentialModal'
 );
 import { useSetPageTitle } from '../components/shell/index.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
-
-const MONO = '"JetBrains Mono", monospace';
+import { PageHeader } from '../components/PageHeader.js';
 
 export function Credentials() {
     useSetPageTitle('Git credentials');
-    const navigate = useNavigate();
     const qc = useQueryClient();
     const toast = useToast();
     const { data: rows = [], isPending } = useCredentials();
@@ -93,107 +89,31 @@ export function Credentials() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {/* Breadcrumb */}
-            <Box sx={{ mb: 3 }}>
-                <Box
-                    component="a"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        navigate('/settings');
-                    }}
-                    sx={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        color: ATLAS_PALETTE.slate60,
-                        cursor: 'pointer',
-                        textDecoration: 'none',
-                        '&:hover': { color: ATLAS_PALETTE.brandBlue },
-                    }}
-                >
-                    Settings
-                </Box>
-                <Box
-                    component="span"
-                    sx={{
-                        mx: 1.5,
-                        fontSize: '0.6875rem',
-                        color: ATLAS_PALETTE.slate30,
-                    }}
-                >
-                    ·
-                </Box>
-                <Box
-                    component="span"
-                    sx={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        color: ATLAS_PALETTE.slate60,
-                    }}
-                >
-                    Credentials
-                </Box>
-            </Box>
-
-            {/* Header — title stacks above the action row on mobile; on
-                desktop they sit side-by-side. The two buttons split the
-                available row width 50/50 on mobile so they don't shrink to
-                "Check exp…" / "Add cred…" ellipsis. */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    flexDirection: { xs: 'column', md: 'row' },
-                    alignItems: { xs: 'stretch', md: 'flex-end' },
-                    justifyContent: 'space-between',
-                    mb: 6,
-                    gap: 4,
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            color: ATLAS_PALETTE.slate,
-                            letterSpacing: '-0.01em',
-                        }}
-                    >
-                        <PageTitleIcon name="key" />
-                        Git credentials
-                    </Typography>
-                    {rows.length > 0 && (
-                        <Typography
-                            sx={{
-                                fontFamily: MONO,
-                                fontSize: '0.8125rem',
-                                color: ATLAS_PALETTE.slate60,
-                                mt: 1.5,
-                            }}
-                        >
+            <PageHeader
+                icon="key"
+                title="Git credentials"
+                breadcrumbs={[{ label: 'Settings', to: '/settings' }, { label: 'Credentials' }]}
+                subtitle={
+                    rows.length > 0 ? (
+                        <>
                             {rows.length} {rows.length === 1 ? 'credential' : 'credentials'} ·{' '}
                             {hostsCount} {hostsCount === 1 ? 'host' : 'hosts'}
                             {expiringSoon > 0 && ` · ${expiringSoon} expiring soon`}
-                        </Typography>
-                    )}
-                </Box>
-                <Button
-                    variant="contained"
-                    color="success"
-                    startIcon={<AddRounded />}
-                    onClick={openAdd}
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        alignSelf: { xs: 'flex-start', md: 'flex-end' },
-                    }}
-                >
-                    Add credential
-                </Button>
-            </Box>
+                        </>
+                    ) : undefined
+                }
+                actions={
+                    <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<AddRounded />}
+                        onClick={openAdd}
+                        sx={{ textTransform: 'none', fontWeight: 600 }}
+                    >
+                        Add credential
+                    </Button>
+                }
+            />
 
             {rows.length === 0 ? (
                 <CredentialsEmptyState onAdd={openAdd} />

@@ -28,7 +28,7 @@ import {
     type CliFilterKey,
 } from '../components/TerminalFilters.js';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -132,68 +132,44 @@ export function Terminal() {
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
             {/* Header — Projects-style h1 + monospace subtitle. */}
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        <PageTitleIcon name="terminal" />
-                        Terminal
-                    </Typography>
-                    <Typography
-                        sx={{
-                            fontFamily: MONO_FONT,
-                            fontSize: '0.8125rem',
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 2,
-                        }}
-                    >
+            <PageHeader
+                icon="terminal"
+                title="Terminal"
+                subtitle={
+                    <>
                         {sessions.length} sessions · {counts.active} active · {counts.paused} paused
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Tooltip title="Open multi-pane workspace">
-                        <IconButton
-                            onClick={() => navigate('/terminal/layout')}
+                    </>
+                }
+                actions={
+                    <>
+                        <Tooltip title="Open multi-pane workspace">
+                            <IconButton
+                                onClick={() => navigate('/terminal/layout')}
+                                sx={{
+                                    border: `1px solid ${ATLAS_PALETTE.slate12}`,
+                                    borderRadius: '8px',
+                                    p: 1,
+                                }}
+                            >
+                                <DashboardCustomizeRounded sx={{ fontSize: 20 }} />
+                            </IconButton>
+                        </Tooltip>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddRounded />}
+                            onClick={() => setDialogOpen(true)}
                             sx={{
-                                border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                                borderRadius: '8px',
-                                p: 1,
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                background: ATLAS_PALETTE.green,
+                                '&:hover': { background: ATLAS_PALETTE.greenDark },
                             }}
                         >
-                            <DashboardCustomizeRounded sx={{ fontSize: 20 }} />
-                        </IconButton>
-                    </Tooltip>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddRounded />}
-                        onClick={() => setDialogOpen(true)}
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            background: ATLAS_PALETTE.green,
-                            '&:hover': { background: ATLAS_PALETTE.greenDark },
-                        }}
-                    >
-                        Start Session
-                    </Button>
-                </Box>
-            </Box>
+                            Start Session
+                        </Button>
+                    </>
+                }
+            />
 
             {/* Filter row */}
             <Box sx={{ mt: 5 }}>

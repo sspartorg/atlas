@@ -20,10 +20,9 @@ describe('AgentBreadcrumbs', () => {
         expect(screen.getByText('Coder')).toBeTruthy();
     });
 
-    it('renders separator slashes', () => {
+    it('marks the agent as the current page', () => {
         renderWithProviders(<AgentBreadcrumbs category="Marketing" agentName="Marketer" />);
-        const slashes = screen.getAllByText('/');
-        expect(slashes.length).toBeGreaterThanOrEqual(2);
+        expect(screen.getByText('Marketer')).toHaveAttribute('aria-current', 'page');
     });
 
     it('navigates to /agents when Agents link is clicked', async () => {

@@ -14,7 +14,7 @@ Full read of a single `agent_runs` row: status header, issue link card, **per-ev
 ## UI elements
 
 **Breadcrumbs**
-- `Agents / {agent.name} / Runs / {runId.slice(0,8)}`
+- `Agents › {agent.name} › Runs › {runId.slice(0,8)}` (shared `Breadcrumb`; run id mono). The hero title is the run id as the page `h1` (`PAGE_TITLE_SX`, mono).
 - "Agents" → `/agents`, agent name → `/agents/:id`, "Runs" → `/agents/:id?tab=runs`.
 
 **Hero**

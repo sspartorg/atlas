@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import type { IAgent } from '@atlas/shared';
 import { SearchTextInput } from '../components/index.js';
 import { useAgentsWithPrompts } from '../hooks/useAgents.js';
@@ -28,7 +27,7 @@ import {
     type SearchType,
 } from './search/searchViewModel.js';
 import { useSetPageTitle } from '../components/shell/index.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 // P14 — the page now sources hits from `GET /api/search` (Postgres FTS +
 // filter pushdown) instead of building a client-side corpus from every
@@ -142,60 +141,40 @@ export function Search() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {/* Header */}
-            <Box sx={{ mb: 5 }}>
-                <Box
-                    sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 4,
-                        flexWrap: 'wrap',
-                    }}
-                >
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        <PageTitleIcon name="search" />
-                        Search
-                    </Typography>
-                    <SearchModeToggle mode={mode} onChange={setMode} />
-                </Box>
-                <Typography sx={{ fontSize: 14, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
-                    Across{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        tasks
-                    </Box>
-                    ,{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        sub-tasks
-                    </Box>
-                    ,{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        prompts
-                    </Box>
-                    , and{' '}
-                    <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
-                        conversation history
-                    </Box>
-                    .
-                    {isFetching ? (
-                        <Box
-                            component="span"
-                            sx={{ ml: 1, fontSize: 12, color: ATLAS_PALETTE.slate60 }}
-                        >
-                            · searching…
+            <PageHeader
+                icon="search"
+                title="Search"
+                subtitle={
+                    <>
+                        Across{' '}
+                        <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                            tasks
                         </Box>
-                    ) : null}
-                </Typography>
-            </Box>
+                        ,{' '}
+                        <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                            sub-tasks
+                        </Box>
+                        ,{' '}
+                        <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                            prompts
+                        </Box>
+                        , and{' '}
+                        <Box component="b" sx={{ fontWeight: 600, color: ATLAS_PALETTE.slate }}>
+                            conversation history
+                        </Box>
+                        .
+                        {isFetching ? (
+                            <Box
+                                component="span"
+                                sx={{ ml: 1, fontSize: 12, color: ATLAS_PALETTE.slate60 }}
+                            >
+                                · searching…
+                            </Box>
+                        ) : null}
+                    </>
+                }
+                actions={<SearchModeToggle mode={mode} onChange={setMode} />}
+            />
 
             <Box sx={{ mb: 4 }}>
                 <SearchTextInput

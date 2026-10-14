@@ -8,7 +8,7 @@ import { goto } from '../helpers/nav.js';
 test.describe('/tasks/new', () => {
     test('renders without console errors and shows the form heading', async ({ page }) => {
         await goto(page, '/tasks/new');
-        await expect(page.getByText(/Draft a new task/i).first()).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: /New task/ })).toBeVisible();
     });
 
     test('form has Title, Description, Project, Priority fields', async ({ page }) => {

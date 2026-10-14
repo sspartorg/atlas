@@ -11,7 +11,7 @@ Single-page form to draft a Task and either save it as a draft or submit it. Sub
 
 ## UI elements
 **Header / breadcrumb**
-- Breadcrumb: Tasks → "New Task"; title "Draft a new task"
+- Breadcrumb: Tasks › New task; title "New task" (`PageHeader`)
 - Subtitle: `"<workflow.name> will start once you submit"` when a workflow is picked, else `"Nothing runs until the Task is queued for a workflow"`. It used to name the assignee ("PO Writer will pick this up"), which promised something that never happened — agents don't pick items up (ADR 0014).
 
 **Info banner** — `taskNewBannerCopy(workflowName)`: "<workflow> starts as soon as you submit…" with a workflow, else "With no workflow picked, nothing runs until you queue the Task for one from its page."

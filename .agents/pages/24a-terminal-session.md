@@ -17,8 +17,8 @@ The live, single-pane view of one PTY-backed CLI session: a real xterm attached 
 - **Terminal-state session**: renders `null` while the redirect fires, so the closed-state alerts don't paint for one tick first.
 
 ## UI elements
-- **Back to sessions** icon button (`ArrowBackRounded`, tooltip "Back to sessions") → `/terminal`.
-- **Title** — `session.title`, `noWrap`.
+- **Breadcrumb** — Terminal (→ `/terminal`) › session title.
+- **Title** — `session.title` as the page `h1` (`PAGE_TITLE_SX`), `noWrap`.
 - **Chips** — `session.cli` (outlined, capitalised, `data-testid="session-cli-chip"`), `session.status` (coloured via `STATUS_COLOUR`: active → success, paused → warning, closed → default, errored → error, `data-testid="session-status-chip"`), and `session.item_id` when the session is attached to an item (mono, `data-testid="session-item-chip"`).
 - **Header strip** — `HeaderField` for **Branch** (`worktree_branch ?? '—'`), **Model**, and **Session id** (`claude_session_id`, mono, with a **Copy** icon button; toasts "Session id copied", or "Clipboard write blocked by browser" when the write throws). Fields show `—` when unset.
 - **`TerminalSessionControls`** — Pause / Resume / Stop, including the `StopSessionModal` confirmation. It also owns the "Session stopped + branch pushed" toast; this page deliberately does NOT fire its own, which used to produce a duplicate on every Stop.

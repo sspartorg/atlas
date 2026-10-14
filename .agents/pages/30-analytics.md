@@ -13,9 +13,9 @@ combining autonomous agent runs with manual terminal sessions.
 
 ## UI elements
 
-**Header**
-- `{todayLabel} · {clockLabel} {tzShort}` (`:536`) — wall clock in the **viewer's** timezone.
-- Subtitle states the month and repeats the timezone (`:561`). That sentence matters — see Edge cases.
+**Header** — `PageHeader` (`analytics` icon, title, subtitle) above the dark hero band.
+- Hero band: `{todayLabel} · {clockLabel} {tzShort}` (`:536`) — wall clock in the **viewer's** timezone.
+- Subtitle states the month and repeats the timezone. That sentence matters — see Edge cases.
 
 **Headline insight** (`:381`) — one computed sentence, picked in priority order:
 1. **Month-over-month** — spend delta vs last month

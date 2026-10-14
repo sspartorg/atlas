@@ -14,7 +14,7 @@ Look at a marketplace workflow before using it: its graph, the agents it install
 
 ## UI elements
 **Header**
-- **Marketplace** back button → `/agents/marketplace?tab=workflows`.
+- Breadcrumb Marketplace (→ `/agents/marketplace?tab=workflows`) › workflow name; title `h1` uses `PAGE_TITLE_SX`.
 - `account_tree` tile, name (H1), chips: input kind (`Per Task` / `Project run` / `Sub-task workflow`), trigger, delivery; a published workflow adds `Published {date}`.
 - **Export** — plain `href`. Starter: `GET /api/workflows/templates/:id/export` (the template, its `template:` sub-workflows and their **catalog** agents). Published: `GET /api/marketplace/workflows/:id/export` (the zip stored at publish time — the same bundle the builder's Export produces). Import either from **Workflows → Import**.
 - **Unpublish** (published only; outlined, error colour) → `ConfirmActionModal` "Unpublish {name}?" / "It leaves the marketplace. Workflows already created from it stay as they are." → `DELETE /api/marketplace/workflows/:id` → toast `Unpublished {name}` → back to the Workflows tab. Failure toasts "Could not unpublish workflow".

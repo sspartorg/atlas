@@ -15,7 +15,7 @@ import { relativeTime } from '../utils/time.js';
 import { NewWorkflowDialog } from './workflows/NewWorkflowDialog.js';
 import { ImportWorkflowDialog } from './workflows/ImportWorkflowDialog.js';
 import { INPUT_KIND_LABEL, graphAgentIds, triggerLabel } from './workflows/labels.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const GRID_SX = {
     display: 'grid',
@@ -194,22 +194,11 @@ export function Workflows() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    mb: 5,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Box>
-                    <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
-                        <PageTitleIcon name="account_tree" />
-                        Workflows
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
+            <PageHeader
+                icon="account_tree"
+                title="Workflows"
+                subtitle={
+                    <>
                         <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
                             {workflows?.length ?? 0}
                         </Box>{' '}
@@ -218,61 +207,63 @@ export function Workflows() {
                             {activeCount}
                         </Box>{' '}
                         active
-                    </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                    <Button
-                        variant="outlined"
-                        onClick={() => setImportOpen(true)}
-                        startIcon={
-                            <Box
-                                component="span"
-                                className="material-symbols-rounded"
-                                aria-hidden="true"
-                                sx={{ fontSize: 18 }}
-                            >
-                                upload
-                            </Box>
-                        }
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            fontSize: 13.5,
-                            px: 3,
-                            py: 1.25,
-                        }}
-                    >
-                        Import
-                    </Button>
-                    <Button
-                        variant="contained"
-                        onClick={() => setNewOpen(true)}
-                        startIcon={
-                            <Box
-                                component="span"
-                                className="material-symbols-rounded"
-                                aria-hidden="true"
-                                sx={{ fontSize: 18 }}
-                            >
-                                add
-                            </Box>
-                        }
-                        sx={{
-                            textTransform: 'none',
-                            fontWeight: 600,
-                            fontSize: 13.5,
-                            px: 3,
-                            py: 1.25,
-                            bgcolor: ATLAS_PALETTE.green,
-                            boxShadow: 'none',
-                            display: { xs: 'none', md: 'inline-flex' },
-                            '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
-                        }}
-                    >
-                        New workflow
-                    </Button>
-                </Box>
-            </Box>
+                    </>
+                }
+                actions={
+                    <>
+                        <Button
+                            variant="outlined"
+                            onClick={() => setImportOpen(true)}
+                            startIcon={
+                                <Box
+                                    component="span"
+                                    className="material-symbols-rounded"
+                                    aria-hidden="true"
+                                    sx={{ fontSize: 18 }}
+                                >
+                                    upload
+                                </Box>
+                            }
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                fontSize: 13.5,
+                                px: 3,
+                                py: 1.25,
+                            }}
+                        >
+                            Import
+                        </Button>
+                        <Button
+                            variant="contained"
+                            onClick={() => setNewOpen(true)}
+                            startIcon={
+                                <Box
+                                    component="span"
+                                    className="material-symbols-rounded"
+                                    aria-hidden="true"
+                                    sx={{ fontSize: 18 }}
+                                >
+                                    add
+                                </Box>
+                            }
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                fontSize: 13.5,
+                                px: 3,
+                                py: 1.25,
+                                bgcolor: ATLAS_PALETTE.green,
+                                boxShadow: 'none',
+                                display: { xs: 'none', md: 'inline-flex' },
+                                '&:hover': { bgcolor: ATLAS_PALETTE.greenDark, boxShadow: 'none' },
+                            }}
+                        >
+                            New workflow
+                        </Button>
+                    </>
+                }
+            />
 
             {error ? (
                 <Alert severity="error">Couldn&apos;t load workflows: {error.message}</Alert>

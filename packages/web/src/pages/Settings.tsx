@@ -1,6 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -23,7 +22,7 @@ import { HelpAboutTab } from './settings/HelpAboutTab.js';
 import { JiraTab } from './settings/JiraTab.js';
 import { TeamConfigTab } from './settings/TeamConfigTab.js';
 import { useSetPageTitle } from '../components/shell/index.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const TAB_KEYS = [
     'profile',
@@ -77,25 +76,11 @@ export function Settings() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {/* Header */}
-            <Box sx={{ mb: 5 }}>
-                <Typography
-                    variant="h1"
-                    sx={{
-                        fontSize: '2.25rem',
-                        fontWeight: 700,
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.01em',
-                        color: ATLAS_PALETTE.slate,
-                    }}
-                >
-                    <PageTitleIcon name="settings" />
-                    Settings
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
-                    {ownerName} · local app · no auth · settings live in the Atlas server directory
-                </Typography>
-            </Box>
+            <PageHeader
+                icon="settings"
+                title="Settings"
+                subtitle={`${ownerName} · local app · no auth · settings live in the Atlas server directory`}
+            />
 
             {/* Tab bar */}
             <Box sx={{ borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`, mb: 5 }}>

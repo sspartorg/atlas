@@ -3,10 +3,9 @@ import Typography from '@mui/material/Typography';
 import Skeleton from '@mui/material/Skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/api.js';
-import { Breadcrumb } from '../components/Breadcrumb.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import type { IToolCatalogGroup } from '@atlas/shared';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const GROUP_LABELS: Record<string, string> = {
     AGENTS: 'Agents',
@@ -32,34 +31,21 @@ export function McpTools() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Breadcrumb items={[{ label: 'Agents', to: '/agents' }, { label: 'MCP Tools' }]} />
-
-            <Box sx={{ mb: 8 }}>
-                <Typography
-                    variant="h1"
-                    sx={{ fontSize: '2.25rem', fontWeight: 700, color: ATLAS_PALETTE.slate }}
-                >
-                    <PageTitleIcon name="build" />
-                    MCP Tools
-                </Typography>
-                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
-                    Read-only directory of every tool the Atlas MCP server exposes to agents.
-                </Typography>
-                {!isLoading && !isError && totalTools > 0 && (
-                    <Typography
-                        sx={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            color: ATLAS_PALETTE.slate40,
-                            mt: 2,
-                        }}
-                    >
-                        {totalTools} tools · {groups.length} categories
-                    </Typography>
-                )}
-            </Box>
+            <PageHeader
+                icon="build"
+                title="MCP Tools"
+                breadcrumbs={[{ label: 'Agents', to: '/agents' }, { label: 'MCP Tools' }]}
+                subtitle={
+                    <>
+                        Read-only directory of every tool the Atlas MCP server exposes to agents.
+                        {!isLoading && !isError && totalTools > 0 && (
+                            <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                                {totalTools} tools · {groups.length} categories
+                            </Box>
+                        )}
+                    </>
+                }
+            />
 
             {isError && (
                 <Box

@@ -26,7 +26,7 @@ import { HeroEmptyState } from '../components/HeroEmptyState.js';
 import { RefreshButton } from '../components/index.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { NewReminderModal } from './reminders/NewReminderModal.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const ACTIVE_STATES: ReminderStatus[] = ['active', 'paused'];
 const HISTORY_STATES: ReminderStatus[] = ['cancelled', 'completed'];
@@ -84,64 +84,47 @@ export function Reminders() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    mb: 5,
-                    gap: 4,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Typography
-                    variant="h1"
-                    sx={{
-                        fontSize: '2.25rem',
-                        fontWeight: 700,
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.01em',
-                        color: ATLAS_PALETTE.slate,
-                    }}
-                >
-                    <PageTitleIcon name="alarm" />
-                    Reminders
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <RefreshButton
-                        onRefresh={() => void refetch()}
-                        isFetching={isFetching}
-                        tooltipLabel="Refresh reminders"
-                    />
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                size="small"
-                                checked={showHistory}
-                                onChange={(e) => setShowHistory(e.target.checked)}
-                            />
-                        }
-                        label={
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                Show history
-                            </Typography>
-                        }
-                    />
-                    <Button
-                        variant="contained"
-                        startIcon={<AddRounded sx={{ fontSize: 16 }} />}
-                        onClick={() => setNewOpen(true)}
-                        sx={{ textTransform: 'none', fontWeight: 500 }}
-                    >
-                        New reminder
-                    </Button>
-                </Box>
-            </Box>
-
-            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 4 }}>
-                Reminders fire as in-app notifications and (optionally) external notifications. They
-                run on the same per-minute scheduler as agents.
-            </Typography>
+            <PageHeader
+                icon="alarm"
+                title="Reminders"
+                subtitle={
+                    <>
+                        Reminders fire as in-app notifications and (optionally) external
+                        notifications. They run on the same per-minute scheduler as agents.
+                    </>
+                }
+                actions={
+                    <>
+                        <RefreshButton
+                            onRefresh={() => void refetch()}
+                            isFetching={isFetching}
+                            tooltipLabel="Refresh reminders"
+                        />
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    size="small"
+                                    checked={showHistory}
+                                    onChange={(e) => setShowHistory(e.target.checked)}
+                                />
+                            }
+                            label={
+                                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                                    Show history
+                                </Typography>
+                            }
+                        />
+                        <Button
+                            variant="contained"
+                            startIcon={<AddRounded sx={{ fontSize: 16 }} />}
+                            onClick={() => setNewOpen(true)}
+                            sx={{ textTransform: 'none', fontWeight: 500 }}
+                        >
+                            New reminder
+                        </Button>
+                    </>
+                }
+            />
 
             {!isLoading && active.length === 0 ? (
                 <HeroEmptyState

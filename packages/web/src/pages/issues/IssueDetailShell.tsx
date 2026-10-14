@@ -1,13 +1,11 @@
-import { Fragment, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
-import Typography from '@mui/material/Typography';
 import type { IssueType } from '@atlas/shared';
-import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { CopyLinkButton } from '../../components/CopyLinkButton.js';
 import { EditableTitle } from '../../components/EditableTitle.js';
 import { KindIcon } from '../../components/KindIcon.js';
+import { Breadcrumb } from '../../components/Breadcrumb.js';
 
 export function IssueDetailLoading({ withBreadcrumb = false }: { withBreadcrumb?: boolean }) {
     return (
@@ -18,8 +16,6 @@ export function IssueDetailLoading({ withBreadcrumb = false }: { withBreadcrumb?
         </Box>
     );
 }
-
-const MONO = '"JetBrains Mono", monospace';
 
 interface BreadcrumbStep {
     label: string;
@@ -58,45 +54,19 @@ export function IssueDetailShell({
     rightRail,
     children,
 }: Props) {
-    const navigate = useNavigate();
     const lastIndex = breadcrumbs.length - 1;
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            {/* Breadcrumb — kind icon + item-number crumb + copy-link button. */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                {breadcrumbs.map((step, i) => (
-                    <Fragment key={`${step.label}-${i}`}>
-                        {i > 0 && (
-                            <Box
-                                component="span"
-                                sx={{ color: ATLAS_PALETTE.slate30, fontSize: 12 }}
-                            >
-                                /
-                            </Box>
-                        )}
-                        {i === lastIndex && (
-                            <Box sx={{ display: 'inline-flex', alignItems: 'center', mr: 0.5 }}>
-                                <KindIcon kind={issueType} size={14} />
-                            </Box>
-                        )}
-                        <Typography
-                            onClick={() => step.href && navigate(step.href)}
-                            sx={{
-                                fontSize: 12,
-                                fontFamily: step.mono ? MONO : undefined,
-                                color:
-                                    i === lastIndex ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.slate40,
-                                cursor: step.href ? 'pointer' : 'default',
-                                '&:hover': step.href ? { color: ATLAS_PALETTE.slate } : undefined,
-                            }}
-                        >
-                            {step.label}
-                        </Typography>
-                    </Fragment>
-                ))}
-                <CopyLinkButton />
-            </Box>
+            <Breadcrumb
+                items={breadcrumbs.map((step, i) => ({
+                    label: step.label,
+                    to: step.href,
+                    mono: step.mono,
+                    icon: i === lastIndex ? <KindIcon kind={issueType} size={14} /> : undefined,
+                }))}
+                after={<CopyLinkButton />}
+            />
 
             {/* Header row: editable title + optional 3-dots actions menu.
              *  The kind label no longer appears as a text chip — it's the

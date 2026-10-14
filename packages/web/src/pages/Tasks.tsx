@@ -27,7 +27,7 @@ import type { IssueStatus } from '@atlas/shared';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useToast } from '../hooks/useToast.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 export function Tasks() {
     useSetPageTitle('Tasks');
@@ -115,87 +115,60 @@ export function Tasks() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    flexWrap: 'wrap',
-                    mb: 5,
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        <PageTitleIcon name="flag" />
-                        Tasks
-                    </Typography>
-                    <Typography
-                        sx={{
-                            fontFamily: '"JetBrains Mono", monospace',
-                            fontSize: '0.8125rem',
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 2,
-                        }}
-                    >
+            <PageHeader
+                icon="flag"
+                title="Tasks"
+                subtitle={
+                    <>
                         {project ? scopedTasks.length : totalTasks}{' '}
                         {(project ? scopedTasks.length : totalTasks) === 1 ? 'task' : 'tasks'}
                         {project ? ` · ${project.name}` : ''}
                         {awaitingPickup > 0 ? ` · ${awaitingPickup} awaiting pickup` : ''}
-                    </Typography>
-                </Box>
-                <Box
-                    sx={{
-                        display: { xs: 'none', md: 'flex' },
-                        alignItems: 'center',
-                        gap: 2,
-                    }}
-                >
-                    <FormControlLabel
-                        control={
-                            <Switch
-                                size="small"
-                                checked={showArchived}
-                                onChange={(e) =>
-                                    setParam('include_archived', e.target.checked ? 'true' : null)
-                                }
-                            />
-                        }
-                        label={
-                            <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                Show archived
-                            </Typography>
-                        }
-                    />
-                    <ViewModeToggle value={viewMode} onChange={setViewMode} />
-                    <Button
-                        variant="contained"
-                        startIcon={
-                            <Box
-                                component="span"
-                                className="material-symbols-rounded"
-                                aria-hidden="true"
-                                sx={{ fontSize: 18 }}
-                            >
-                                add
-                            </Box>
-                        }
-                        onClick={() => navigate('/tasks/new')}
-                        disabled={projects.length === 0}
-                    >
-                        New Task
-                    </Button>
-                </Box>
-            </Box>
+                    </>
+                }
+                hideActionsOnMobile
+                actions={
+                    <>
+                        <FormControlLabel
+                            control={
+                                <Switch
+                                    size="small"
+                                    checked={showArchived}
+                                    onChange={(e) =>
+                                        setParam(
+                                            'include_archived',
+                                            e.target.checked ? 'true' : null
+                                        )
+                                    }
+                                />
+                            }
+                            label={
+                                <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                                    Show archived
+                                </Typography>
+                            }
+                        />
+                        <ViewModeToggle value={viewMode} onChange={setViewMode} />
+                        <Button
+                            variant="contained"
+                            startIcon={
+                                <Box
+                                    component="span"
+                                    className="material-symbols-rounded"
+                                    aria-hidden="true"
+                                    sx={{ fontSize: 18 }}
+                                >
+                                    add
+                                </Box>
+                            }
+                            onClick={() => navigate('/tasks/new')}
+                            disabled={projects.length === 0}
+                        >
+                            New Task
+                        </Button>
+                    </>
+                }
+            />
 
             <TaskFiltersBar
                 filterKey={filterKey}

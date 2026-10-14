@@ -32,7 +32,7 @@ import type { IProject, IProjectRepo, AgentCategory } from '@atlas/shared';
 import { relativeTime } from '../utils/time.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -242,61 +242,32 @@ export function Projects() {
             ) : (
                 <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
                     {/* Header */}
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'flex-end',
-                            justifyContent: 'space-between',
-                            gap: 4,
-                            flexWrap: 'wrap',
-                        }}
-                    >
-                        <Box>
-                            <Typography
-                                variant="h1"
-                                sx={{
-                                    fontSize: '2.25rem',
-                                    fontWeight: 700,
-                                    lineHeight: 1.2,
-                                    letterSpacing: '-0.01em',
-                                    color: ATLAS_PALETTE.slate,
-                                }}
-                            >
-                                <PageTitleIcon name="folder_open" />
-                                Projects
-                            </Typography>
-                            <Typography
-                                sx={{
-                                    fontFamily: MONO_FONT,
-                                    fontSize: '0.8125rem',
-                                    color: ATLAS_PALETTE.slate60,
-                                    mt: 2,
-                                }}
-                            >
+                    <PageHeader
+                        icon="folder_open"
+                        title="Projects"
+                        subtitle={
+                            <>
                                 {totalProjects} {totalProjects === 1 ? 'project' : 'projects'} ·{' '}
                                 {totalTasks} {totalTasks === 1 ? 'task' : 'tasks'} · {totalSubTasks}{' '}
                                 {totalSubTasks === 1 ? 'sub-task' : 'sub-tasks'}
-                            </Typography>
-                        </Box>
-                        <Box
-                            sx={{
-                                display: { xs: 'none', md: 'flex' },
-                                alignItems: 'center',
-                                gap: 2,
-                            }}
-                        >
-                            <ViewToggle value={view} onChange={setView} />
-                            <Button
-                                variant="contained"
-                                color="success"
-                                startIcon={<AddRounded />}
-                                onClick={() => setNewProjectOpen(true)}
-                                sx={{ textTransform: 'none', fontWeight: 600 }}
-                            >
-                                New Project
-                            </Button>
-                        </Box>
-                    </Box>
+                            </>
+                        }
+                        hideActionsOnMobile
+                        actions={
+                            <>
+                                <ViewToggle value={view} onChange={setView} />
+                                <Button
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<AddRounded />}
+                                    onClick={() => setNewProjectOpen(true)}
+                                    sx={{ textTransform: 'none', fontWeight: 600 }}
+                                >
+                                    New Project
+                                </Button>
+                            </>
+                        }
+                    />
 
                     {/* Filter chips */}
                     <Box sx={{ mt: 5 }}>

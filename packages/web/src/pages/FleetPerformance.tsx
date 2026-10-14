@@ -13,7 +13,6 @@ import Typography from '@mui/material/Typography';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import type { FleetAgentRow, FleetDelivery, FleetWindowDays } from '../api/types.js';
-import { Breadcrumb } from '../components/Breadcrumb.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { KpiTile } from '../components/KpiTile.js';
 import { TrendSparkline } from '../components/TrendSparkline.js';
@@ -23,7 +22,7 @@ import { formatCostUsd } from '../utils/formatCost.js';
 import { formatSpan } from '../utils/time.js';
 import { formatDate } from '../utils/time.js';
 import { OUTCOMES, OutcomeBar } from './agents/PerformanceTabContent.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 // Fleet performance — every agent side by side, and what the fleet delivered.
 //
@@ -160,38 +159,37 @@ export function FleetPerformance() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Breadcrumb items={[{ label: 'Agents', to: '/agents' }, { label: 'Fleet performance' }]} />
-
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 3, flexWrap: 'wrap', mb: 5 }}>
-                <Box>
-                    <Typography variant="h1" sx={{ fontSize: '2.25rem', fontWeight: 700, color: ATLAS_PALETTE.slate }}>
-                        <PageTitleIcon name="speed" />
-                        Fleet performance
-                    </Typography>
-                    <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>
+            <PageHeader
+                icon="speed"
+                title="Fleet performance"
+                breadcrumbs={[{ label: 'Agents', to: '/agents' }, { label: 'Fleet performance' }]}
+                subtitle={
+                    <>
                         Workflow steps and deliveries over the last{' '}
                         <Box component="span" sx={{ fontFamily: TYPOGRAPHY.fontFamilyMono }}>
                             {days}
                         </Box>{' '}
                         days. Ad-hoc runs are not counted, and agent tests are left out of deliveries.
-                    </Typography>
-                </Box>
-                <ToggleButtonGroup
-                    size="small"
-                    exclusive
-                    value={days}
-                    aria-label="Window"
-                    onChange={(_e, v: FleetWindowDays | null) => {
-                        if (v !== null) setParams(v === 90 ? {} : { days: String(v) }, { replace: true });
-                    }}
-                >
-                    {WINDOWS.map((w) => (
-                        <ToggleButton key={w} value={w} sx={{ textTransform: 'none', px: 2 }}>
-                            {w} days
-                        </ToggleButton>
-                    ))}
-                </ToggleButtonGroup>
-            </Box>
+                    </>
+                }
+                actions={
+            <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={days}
+                aria-label="Window"
+                onChange={(_e, v: FleetWindowDays | null) => {
+                    if (v !== null) setParams(v === 90 ? {} : { days: String(v) }, { replace: true });
+                }}
+            >
+                {WINDOWS.map((w) => (
+                    <ToggleButton key={w} value={w} sx={{ textTransform: 'none', px: 2 }}>
+                        {w} days
+                    </ToggleButton>
+                ))}
+            </ToggleButtonGroup>
+                }
+            />
 
             {isLoading ? (
                 <Box sx={{ display: 'grid', gap: 3 }}>

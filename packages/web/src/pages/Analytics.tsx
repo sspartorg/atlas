@@ -6,6 +6,7 @@ import Skeleton from '@mui/material/Skeleton';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import { formatCostUsd, formatTokenCount } from '../utils/formatCost.js';
 
@@ -282,12 +283,8 @@ export function Analytics() {
 
     if (isPending) {
         return (
-            <Box sx={{ px: { xs: 3, md: 8 }, py: { xs: 6, md: 12 } }}>
-                <Typography
-                    sx={{ fontSize: 22, fontWeight: 700, color: ATLAS_PALETTE.slate, mb: 6 }}
-                >
-                    Analytics
-                </Typography>
+            <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
+                <PageHeader icon="analytics" title="Analytics" />
                 <Skeleton variant="rectangular" height={260} sx={{ borderRadius: '18px', mb: 4 }} />
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3, mb: 4 }}>
                     <Skeleton variant="rectangular" height={120} sx={{ borderRadius: '14px' }} />
@@ -442,9 +439,15 @@ export function Analytics() {
     }[headlineInsight.tone];
 
     return (
-        <Box sx={{ px: { xs: 3, md: 8 }, py: { xs: 6, md: 12 } }}>
+        <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
             {/* Inject keyframes once. */}
             <style>{ANIMATION_CSS}</style>
+
+            <PageHeader
+                icon="analytics"
+                title="Analytics"
+                subtitle={`AI spend, throughput, and cache efficiency for ${monthLabel} — autonomous agent runs and manual terminal sessions combined. All times shown in ${tzShort}.`}
+            />
 
             <Box
                 className="atlas-anal-cascade"
@@ -547,34 +550,8 @@ export function Analytics() {
                                 </Typography>
                             </Box>
 
-                            <Typography
-                                sx={{
-                                    fontFamily: '"Inter", system-ui, sans-serif',
-                                    fontSize: { xs: 36, md: 48 },
-                                    fontWeight: 800,
-                                    lineHeight: 1,
-                                    letterSpacing: '-0.025em',
-                                    color: '#FFFFFF',
-                                }}
-                            >
-                                Analytics
-                            </Typography>
-                            <Typography
-                                sx={{
-                                    fontSize: 14,
-                                    color: 'rgba(255,255,255,.7)',
-                                    mt: 1.5,
-                                    maxWidth: 560,
-                                    lineHeight: 1.55,
-                                }}
-                            >
-                                AI spend, throughput, and cache efficiency for {monthLabel} —
-                                autonomous agent runs and manual terminal sessions combined. All
-                                times shown in {tzShort}.
-                            </Typography>
-
                             {/* Headline metric: total cost */}
-                            <Box sx={{ mt: 6 }}>
+                            <Box sx={{ mt: 4 }}>
                                 <Eyebrow light>Total Spend · {monthLabel}</Eyebrow>
                                 <Box
                                     sx={{ display: 'flex', alignItems: 'baseline', gap: 2, mt: 1 }}

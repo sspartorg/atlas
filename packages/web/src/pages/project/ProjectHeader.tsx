@@ -5,6 +5,7 @@ import type { IProject, IProjectRepo } from '@atlas/shared';
 import { Breadcrumb } from '../../components/index.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { ProjectActionsMenu } from './ProjectActionsMenu.js';
+import { PAGE_TITLE_SX } from '../../components/PageHeader.js';
 
 interface Props {
     project: IProject;
@@ -79,15 +80,12 @@ export const ProjectHeader = memo(function ProjectHeader({
                         }}
                     >
                         <Typography
+                            component="h1"
                             sx={{
+                                ...PAGE_TITLE_SX,
                                 // Hide on mobile — MobileAppBar already renders the project name
                                 // as the page title, so this h1 would be the third repeat.
                                 display: { xs: 'none', md: 'block' },
-                                fontSize: 26,
-                                fontWeight: 700,
-                                color: ATLAS_PALETTE.slate,
-                                letterSpacing: '-0.01em',
-                                lineHeight: 1.2,
                             }}
                         >
                             {project.name}

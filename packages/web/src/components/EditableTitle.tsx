@@ -7,6 +7,7 @@ import CheckRounded from '@mui/icons-material/CheckRounded';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import EditOutlined from '@mui/icons-material/EditOutlined';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { PAGE_TITLE_SX } from './PageHeader.js';
 
 interface Props {
     value: string;
@@ -62,7 +63,7 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
                     slotProps={{
                         input: {
                             sx: {
-                                fontSize: '2rem',
+                                fontSize: PAGE_TITLE_SX.fontSize,
                                 fontWeight: 700,
                                 color: ATLAS_PALETTE.slate,
                                 lineHeight: 1.2,
@@ -103,12 +104,10 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
             }}
         >
             <Typography
+                component="h1"
                 onClick={startEdit}
                 sx={{
-                    fontSize: '2rem',
-                    fontWeight: 700,
-                    color: ATLAS_PALETTE.slate,
-                    lineHeight: 1.2,
+                    ...PAGE_TITLE_SX,
                     cursor: 'text',
                     minWidth: 0,
                     overflowWrap: 'anywhere',

@@ -1,39 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen } from '@testing-library/react';
-import type * as RouterDom from 'react-router-dom';
+import { describe, expect, it } from 'vitest';
+import { screen } from '@testing-library/react';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Breadcrumb } from './Breadcrumb.js';
 
-const navigateSpy = vi.fn();
-vi.mock('react-router-dom', async () => {
-    const actual = await vi.importActual<typeof RouterDom>('react-router-dom');
-    return { ...actual, useNavigate: () => navigateSpy };
-});
-
 describe('Breadcrumb', () => {
-    it('renders the leaf text as the last segment', () => {
+    it('renders parents as links and the leaf as the current page', () => {
         renderWithProviders(
             <Breadcrumb items={[{ label: 'Projects', to: '/projects' }, { label: 'Acme' }]} />
         );
-        expect(screen.getByText('Acme')).toBeInTheDocument();
-        expect(screen.getByText('Projects')).toBeInTheDocument();
+        expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/projects');
+        expect(screen.getByText('Acme')).toHaveAttribute('aria-current', 'page');
+        expect(screen.queryByRole('link', { name: 'Acme' })).not.toBeInTheDocument();
     });
 
-    it('navigates when a non-last clickable segment is clicked', () => {
-        navigateSpy.mockClear();
-        renderWithProviders(
-            <Breadcrumb items={[{ label: 'Projects', to: '/projects' }, { label: 'Acme' }]} />
-        );
-        fireEvent.click(screen.getByText('Projects'));
-        expect(navigateSpy).toHaveBeenCalledWith('/projects');
+    it('never links the leaf, even when it has a `to`', () => {
+        renderWithProviders(<Breadcrumb items={[{ label: 'Acme', to: '/projects/1' }]} />);
+        expect(screen.queryByRole('link')).not.toBeInTheDocument();
     });
 
-    it('does NOT navigate when clicking the leaf segment', () => {
-        navigateSpy.mockClear();
+    it('renders the trailing control', () => {
         renderWithProviders(
-            <Breadcrumb items={[{ label: 'Projects', to: '/projects' }, { label: 'Acme' }]} />
+            <Breadcrumb items={[{ label: 'Acme' }]} after={<button type="button">Copy</button>} />
         );
-        fireEvent.click(screen.getByText('Acme'));
-        expect(navigateSpy).not.toHaveBeenCalled();
+        expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
     });
 });

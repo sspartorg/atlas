@@ -128,8 +128,7 @@ describe('MarketplaceAgentDetail page', () => {
         );
         renderAt('/marketplace/agent-coder');
         await screen.findAllByText('Coder');
-        const back = screen.getByRole('button', { name: /^marketplace$/i });
-        fireEvent.click(back);
+        fireEvent.click(screen.getByRole('link', { name: 'Marketplace' }));
     });
 
     it('clicks "Add to my agents" to open the install modal (openAdd)', async () => {

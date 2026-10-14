@@ -25,9 +25,7 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { MOBILE_SHELL } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
-
-const MONO = '"JetBrains Mono", monospace';
+import { PageHeader } from '../components/PageHeader.js';
 
 export function Guardrails() {
     useSetPageTitle('Guard-rails');
@@ -115,48 +113,30 @@ export function Guardrails() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4, pb: 24, position: 'relative' }}>
-            {/* Header */}
-            <Box sx={{ mb: 5 }}>
-                <Typography
-                    variant="h1"
-                    sx={{
-                        fontSize: '2.25rem',
-                        fontWeight: 700,
-                        lineHeight: 1.2,
-                        letterSpacing: '-0.01em',
-                        color: ATLAS_PALETTE.slate,
-                    }}
-                >
-                    <PageTitleIcon name="shield" />
-                    Guard-rails
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: 13,
-                        color: ATLAS_PALETTE.slate60,
-                        mt: 1.5,
-                        lineHeight: 1.6,
-                        maxWidth: 720,
-                    }}
-                >
-                    These rules are merged into every agent's prompt on its next run. Atlas treats
-                    them as the agent contract — failing a{' '}
-                    <Box component="span" sx={{ fontWeight: 600 }}>
-                        BLOCK
-                    </Box>{' '}
-                    rule stops the run; an{' '}
-                    <Box component="span" sx={{ fontWeight: 600 }}>
-                        ASK OWNER
-                    </Box>{' '}
-                    rule routes it to you.
-                </Typography>
-                <Typography
-                    sx={{ fontFamily: MONO, fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 2 }}
-                >
-                    {GUARDRAIL_CATEGORIES.length} categories · {totalRules} rules
-                    {dirtyCount > 0 && ` · ${dirtyCount} dirty`}
-                </Typography>
-            </Box>
+            <PageHeader
+                icon="shield"
+                title="Guard-rails"
+                subtitle={
+                    <>
+                        <Box component="span" sx={{ display: 'block', maxWidth: 720 }}>
+                            These rules are merged into every agent's prompt on its next run. Atlas
+                            treats them as the agent contract — failing a{' '}
+                            <Box component="span" sx={{ fontWeight: 600 }}>
+                                BLOCK
+                            </Box>{' '}
+                            rule stops the run; an{' '}
+                            <Box component="span" sx={{ fontWeight: 600 }}>
+                                ASK OWNER
+                            </Box>{' '}
+                            rule routes it to you.
+                        </Box>
+                        <Box component="span" sx={{ display: 'block', mt: 1 }}>
+                            {GUARDRAIL_CATEGORIES.length} categories · {totalRules} rules
+                            {dirtyCount > 0 && ` · ${dirtyCount} dirty`}
+                        </Box>
+                    </>
+                }
+            />
 
             <Tabs
                 value={tab}

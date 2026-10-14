@@ -8,7 +8,6 @@ import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import type { CliSessionStatus } from '@atlas/shared';
 import { useCliSession } from '../hooks/useCliSessions.js';
@@ -17,6 +16,8 @@ import { useToast } from '../hooks/useToast.js';
 import { TerminalXterm } from '../components/TerminalXterm.js';
 import { TerminalSessionControls } from '../components/TerminalSessionControls.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { Breadcrumb } from '../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../components/PageHeader.js';
 import { isTerminalStatus } from '../utils/cliSessionRouting.js';
 
 const STATUS_COLOUR: Record<CliSessionStatus, 'success' | 'warning' | 'default' | 'error'> = {
@@ -101,38 +102,38 @@ export function TerminalSession() {
                 gap: 2,
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center">
-                <Tooltip title="Back to sessions">
-                    <IconButton onClick={() => navigate('/terminal')} size="small">
-                        <ArrowBackRounded />
-                    </IconButton>
-                </Tooltip>
-                <Typography variant="h4" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {session.title}
-                </Typography>
-                <Chip
-                    size="small"
-                    label={session.cli}
-                    variant="outlined"
-                    sx={{ textTransform: 'capitalize' }}
-                    data-testid="session-cli-chip"
+            <Box>
+                <Breadcrumb
+                    items={[{ label: 'Terminal', to: '/terminal' }, { label: session.title }]}
                 />
-                <Chip
-                    size="small"
-                    label={session.status}
-                    color={STATUS_COLOUR[session.status]}
-                    data-testid="session-status-chip"
-                />
-                {session.item_id ? (
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Typography variant="h1" sx={{ ...PAGE_TITLE_SX, flex: 1, minWidth: 0 }} noWrap>
+                        {session.title}
+                    </Typography>
                     <Chip
                         size="small"
+                        label={session.cli}
                         variant="outlined"
-                        label={session.item_id}
-                        data-testid="session-item-chip"
-                        sx={{ fontFamily: 'monospace' }}
+                        sx={{ textTransform: 'capitalize' }}
+                        data-testid="session-cli-chip"
                     />
-                ) : null}
-            </Stack>
+                    <Chip
+                        size="small"
+                        label={session.status}
+                        color={STATUS_COLOUR[session.status]}
+                        data-testid="session-status-chip"
+                    />
+                    {session.item_id ? (
+                        <Chip
+                            size="small"
+                            variant="outlined"
+                            label={session.item_id}
+                            data-testid="session-item-chip"
+                            sx={{ fontFamily: 'monospace' }}
+                        />
+                    ) : null}
+                </Stack>
+            </Box>
 
             <Stack
                 direction="row"

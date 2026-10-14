@@ -6,12 +6,13 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Skeleton from '@mui/material/Skeleton';
-import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import DownloadRounded from '@mui/icons-material/DownloadRounded';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { Breadcrumb } from '../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../components/PageHeader.js';
 import { AddFromMarketplaceModal } from './marketplace/AddFromMarketplaceModal.js';
 import { CliUnavailableAlert } from '../components/CliUnavailableAlert.js';
 import { useMarketplaceAgentFull, useMarketplaceCatalog } from '../hooks/useMarketplace.js';
@@ -133,13 +134,9 @@ export function MarketplaceAgentDetail() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Button
-                startIcon={<ArrowBackRounded sx={{ fontSize: 18 }} />}
-                onClick={() => navigate('/agents/marketplace')}
-                sx={{ textTransform: 'none', mb: 3, color: ATLAS_PALETTE.slate60 }}
-            >
-                Marketplace
-            </Button>
+            <Breadcrumb
+                items={[{ label: 'Marketplace', to: '/agents/marketplace' }, { label: agent.name }]}
+            />
 
             <Box
                 sx={{
@@ -184,13 +181,7 @@ export function MarketplaceAgentDetail() {
                 <Box sx={{ gridArea: { xs: 'name', sm: 'auto' }, minWidth: 0 }}>
                     <Typography
                         variant="h1"
-                        sx={{
-                            fontSize: { xs: '1.5rem', sm: '2rem' },
-                            fontWeight: 700,
-                            color: ATLAS_PALETTE.slate,
-                            mb: 1,
-                            wordBreak: 'break-word',
-                        }}
+                        sx={{ ...PAGE_TITLE_SX, mb: 1, wordBreak: 'break-word' }}
                     >
                         {agent.name}
                     </Typography>

@@ -26,6 +26,8 @@ import { RunTracePanel } from '../components/RunTracePanel.js';
 import { AiUsagePanel } from '../components/AiUsagePanel.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE, TYPOGRAPHY, MOBILE_SHELL } from '../theme/tokens.js';
+import { Breadcrumb } from '../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../components/PageHeader.js';
 import { runStatusPaletteEntry } from '../theme/runStatusPalette.js';
 import { relativeTime } from './agents/agentViewModel.js';
 import { itemPath } from '../utils/itemPath.js';
@@ -344,41 +346,14 @@ export function AgentRunDetail() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4, pb: { xs: 18, md: 4 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3, flexWrap: 'wrap' }}>
-                <Box
-                    component={RouterLink}
-                    to="/agents"
-                    sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 12.5, textDecoration: 'none' }}
-                >
-                    Agents
-                </Box>
-                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>/</Typography>
-                <Box
-                    component={RouterLink}
-                    to={`/agents/${agent.id}`}
-                    sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 12.5, textDecoration: 'none' }}
-                >
-                    {agent.name}
-                </Box>
-                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>/</Typography>
-                <Box
-                    component={RouterLink}
-                    to={`/agents/${agent.id}?tab=runs`}
-                    sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 12.5, textDecoration: 'none' }}
-                >
-                    Runs
-                </Box>
-                <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>/</Typography>
-                <Typography
-                    sx={{
-                        fontSize: 12.5,
-                        fontFamily: TYPOGRAPHY.fontFamilyMono,
-                        color: ATLAS_PALETTE.slate60,
-                    }}
-                >
-                    {runId.slice(0, 8)}
-                </Typography>
-            </Box>
+            <Breadcrumb
+                items={[
+                    { label: 'Agents', to: '/agents' },
+                    { label: agent.name, to: `/agents/${agent.id}` },
+                    { label: 'Runs', to: `/agents/${agent.id}?tab=runs` },
+                    { label: runId.slice(0, 8), mono: true },
+                ]}
+            />
 
             <Box
                 sx={{
@@ -392,14 +367,8 @@ export function AgentRunDetail() {
             >
                 <Box>
                     <Typography
-                        sx={{
-                            fontSize: { xs: 28, md: 36 },
-                            fontWeight: 700,
-                            fontFamily: TYPOGRAPHY.fontFamilyMono,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                            mb: 1,
-                        }}
+                        variant="h1"
+                        sx={{ ...PAGE_TITLE_SX, fontFamily: TYPOGRAPHY.fontFamilyMono, mb: 1 }}
                     >
                         {runId.slice(0, 8)}
                     </Typography>

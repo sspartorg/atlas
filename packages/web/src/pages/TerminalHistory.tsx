@@ -3,12 +3,9 @@ import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
 import Chip from '@mui/material/Chip';
-import Tooltip from '@mui/material/Tooltip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Alert from '@mui/material/Alert';
-import ArrowBackRounded from '@mui/icons-material/ArrowBackRounded';
 import HistoryRounded from '@mui/icons-material/HistoryRounded';
 import type { CliSessionStatus } from '@atlas/shared';
 import { useCliSession, useCliSessionTranscript } from '../hooks/useCliSessions.js';
@@ -16,6 +13,8 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { RunEventViewer } from '../components/RunEventViewer.js';
 import { AiUsagePanel } from '../components/AiUsagePanel.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { Breadcrumb } from '../components/Breadcrumb.js';
+import { PAGE_TITLE_SX } from '../components/PageHeader.js';
 import { formatAbsolute } from '../utils/time.js';
 
 const STATUS_COLOUR: Record<CliSessionStatus, 'success' | 'warning' | 'default' | 'error'> = {
@@ -90,24 +89,28 @@ export function TerminalHistory() {
                 minHeight: 'calc(100vh - 64px)',
             }}
         >
-            <Stack direction="row" spacing={1} alignItems="center">
-                <Tooltip title="Back to sessions">
-                    <IconButton onClick={() => navigate('/terminal')} size="small">
-                        <ArrowBackRounded />
-                    </IconButton>
-                </Tooltip>
-                <HistoryRounded sx={{ fontSize: 24, color: ATLAS_PALETTE.slate60 }} />
-                <Typography variant="h4" sx={{ flex: 1, minWidth: 0 }} noWrap>
-                    {session.title}
-                </Typography>
-                <Chip
-                    size="small"
-                    label={session.cli}
-                    variant="outlined"
-                    sx={{ textTransform: 'capitalize' }}
+            <Box>
+                <Breadcrumb
+                    items={[{ label: 'Terminal', to: '/terminal' }, { label: session.title }]}
                 />
-                <Chip size="small" label={session.status} color={STATUS_COLOUR[session.status]} />
-            </Stack>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                    <HistoryRounded sx={{ fontSize: 24, color: ATLAS_PALETTE.slate60 }} />
+                    <Typography variant="h1" sx={{ ...PAGE_TITLE_SX, flex: 1, minWidth: 0 }} noWrap>
+                        {session.title}
+                    </Typography>
+                    <Chip
+                        size="small"
+                        label={session.cli}
+                        variant="outlined"
+                        sx={{ textTransform: 'capitalize' }}
+                    />
+                    <Chip
+                        size="small"
+                        label={session.status}
+                        color={STATUS_COLOUR[session.status]}
+                    />
+                </Stack>
+            </Box>
 
             <Box
                 sx={{

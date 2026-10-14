@@ -23,7 +23,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { StartStandaloneSessionDialog } from '../components/StartStandaloneSessionDialog.js';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
 import { formatCostUsd } from '../utils/formatCost.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 // Standalone terminals — PTYs the Owner opened directly on a folder, with no
 // project, no worktree and no Atlas scaffolding. Deliberately its own page
@@ -78,55 +78,33 @@ export function TerminalStandalone() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Box>
-                    <Typography
-                        variant="h1"
-                        sx={{
-                            fontSize: '2.25rem',
-                            fontWeight: 700,
-                            lineHeight: 1.2,
-                            letterSpacing: '-0.01em',
-                            color: ATLAS_PALETTE.slate,
-                        }}
-                    >
-                        <PageTitleIcon name="folder_open" />
-                        Standalone
-                    </Typography>
-                    <Typography
-                        sx={{
-                            fontFamily: MONO_FONT,
-                            fontSize: '0.8125rem',
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 2,
-                        }}
-                    >
+            <PageHeader
+                icon="folder_open"
+                title="Standalone"
+                subtitle={
+                    <>
                         {sessions.length} sessions · {counts.active} active · {counts.paused} paused
                         · {formatCostUsd(counts.spend)} spent
-                    </Typography>
-                </Box>
-                <Button
-                    variant="contained"
-                    startIcon={<AddRounded />}
-                    onClick={() => setDialogOpen(true)}
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        background: ATLAS_PALETTE.green,
-                        '&:hover': { background: ATLAS_PALETTE.greenDark },
-                    }}
-                >
-                    Open folder
-                </Button>
-            </Box>
+                    </>
+                }
+                actions={
+                    <>
+                        <Button
+                            variant="contained"
+                            startIcon={<AddRounded />}
+                            onClick={() => setDialogOpen(true)}
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                                background: ATLAS_PALETTE.green,
+                                '&:hover': { background: ATLAS_PALETTE.greenDark },
+                            }}
+                        >
+                            Open folder
+                        </Button>
+                    </>
+                }
+            />
 
             <Box sx={{ mt: 6 }}>
                 {isLoading ? (

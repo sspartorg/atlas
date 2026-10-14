@@ -12,8 +12,8 @@ Watch one workflow run move node-by-node: the run's `graph_snapshot` on a read-o
 
 ## UI elements
 **Header**
-- Breadcrumb `Workflows / {workflow_name}` (→ `/workflows/:id?tab=runs`); on a sub-task's run it adds **part of the Task run** → `/workflows/:workflowId/runs/:parent_workflow_run_id` (the page reads only `:runId`).
-- H2 item title (Task, sub-task, or "Project run") + run status chip.
+- Breadcrumb `Workflows › {workflow_name} › Run` (→ `/workflows/:id?tab=runs`); on a sub-task's run it adds **part of the Task run** → `/workflows/:workflowId/runs/:parent_workflow_run_id` (the page reads only `:runId`).
+- `h1` item title (`PAGE_TITLE_SX`) (Task, sub-task, or "Project run") + run status chip.
 - Metadata: item id (links to the item when found in the project's issue tree), started (relative), duration · cost of the run's steps plus its sub-task runs' steps (`total_cost_usd`) · `N loops` when `loop_count > 0` · branch.
 - **Resume** (green, only `waiting_for_owner`) → `POST /api/workflow-runs/:id/resume`.
 - **Stop** (outlined error, `running` or `waiting_for_owner`) → `POST /api/workflow-runs/:id/stop`. Stopping a sub-task's run stops its whole Task run (they share one branch).

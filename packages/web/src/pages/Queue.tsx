@@ -7,7 +7,6 @@ import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Skeleton from '@mui/material/Skeleton';
-import Typography from '@mui/material/Typography';
 import { useAgents } from '../hooks/useAgents.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useToast } from '../hooks/useToast.js';
@@ -19,10 +18,9 @@ import {
 } from '../hooks/useWorkflows.js';
 import { EmptyState } from '../components/EmptyState.js';
 import { useSetPageTitle } from '../components/shell/index.js';
-import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import { WorkflowQueueCard } from './queue/WorkflowQueueCard.js';
 import { UnassignedTasks } from './queue/UnassignedTasks.js';
-import { PageTitleIcon } from '../components/PageTitleIcon.js';
+import { PageHeader } from '../components/PageHeader.js';
 
 const GRID_SX = {
     display: 'grid',
@@ -67,48 +65,30 @@ export function Queue() {
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
-            <Box
-                sx={{
-                    display: 'flex',
-                    alignItems: 'flex-end',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    mb: 5,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <Box>
-                    <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
-                        <PageTitleIcon name="schedule" />
-                        Queue
-                    </Typography>
-                    <Typography
-                        sx={{
-                            fontFamily: TYPOGRAPHY.fontFamilyMono,
-                            fontSize: 12.5,
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 1.5,
-                        }}
-                    >
-                        {stats.map(([label, n]) => `${n} ${label}`).join(' · ')}
-                    </Typography>
-                </Box>
-                <Select
-                    size="small"
-                    value={projectId}
-                    displayEmpty
-                    onChange={(e) => setProjectId(e.target.value)}
-                    inputProps={{ 'aria-label': 'Project' }}
-                    sx={{ fontSize: 13, minWidth: 180 }}
-                >
-                    <MenuItem value="">All projects</MenuItem>
-                    {projects.map((p) => (
-                        <MenuItem key={p.id} value={p.id}>
-                            {p.name}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </Box>
+            <PageHeader
+                icon="schedule"
+                title="Queue"
+                subtitle={<>{stats.map(([label, n]) => `${n} ${label}`).join(' · ')}</>}
+                actions={
+                    <>
+                        <Select
+                            size="small"
+                            value={projectId}
+                            displayEmpty
+                            onChange={(e) => setProjectId(e.target.value)}
+                            inputProps={{ 'aria-label': 'Project' }}
+                            sx={{ fontSize: 13, minWidth: 180 }}
+                        >
+                            <MenuItem value="">All projects</MenuItem>
+                            {projects.map((p) => (
+                                <MenuItem key={p.id} value={p.id}>
+                                    {p.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </>
+                }
+            />
 
             {error ? (
                 <Alert severity="error">Couldn&apos;t load the queue: {error.message}</Alert>
