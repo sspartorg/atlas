@@ -23,6 +23,7 @@ import { HelpAboutTab } from './settings/HelpAboutTab.js';
 import { JiraTab } from './settings/JiraTab.js';
 import { TeamConfigTab } from './settings/TeamConfigTab.js';
 import { useSetPageTitle } from '../components/shell/index.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const TAB_KEYS = [
     'profile',
@@ -88,6 +89,7 @@ export function Settings() {
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
+                    <PageTitleIcon name="settings" />
                     Settings
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>

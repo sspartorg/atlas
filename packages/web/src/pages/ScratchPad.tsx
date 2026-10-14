@@ -11,6 +11,7 @@ import { ScratchPadEditor } from '../components/ScratchPadEditor.js';
 import { useScratchPadList, useCreateScratchPad } from '../hooks/useScratchPad.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 // P12 — Scratch Pad page. Tile-grid of free-form markdown notes that don't
 // belong to any project / agent / issue. The list is rendered as a
@@ -77,6 +78,7 @@ export function ScratchPad() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
+                        <PageTitleIcon name="sticky_note_2" />
                         Scratch Pad
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 2 }}>

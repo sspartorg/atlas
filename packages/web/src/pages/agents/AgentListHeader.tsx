@@ -6,6 +6,7 @@ import FileUploadRounded from '@mui/icons-material/FileUploadRounded';
 import MonitorHeartRounded from '@mui/icons-material/MonitorHeartRounded';
 import { Link as RouterLink } from 'react-router-dom';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { PageTitleIcon } from '../../components/PageTitleIcon.js';
 
 interface Props {
     installedCount: number;
@@ -41,6 +42,7 @@ export function AgentListHeader({ installedCount, categoryCount, onAdd, onImport
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
+                    <PageTitleIcon name="smart_toy" />
                     Agents
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>

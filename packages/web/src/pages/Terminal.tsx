@@ -28,6 +28,7 @@ import {
     type CliFilterKey,
 } from '../components/TerminalFilters.js';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -144,9 +145,6 @@ export function Terminal() {
                     <Typography
                         variant="h1"
                         sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1.5,
                             fontSize: '2.25rem',
                             fontWeight: 700,
                             lineHeight: 1.2,
@@ -154,7 +152,7 @@ export function Terminal() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
-                        <TerminalRounded sx={{ fontSize: 36, color: ATLAS_PALETTE.green }} />
+                        <PageTitleIcon name="terminal" />
                         Terminal
                     </Typography>
                     <Typography

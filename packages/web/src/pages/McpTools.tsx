@@ -6,6 +6,7 @@ import { api } from '../api/api.js';
 import { Breadcrumb } from '../components/Breadcrumb.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import type { IToolCatalogGroup } from '@atlas/shared';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const GROUP_LABELS: Record<string, string> = {
     AGENTS: 'Agents',
@@ -38,6 +39,7 @@ export function McpTools() {
                     variant="h1"
                     sx={{ fontSize: '2.25rem', fontWeight: 700, color: ATLAS_PALETTE.slate }}
                 >
+                    <PageTitleIcon name="build" />
                     MCP Tools
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>

@@ -25,6 +25,7 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { MOBILE_SHELL } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -126,6 +127,7 @@ export function Guardrails() {
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
+                    <PageTitleIcon name="shield" />
                     Guard-rails
                 </Typography>
                 <Typography

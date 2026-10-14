@@ -32,6 +32,7 @@ import type { IProject, IProjectRepo, AgentCategory } from '@atlas/shared';
 import { relativeTime } from '../utils/time.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -261,6 +262,7 @@ export function Projects() {
                                     color: ATLAS_PALETTE.slate,
                                 }}
                             >
+                                <PageTitleIcon name="folder_open" />
                                 Projects
                             </Typography>
                             <Typography

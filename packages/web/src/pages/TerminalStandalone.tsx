@@ -23,6 +23,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { StartStandaloneSessionDialog } from '../components/StartStandaloneSessionDialog.js';
 import { sessionDetailUrl } from '../utils/cliSessionRouting.js';
 import { formatCostUsd } from '../utils/formatCost.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 // Standalone terminals — PTYs the Owner opened directly on a folder, with no
 // project, no worktree and no Atlas scaffolding. Deliberately its own page
@@ -90,9 +91,6 @@ export function TerminalStandalone() {
                     <Typography
                         variant="h1"
                         sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1.5,
                             fontSize: '2.25rem',
                             fontWeight: 700,
                             lineHeight: 1.2,
@@ -100,7 +98,7 @@ export function TerminalStandalone() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
-                        <FolderOpenRounded sx={{ fontSize: 36, color: ATLAS_PALETTE.green }} />
+                        <PageTitleIcon name="folder_open" />
                         Standalone
                     </Typography>
                     <Typography

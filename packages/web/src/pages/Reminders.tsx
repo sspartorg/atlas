@@ -26,6 +26,7 @@ import { HeroEmptyState } from '../components/HeroEmptyState.js';
 import { RefreshButton } from '../components/index.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { NewReminderModal } from './reminders/NewReminderModal.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const ACTIVE_STATES: ReminderStatus[] = ['active', 'paused'];
 const HISTORY_STATES: ReminderStatus[] = ['cancelled', 'completed'];
@@ -103,6 +104,7 @@ export function Reminders() {
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
+                    <PageTitleIcon name="alarm" />
                     Reminders
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>

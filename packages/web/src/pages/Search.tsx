@@ -28,6 +28,7 @@ import {
     type SearchType,
 } from './search/searchViewModel.js';
 import { useSetPageTitle } from '../components/shell/index.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 // P14 — the page now sources hits from `GET /api/search` (Postgres FTS +
 // filter pushdown) instead of building a client-side corpus from every
@@ -162,6 +163,7 @@ export function Search() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
+                        <PageTitleIcon name="search" />
                         Search
                     </Typography>
                     <SearchModeToggle mode={mode} onChange={setMode} />

@@ -146,6 +146,10 @@ Do not invent a new subtitle shape (no status pills, no bold-keyword paragraphs 
 - No `console.log` (use browser dev tools; remove before committing)
 - No `any` type without a comment explaining why
 
+## Page titles
+
+- A page's title (`h1`, or `h2` where the page already uses it) starts with `<PageTitleIcon name="…" />` (`components/PageTitleIcon.tsx`), using the same Material Symbol as the page's sidenav entry (`components/Sidenav.tsx`). Pages without a nav entry pick the closest glyph (Credentials `key`, Fleet performance `speed`). Detail pages titled with an entity's name (an agent, a workflow) keep that entity's own glyph instead.
+
 ## Page weight (ADR 0031)
 
 - `useAgents()` returns agents **without** `prompt_md`; use `useAgentsWithPrompts()` only where the prompt is read (Agents page, Search). Type list props as `AgentSummary` (`api/types.ts`) so either fits.

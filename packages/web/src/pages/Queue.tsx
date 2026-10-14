@@ -22,6 +22,7 @@ import { useSetPageTitle } from '../components/shell/index.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 import { WorkflowQueueCard } from './queue/WorkflowQueueCard.js';
 import { UnassignedTasks } from './queue/UnassignedTasks.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const GRID_SX = {
     display: 'grid',
@@ -78,6 +79,7 @@ export function Queue() {
             >
                 <Box>
                     <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
+                        <PageTitleIcon name="schedule" />
                         Queue
                     </Typography>
                     <Typography

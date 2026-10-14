@@ -27,6 +27,7 @@ import type { IssueStatus } from '@atlas/shared';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useToast } from '../hooks/useToast.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 export function Tasks() {
     useSetPageTitle('Tasks');
@@ -135,6 +136,7 @@ export function Tasks() {
                             color: ATLAS_PALETTE.slate,
                         }}
                     >
+                        <PageTitleIcon name="flag" />
                         Tasks
                     </Typography>
                     <Typography

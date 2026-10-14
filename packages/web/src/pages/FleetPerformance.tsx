@@ -23,6 +23,7 @@ import { formatCostUsd } from '../utils/formatCost.js';
 import { formatSpan } from '../utils/time.js';
 import { formatDate } from '../utils/time.js';
 import { OUTCOMES, OutcomeBar } from './agents/PerformanceTabContent.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 // Fleet performance — every agent side by side, and what the fleet delivered.
 //
@@ -164,6 +165,7 @@ export function FleetPerformance() {
             <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 3, flexWrap: 'wrap', mb: 5 }}>
                 <Box>
                     <Typography variant="h1" sx={{ fontSize: '2.25rem', fontWeight: 700, color: ATLAS_PALETTE.slate }}>
+                        <PageTitleIcon name="speed" />
                         Fleet performance
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>

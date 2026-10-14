@@ -15,6 +15,7 @@ import { relativeTime } from '../utils/time.js';
 import { NewWorkflowDialog } from './workflows/NewWorkflowDialog.js';
 import { ImportWorkflowDialog } from './workflows/ImportWorkflowDialog.js';
 import { INPUT_KIND_LABEL, graphAgentIds, triggerLabel } from './workflows/labels.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const GRID_SX = {
     display: 'grid',
@@ -205,6 +206,7 @@ export function Workflows() {
             >
                 <Box>
                     <Typography variant="h2" sx={{ color: ATLAS_PALETTE.slate }}>
+                        <PageTitleIcon name="account_tree" />
                         Workflows
                     </Typography>
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mt: 1.5 }}>

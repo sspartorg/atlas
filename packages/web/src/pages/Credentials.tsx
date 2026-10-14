@@ -25,6 +25,7 @@ const CredentialModal = lazyNamed(
     'CredentialModal'
 );
 import { useSetPageTitle } from '../components/shell/index.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -161,6 +162,7 @@ export function Credentials() {
                             letterSpacing: '-0.01em',
                         }}
                     >
+                        <PageTitleIcon name="key" />
                         Git credentials
                     </Typography>
                     {rows.length > 0 && (

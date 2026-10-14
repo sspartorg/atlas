@@ -22,6 +22,7 @@ import { InAppFeedTab } from './notifications/InAppFeedTab.js';
 import { relativeShort } from './notifications/timeFormat.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { RefreshButton } from '../components/index.js';
+import { PageTitleIcon } from '../components/PageTitleIcon.js';
 
 const MONO = '"JetBrains Mono", monospace';
 const TAB_KEYS = ['external', 'in-app'] as const;
@@ -97,6 +98,7 @@ export function Notifications() {
                         color: ATLAS_PALETTE.slate,
                     }}
                 >
+                    <PageTitleIcon name="notifications" />
                     Notifications
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
