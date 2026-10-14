@@ -23,7 +23,9 @@ vi.mock('../services/notifications.js', () => ({
 // No CLI: spawnAgentRun just returns an id. cancelRun reports "not in the
 // registry" (no live child). The workflow engine runs for real.
 vi.mock('../services/agent-runner.js', () => ({
-    spawnAgentRun: vi.fn().mockImplementation(async () => `fake-run-${Math.random().toString(36).slice(2)}`),
+    spawnAgentRun: vi
+        .fn()
+        .mockImplementation(async () => `fake-run-${Math.random().toString(36).slice(2)}`),
     runOutputRegistry: new Map<string, string>(),
     cancelRun: vi.fn().mockResolvedValue({ cancelled: false, pidKilled: null }),
 }));
@@ -75,7 +77,6 @@ describe('POST /api/run — ad-hoc agent runs (ADR 0014)', () => {
         expect(res.json()).toMatchObject({ kind: 'validation_error' });
         expect(res.json().error).toMatch(/workflow/);
     });
-
 
     it('returns 202 when an agent is launched without item params', async () => {
         await insertAgent({ id: 'agent-freedom', status: 'active' });
@@ -134,7 +135,6 @@ describe('POST /api/run — typed error envelope (W4)', () => {
             kind: 'validation_error',
         });
     });
-
 });
 
 // P9 — Delete-a-run + item unstick. The endpoint exists so the Owner can
@@ -292,7 +292,8 @@ describe('POST /api/run/:id/stop — kill switch (W6)', () => {
         const { broadcastSSE } = await import('../routes/events.js');
         (broadcastSSE as unknown as ReturnType<typeof vi.fn>).mockClear();
 
-        await seedRun({ id: 'run-q', item_id: 'ATL-2', status: 'queued' });
+        // One live run per item (DB constraint), so the queued run is on the parent.
+        await seedRun({ id: 'run-q', item_id: 'ATL-100', status: 'queued' });
 
         const res = await app.inject({ method: 'POST', url: '/api/run/run-q/stop' });
         expect(res.statusCode).toBe(200);
@@ -434,6 +435,23 @@ describe('GET /api/run — list endpoint', () => {
         const body = res.json();
         expect(Array.isArray(body)).toBe(true);
     });
+
+    it('returns only the statuses asked for, ignoring unknown ones', async () => {
+        // One live run per item (DB constraint), so the queued run is on the parent.
+        await seedRun({ id: 'run-q', item_id: 'ATL-100', status: 'queued' });
+        await seedRun({ id: 'run-ip', item_id: 'ATL-2', status: 'in_progress' });
+        await seedRun({ id: 'run-done', item_id: 'ATL-2', status: 'completed' });
+        const ids = async (url: string) =>
+            (await app.inject({ method: 'GET', url }))
+                .json()
+                .map((r: { id: string }) => r.id)
+                .sort();
+        expect(await ids('/api/run?status=queued,in_progress')).toEqual(['run-ip', 'run-q']);
+        // An unknown status is dropped, not passed to SQL.
+        expect(await ids('/api/run?status=in_progress,bogus')).toEqual(['run-ip']);
+        // Nothing valid asked for: no status filter at all.
+        expect(await ids('/api/run?status=bogus')).toEqual(['run-done', 'run-ip', 'run-q']);
+    });
 });
 
 describe('GET /api/run/:id — single run endpoint', () => {
@@ -453,7 +471,6 @@ describe('GET /api/run/:id — single run endpoint', () => {
 });
 
 describe('POST /api/run — additional validation', () => {
-
     it('returns 400 when agent is inactive', async () => {
         await insertAgent({ id: 'agent-dormant', status: 'inactive' });
         const res = await app.inject({
@@ -645,7 +662,6 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
         expect(row?.status).toBe('error');
         expect(row?.outcome_summary).toMatch(/simulated spawn failure/);
     });
-
 });
 
 // ── Additional branch coverage ────────────────────────────────────────────

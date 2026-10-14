@@ -171,6 +171,18 @@ describe('GET /api/agents', () => {
         const body = JSON.parse(res.body) as { id: string }[];
         expect(body.some((a) => a.id === 'agent-coder')).toBe(true);
     });
+
+    it('leaves the prompt out of ?view=summary, and only there', async () => {
+        await insertAgent({ id: 'agent-coder' });
+        const full = JSON.parse((await app.inject({ method: 'GET', url: '/api/agents' })).body);
+        const summary = JSON.parse(
+            (await app.inject({ method: 'GET', url: '/api/agents?view=summary' })).body
+        );
+        expect(full[0]).toHaveProperty('prompt_md');
+        expect(summary[0]).not.toHaveProperty('prompt_md');
+        const { prompt_md: _prompt, ...rest } = full[0];
+        expect(summary[0]).toEqual(rest);
+    });
 });
 
 describe('GET /api/agents/:id', () => {
@@ -277,7 +289,12 @@ describe('DELETE /api/agents/:id', () => {
                 use_worktree: false,
                 graph: JSON.stringify({
                     nodes: [
-                        { id: 'n1', type: 'agent', agent_id: 'agent-in-flow', position: { x: 0, y: 0 } },
+                        {
+                            id: 'n1',
+                            type: 'agent',
+                            agent_id: 'agent-in-flow',
+                            position: { x: 0, y: 0 },
+                        },
                     ],
                     edges: [],
                 }),
@@ -1185,7 +1202,11 @@ describe('agent tests over HTTP', () => {
 
     it('creates, lists, patches and deletes a test', async () => {
         await seed();
-        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/tests',
+            payload: body,
+        });
         expect(created.statusCode).toBe(201);
         const id = created.json().id as string;
 
@@ -1203,7 +1224,9 @@ describe('agent tests over HTTP', () => {
 
         const removed = await app.inject({ method: 'DELETE', url: `/api/agent-tests/${id}` });
         expect(removed.statusCode).toBe(204);
-        expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' })).json()).toEqual([]);
+        expect(
+            (await app.inject({ method: 'GET', url: '/api/agents/agent-coder/tests' })).json()
+        ).toEqual([]);
     });
 
     // Scope checks (ADR 0023 amendment): a pattern that does not compile is
@@ -1220,9 +1243,16 @@ describe('agent tests over HTTP', () => {
                 script: { body_sh: 'exit 0' },
             },
         };
-        const ok = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: scoped });
+        const ok = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/tests',
+            payload: scoped,
+        });
         expect(ok.statusCode).toBe(201);
-        expect(ok.json().expectations).toMatchObject({ no_code_changes: true, script: { body_sh: 'exit 0' } });
+        expect(ok.json().expectations).toMatchObject({
+            no_code_changes: true,
+            script: { body_sh: 'exit 0' },
+        });
 
         const bad = await app.inject({
             method: 'POST',
@@ -1234,14 +1264,29 @@ describe('agent tests over HTTP', () => {
 
     it('404s every route for an agent or test that does not exist', async () => {
         await seed();
-        for (const url of ['/api/agents/nope/tests', '/api/agents/nope/cost-estimate', '/api/agent-tests/nope/runs']) {
+        for (const url of [
+            '/api/agents/nope/tests',
+            '/api/agents/nope/cost-estimate',
+            '/api/agent-tests/nope/runs',
+        ]) {
             expect((await app.inject({ method: 'GET', url })).statusCode).toBe(404);
         }
-        expect((await app.inject({ method: 'POST', url: '/api/agents/nope/tests', payload: body })).statusCode).toBe(404);
         expect(
-            (await app.inject({ method: 'PATCH', url: '/api/agent-tests/nope', payload: { name: 'x' } })).statusCode,
+            (await app.inject({ method: 'POST', url: '/api/agents/nope/tests', payload: body }))
+                .statusCode
         ).toBe(404);
-        expect((await app.inject({ method: 'POST', url: '/api/agent-tests/nope/run' })).statusCode).toBe(404);
+        expect(
+            (
+                await app.inject({
+                    method: 'PATCH',
+                    url: '/api/agent-tests/nope',
+                    payload: { name: 'x' },
+                })
+            ).statusCode
+        ).toBe(404);
+        expect(
+            (await app.inject({ method: 'POST', url: '/api/agent-tests/nope/run' })).statusCode
+        ).toBe(404);
     });
 
     it('runs a test and records the dispatch', async () => {
@@ -1256,7 +1301,11 @@ describe('agent tests over HTTP', () => {
                 .execute();
             return 'spawned-run-1';
         });
-        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/tests',
+            payload: body,
+        });
         const id = created.json().id as string;
 
         const run = await app.inject({ method: 'POST', url: `/api/agent-tests/${id}/run` });
@@ -1273,7 +1322,10 @@ describe('agent tests over HTTP', () => {
         const batches = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/batches` });
         expect(batches.json()).toHaveLength(1);
         expect(batches.json()[0]).toMatchObject({ n_runs: 1, running: 1, consistency: null });
-        const limited = await app.inject({ method: 'GET', url: `/api/agent-tests/${id}/batches?limit=abc` });
+        const limited = await app.inject({
+            method: 'GET',
+            url: `/api/agent-tests/${id}/batches?limit=abc`,
+        });
         expect(limited.json()).toHaveLength(1);
 
         // The list carries each test's newest batch, so the tab needs no
@@ -1286,7 +1338,11 @@ describe('agent tests over HTTP', () => {
     // number should be a 400, not a silently clamped spend.
     it('refuses a sample count outside the cap', async () => {
         await seed();
-        const created = await app.inject({ method: 'POST', url: '/api/agents/agent-coder/tests', payload: body });
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/agents/agent-coder/tests',
+            payload: body,
+        });
         const id = created.json().id as string;
         const res = await app.inject({
             method: 'POST',
@@ -1299,15 +1355,23 @@ describe('agent tests over HTTP', () => {
     describe('cost estimate', () => {
         // Spend that surprises you afterwards is what stops people running
         // tests at all, so the estimate is shown before the button is pressed.
-        it('averages the agent\'s recent completed runs', async () => {
+        it("averages the agent's recent completed runs", async () => {
             await seed();
             for (const [i, cost] of [0.2, 0.4].entries()) {
                 await testDb
                     .insertInto('agent_runs')
-                    .values({ id: `r${i}`, agent_id: 'agent-coder', status: 'completed', total_cost_usd: cost } as never)
+                    .values({
+                        id: `r${i}`,
+                        agent_id: 'agent-coder',
+                        status: 'completed',
+                        total_cost_usd: cost,
+                    } as never)
                     .execute();
             }
-            const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
+            const res = await app.inject({
+                method: 'GET',
+                url: '/api/agents/agent-coder/cost-estimate',
+            });
             expect(res.json()).toMatchObject({ estimated_cost_usd: 0.3, sample_size: 2 });
         });
 
@@ -1315,7 +1379,10 @@ describe('agent tests over HTTP', () => {
         // answers and only one of them is honest.
         it('returns null rather than zero when the agent has never run', async () => {
             await seed();
-            const res = await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' });
+            const res = await app.inject({
+                method: 'GET',
+                url: '/api/agents/agent-coder/cost-estimate',
+            });
             expect(res.json()).toMatchObject({ estimated_cost_usd: null, sample_size: 0 });
         });
 
@@ -1323,10 +1390,21 @@ describe('agent tests over HTTP', () => {
             await seed();
             await testDb
                 .insertInto('agent_runs')
-                .values({ id: 'r-err', agent_id: 'agent-coder', status: 'error', total_cost_usd: 99 } as never)
+                .values({
+                    id: 'r-err',
+                    agent_id: 'agent-coder',
+                    status: 'error',
+                    total_cost_usd: 99,
+                } as never)
                 .execute();
-            expect((await app.inject({ method: 'GET', url: '/api/agents/agent-coder/cost-estimate' })).json())
-                .toMatchObject({ estimated_cost_usd: null, sample_size: 0 });
+            expect(
+                (
+                    await app.inject({
+                        method: 'GET',
+                        url: '/api/agents/agent-coder/cost-estimate',
+                    })
+                ).json()
+            ).toMatchObject({ estimated_cost_usd: null, sample_size: 0 });
         });
     });
 });
@@ -1336,7 +1414,10 @@ describe('agent tests over HTTP', () => {
 describe('GET /api/agent-qualification', () => {
     it('answers for one agent, and 404s for an id that is not installed', async () => {
         await insertAgent({ id: 'agent-coder' });
-        const res = await app.inject({ method: 'GET', url: '/api/agent-qualification?agent_id=agent-coder' });
+        const res = await app.inject({
+            method: 'GET',
+            url: '/api/agent-qualification?agent_id=agent-coder',
+        });
         expect(res.statusCode).toBe(200);
         const body = JSON.parse(res.body) as Array<{ agent_id: string; verdict: string }>;
         expect(body).toHaveLength(1);
@@ -1344,7 +1425,10 @@ describe('GET /api/agent-qualification', () => {
         // never "qualified".
         expect(body[0]).toMatchObject({ agent_id: 'agent-coder', verdict: 'no_tests' });
 
-        const missing = await app.inject({ method: 'GET', url: '/api/agent-qualification?agent_id=nope' });
+        const missing = await app.inject({
+            method: 'GET',
+            url: '/api/agent-qualification?agent_id=nope',
+        });
         expect(missing.statusCode).toBe(404);
     });
 

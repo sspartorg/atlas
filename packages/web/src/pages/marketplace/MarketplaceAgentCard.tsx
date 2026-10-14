@@ -12,6 +12,7 @@ import { api } from '../../api/api.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { AddFromMarketplaceModal } from './AddFromMarketplaceModal.js';
+import { iconOr } from '../../theme/icons.js';
 
 interface Props {
     agent: IMarketplaceAgentSummary;
@@ -205,7 +206,7 @@ export function MarketplaceAgentCard({
                         aria-hidden="true"
                         sx={{ fontSize: 22, fontVariationSettings: "'FILL' 1" }}
                     >
-                        {agent.glyph || 'smart_toy'}
+                        {iconOr(agent.glyph, 'smart_toy')}
                     </Box>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>

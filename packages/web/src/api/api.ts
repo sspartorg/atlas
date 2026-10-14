@@ -69,6 +69,7 @@ import type {
     CliSessionFilePatchResponse,
     WorkflowRunDiffResponse,
     ICliSessionTranscriptResponse,
+    RunStatus,
 } from '@atlas/shared';
 import type {
     CreateWorkflowInput,
@@ -83,6 +84,7 @@ import type {
     UpdateWorkflowInput,
 } from '@atlas/shared';
 import type {
+    AgentSummary,
     SidenavCounts,
     DashboardResponse,
     ProjectCounts,
@@ -121,7 +123,7 @@ export class AtlasApiError extends Error {
         message: string,
         public readonly kind: ApiErrorKind,
         public readonly status: number,
-        public readonly details?: unknown,
+        public readonly details?: unknown
     ) {
         super(message);
         this.name = 'AtlasApiError';
@@ -135,8 +137,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     // Only set Content-Type when there's a body — Fastify 5 rejects a JSON
     // content-type without a body (FST_ERR_CTP_EMPTY_JSON_BODY). FormData
     // is left untyped so the browser supplies the multipart boundary.
-    const isForm =
-        typeof FormData !== 'undefined' && init?.body instanceof FormData;
+    const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData;
     if (init?.body !== undefined && !isForm && headers['Content-Type'] === undefined) {
         headers['Content-Type'] = 'application/json';
     }
@@ -147,7 +148,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
             body.error ?? `HTTP ${res.status}`,
             body.kind ?? 'internal_error',
             res.status,
-            body.details,
+            body.details
         );
     }
     if (res.status === 204) return undefined as unknown as T;
@@ -208,8 +209,7 @@ const del = (path: string) => request<void>(path, { method: 'DELETE' });
 // Multipart form-data POST (file uploads). Caller hands a FormData with the
 // file in a `file` part; we do NOT set Content-Type so the browser supplies
 // the boundary automatically.
-const postForm = <T>(path: string, fd: FormData) =>
-    request<T>(path, { method: 'POST', body: fd });
+const postForm = <T>(path: string, fd: FormData) => request<T>(path, { method: 'POST', body: fd });
 
 // Absolute URL builder for download links (anchor href = a backend endpoint).
 const apiUrl = (path: string) => `${BASE}${path}`;
@@ -280,32 +280,25 @@ export const api = {
         },
         // Drill-down: project aggregate (totals + byKind + top 25 tasks).
         project: (projectId: string) =>
-            get<AnalyticsProjectResponse>(
-                `/analytics/project/${encodeURIComponent(projectId)}`,
-            ),
-        projectTasks: (
-            projectId: string,
-            params: { page?: number; limit?: number } = {},
-        ) => {
+            get<AnalyticsProjectResponse>(`/analytics/project/${encodeURIComponent(projectId)}`),
+        projectTasks: (projectId: string, params: { page?: number; limit?: number } = {}) => {
             const q = new URLSearchParams();
             if (params.page) q.set('page', String(params.page));
             if (params.limit) q.set('limit', String(params.limit));
             const qs = q.toString();
             return get<AnalyticsProjectTasksResponse>(
-                `/analytics/project/${encodeURIComponent(projectId)}/tasks${qs ? `?${qs}` : ''}`,
+                `/analytics/project/${encodeURIComponent(projectId)}/tasks${qs ? `?${qs}` : ''}`
             );
         },
         task: (taskId: string) =>
-            get<AnalyticsTaskResponse>(
-                `/analytics/task/${encodeURIComponent(taskId)}`,
-            ),
+            get<AnalyticsTaskResponse>(`/analytics/task/${encodeURIComponent(taskId)}`),
         taskChildren: (
             taskId: string,
             params: {
                 page?: number;
                 limit?: number;
                 type?: IssueType;
-            } = {},
+            } = {}
         ) => {
             const q = new URLSearchParams();
             if (params.page) q.set('page', String(params.page));
@@ -313,7 +306,7 @@ export const api = {
             if (params.type) q.set('type', params.type);
             const qs = q.toString();
             return get<AnalyticsTaskChildrenResponse>(
-                `/analytics/task/${encodeURIComponent(taskId)}/children${qs ? `?${qs}` : ''}`,
+                `/analytics/task/${encodeURIComponent(taskId)}/children${qs ? `?${qs}` : ''}`
             );
         },
     },
@@ -333,20 +326,19 @@ export const api = {
     },
     // Every secret but git credentials, sealed with a passphrase for another machine.
     secretsBundle: {
-        export: (passphrase: string) => post<SecretsBundle>('/secrets-bundle/export', { passphrase }),
+        export: (passphrase: string) =>
+            post<SecretsBundle>('/secrets-bundle/export', { passphrase }),
         import: (passphrase: string, bundle: SecretsBundle) =>
             post<SecretsImportReport>('/secrets-bundle/import', { passphrase, bundle }),
     },
     // Migration 010 — sources are a project's query+workflow+repos combos.
     jiraSources: {
-        list: (projectId: string) =>
-            get<IJiraSource[]>(`/projects/${projectId}/jira-sources`),
+        list: (projectId: string) => get<IJiraSource[]>(`/projects/${projectId}/jira-sources`),
         create: (projectId: string, data: JiraSourceInput) =>
             post<IJiraSource>(`/projects/${projectId}/jira-sources`, data),
         update: (projectId: string, id: number, data: Partial<JiraSourceInput>) =>
             patch<IJiraSource>(`/projects/${projectId}/jira-sources/${id}`, data),
-        remove: (projectId: string, id: number) =>
-            del(`/projects/${projectId}/jira-sources/${id}`),
+        remove: (projectId: string, id: number) => del(`/projects/${projectId}/jira-sources/${id}`),
     },
 
     /** Every repo of every project (ADR 0018). */
@@ -374,7 +366,7 @@ export const api = {
         testExternalNotification: () =>
             post<{ ok: boolean; error?: string; endpoint_label?: string | null }>(
                 '/settings/external-notification/test',
-                {},
+                {}
             ),
         // Batch-9 enterprise-secrets read model: on-demand reveal of the
         // token / webhook URL. The GET /api/settings response never
@@ -434,19 +426,20 @@ export const api = {
         get: (id: SdlcRole) => get<IRole>(`/roles/${id}`),
         update: (
             id: SdlcRole,
-            data: Partial<Pick<IRole, 'label' | 'description' | 'default_prompt_md'>>,
+            data: Partial<Pick<IRole, 'label' | 'description' | 'default_prompt_md'>>
         ) => patch<IRole>(`/roles/${id}`, data),
     },
 
     agents: {
         list: () => get<IAgent[]>('/agents'),
+        /** The list without `prompt_md` (most of its size). */
+        listSummaries: () => get<AgentSummary[]>('/agents?view=summary'),
         get: (id: string) => get<IAgent>(`/agents/${id}`),
         create: (data: Partial<IAgent>) => post<IAgent>('/agents', data),
         update: (id: string, data: Partial<IAgent>) => patch<IAgent>(`/agents/${id}`, data),
         delete: (id: string) => del(`/agents/${id}`),
         getRuns: (id: string) => get<IAgentRun[]>(`/agents/${id}/runs`),
-        getChecklists: (id: string) =>
-            get<IAgentChecklistItem[]>(`/agents/${id}/checklists`),
+        getChecklists: (id: string) => get<IAgentChecklistItem[]>(`/agents/${id}/checklists`),
         setChecklists: (
             id: string,
             items: Array<{ label: string; sort_order: number; required: boolean }>
@@ -454,17 +447,16 @@ export const api = {
         getMemory: (id: string) => get<IAgentMemory>(`/agents/${id}/memory`),
         setMemory: (id: string, body_md: string) =>
             put<IAgentMemory>(`/agents/${id}/memory`, { body_md }),
-        regenerateMemory: (id: string) =>
-            post<IAgentMemory>(`/agents/${id}/memory/regenerate`, {}),
+        regenerateMemory: (id: string) => post<IAgentMemory>(`/agents/${id}/memory/regenerate`, {}),
         // Theme 08 — regen audit history for the Memory tab.
         getMemoryHistory: (id: string, limit?: number) =>
             get<IMemoryRegeneration[]>(
-                `/agents/${id}/memory/history${limit ? `?limit=${limit}` : ''}`,
+                `/agents/${id}/memory/history${limit ? `?limit=${limit}` : ''}`
             ),
         // Theme 08 — similar items via the RAG service.
         getSimilarItems: (itemId: string, topK?: number) =>
             get<Array<{ item_id: string; similarity: number; source_type: string }>>(
-                `/items/${encodeURIComponent(itemId)}/similar${topK ? `?top_k=${topK}` : ''}`,
+                `/items/${encodeURIComponent(itemId)}/similar${topK ? `?top_k=${topK}` : ''}`
             ),
         // Theme 11 — commit-discipline verifications for the Agent
         // Detail tile.
@@ -482,16 +474,10 @@ export const api = {
                 }>
             >(`/agents/${id}/commit-verifications${limit ? `?limit=${limit}` : ''}`),
         getPromptVersions: (id: string) =>
-            get<IAgentPromptVersion[]>(
-                `/agents/${id}/prompt-versions`,
-            ),
+            get<IAgentPromptVersion[]>(`/agents/${id}/prompt-versions`),
         revertPrompt: (id: string, version: number) =>
             post<IAgent>(`/agents/${id}/prompt-versions/${version}/revert`, {}),
-        compilePrompt: (
-            id: string,
-            issue_type: IssueType | null,
-            issue_id: string | null
-        ) =>
+        compilePrompt: (id: string, issue_type: IssueType | null, issue_id: string | null) =>
             post<{
                 prompt: string;
                 filename: string;
@@ -518,12 +504,14 @@ export const api = {
     },
 
     marketplace: {
-        list: (params: {
-            q?: string;
-            category?: AgentCategory;
-            kind?: AgentKindSlug;
-            limit?: number;
-        } = {}) => {
+        list: (
+            params: {
+                q?: string;
+                category?: AgentCategory;
+                kind?: AgentKindSlug;
+                limit?: number;
+            } = {}
+        ) => {
             const sp = new URLSearchParams();
             if (params.q) sp.set('q', params.q);
             if (params.category) sp.set('category', params.category);
@@ -538,7 +526,7 @@ export const api = {
             post<IAgent>(`/marketplace/agents/${encodeURIComponent(id)}/install`, opts),
         diff: (catalogId: string, agentId: string) =>
             get<IMarketplaceUpgradeDiff>(
-                `/marketplace/agents/${encodeURIComponent(catalogId)}/diff/${encodeURIComponent(agentId)}`,
+                `/marketplace/agents/${encodeURIComponent(catalogId)}/diff/${encodeURIComponent(agentId)}`
             ),
         exportZipUrl: (id: string) =>
             apiUrl(`/marketplace/agents/${encodeURIComponent(id)}/export`),
@@ -548,7 +536,7 @@ export const api = {
         list: () => get<IProject[]>('/projects'),
         listPaged: (params: { page: number; limit: number }) =>
             get<{ rows: IProject[]; total: number; page: number; limit: number }>(
-                `/projects/paged?page=${params.page}&limit=${params.limit}`,
+                `/projects/paged?page=${params.page}&limit=${params.limit}`
             ),
         get: (id: string) => get<IProject>(`/projects/${id}`),
         /** The Health card: 30 days of this project's workflow runs. */
@@ -596,7 +584,7 @@ export const api = {
         repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
         cloneRepo: (
             id: string,
-            data: { name: string; repo_url: string; credential_id: string; default_branch: string },
+            data: { name: string; repo_url: string; credential_id: string; default_branch: string }
         ) =>
             post<{ clone_id: string; destination: string }>(`/projects/${id}/repos`, {
                 mode: 'clone',
@@ -604,7 +592,7 @@ export const api = {
             }),
         connectRepo: (
             id: string,
-            data: { name: string; folder_path: string; repo_url: string; credential_id: string },
+            data: { name: string; folder_path: string; repo_url: string; credential_id: string }
         ) =>
             requestRaw<IProjectRepo | ConnectError | ApiErrorBody>(`/projects/${id}/repos`, {
                 method: 'POST',
@@ -618,7 +606,7 @@ export const api = {
                 credential_id?: string;
                 setup_sh_body?: string;
                 setup_ps1_body?: string;
-            },
+            }
         ) => patch<IProjectRepo>(`/projects/${id}/repos/${repoId}`, data),
         removeRepo: (id: string, repoId: string) => del(`/projects/${id}/repos/${repoId}`),
         // Batch-9 enterprise-secrets read model: list returns metadata
@@ -638,7 +626,7 @@ export const api = {
             }>(`/projects/${id}/env`),
         revealEnv: (id: string, key: string) =>
             get<{ key: string; value: string }>(
-                `/projects/${id}/env/${encodeURIComponent(key)}/value`,
+                `/projects/${id}/env/${encodeURIComponent(key)}/value`
             ),
         saveEnv: (id: string, vars: Array<{ key: string; value: string }>) =>
             put<{
@@ -660,7 +648,7 @@ export const api = {
             }>('/environment-secrets'),
         reveal: (key: string) =>
             get<{ key: string; value: string }>(
-                `/environment-secrets/${encodeURIComponent(key)}/value`,
+                `/environment-secrets/${encodeURIComponent(key)}/value`
             ),
         save: (vars: Array<{ key: string; value: string }>) =>
             put<{
@@ -690,7 +678,10 @@ export const api = {
         delete: (projectId: string, repoId: string) =>
             del(`/projects/${projectId}/repos/${repoId}/schedule`),
         fire: (projectId: string, repoId: string) =>
-            post<{ autofetch_id: string }>(`/projects/${projectId}/repos/${repoId}/schedule/fire`, {}),
+            post<{ autofetch_id: string }>(
+                `/projects/${projectId}/repos/${repoId}/schedule/fire`,
+                {}
+            ),
     },
 
     credentials: {
@@ -722,7 +713,7 @@ export const api = {
                       human_name?: string | null;
                       human_email?: string | null;
                       human_gh_login?: string | null;
-                  },
+                  }
         ) => post<ICredential>('/credentials', data),
         update: (
             id: string,
@@ -742,8 +733,7 @@ export const api = {
         refresh: (id: string) => post<ICredential>(`/credentials/${id}/refresh`, {}),
         // On-demand plaintext for a stored PAT. Never cache the result —
         // same read model as environment-secrets / project env reveal.
-        revealToken: (id: string) =>
-            get<{ id: string; value: string }>(`/credentials/${id}/token`),
+        revealToken: (id: string) => get<{ id: string; value: string }>(`/credentials/${id}/token`),
     },
 
     tasks: {
@@ -768,7 +758,8 @@ export const api = {
             }),
         assign: (id: string, assignee_agent_id: string | null) =>
             patch<ITask>(`/tasks/${id}/assign`, { assignee_agent_id }),
-        reorderSubTasks: (id: string, ids: string[]) => put<void>(`/tasks/${id}/sub-tasks/order`, { ids }),
+        reorderSubTasks: (id: string, ids: string[]) =>
+            put<void>(`/tasks/${id}/sub-tasks/order`, { ids }),
         delete: (id: string) => del(`/tasks/${id}`),
     },
 
@@ -791,7 +782,9 @@ export const api = {
     issues: {
         // One round-trip view of Tasks + their Sub-tasks, with project +
         // agent dictionaries inlined. Backs Project Detail.
-        tree: (opts: { projectId?: string | undefined; includeArchived?: boolean | undefined } = {}) => {
+        tree: (
+            opts: { projectId?: string | undefined; includeArchived?: boolean | undefined } = {}
+        ) => {
             const params = new URLSearchParams();
             if (opts.projectId) params.set('project_id', opts.projectId);
             if (opts.includeArchived) params.set('include_archived', 'true');
@@ -804,8 +797,7 @@ export const api = {
         list: (issueType: IssueType, issueId: string) =>
             get<IComment[]>(`/comments?issue_type=${issueType}&issue_id=${issueId}`),
         create: (data: Partial<IComment>) => post<IComment>('/comments', data),
-        update: (id: number, body: string) =>
-            patch<IComment>(`/comments/${id}`, { body }),
+        update: (id: number, body: string) => patch<IComment>(`/comments/${id}`, { body }),
         delete: (id: number) => del(`/comments/${id}`),
     },
 
@@ -822,7 +814,7 @@ export const api = {
             issueId: string,
             toType: IssueType,
             toId: string,
-            relationType: 'relates_to' | 'depends_on' | 'tested_by' = 'relates_to',
+            relationType: 'relates_to' | 'depends_on' | 'tested_by' = 'relates_to'
         ) =>
             post<unknown>(`/issues/${issueType}/${issueId}/links`, {
                 to_type: toType,
@@ -841,7 +833,7 @@ export const api = {
         create: (
             issueType: IssueType,
             issueId: string,
-            input: { url: string; link_kind: 'pull_request'; title?: string | null },
+            input: { url: string; link_kind: 'pull_request'; title?: string | null }
         ) =>
             post<IItemExternalLink>(`/issues/${issueType}/${issueId}/external-links`, {
                 link_kind: input.link_kind,
@@ -879,18 +871,14 @@ export const api = {
     push: {
         getVapidPublicKey: () =>
             get<{ publicKey: string | null }>('/push-subscriptions/vapid-public-key'),
-        subscribe: (data: {
-            endpoint: string;
-            p256dh: string;
-            auth: string;
-            userAgent?: string;
-        }) => post<{ ok: true }>('/push-subscriptions/subscribe', data),
+        subscribe: (data: { endpoint: string; p256dh: string; auth: string; userAgent?: string }) =>
+            post<{ ok: true }>('/push-subscriptions/subscribe', data),
         unsubscribe: (endpoint: string) =>
             post<void>('/push-subscriptions/unsubscribe', { endpoint }),
         test: () =>
             post<{ ok: boolean; subscriptions: number; delivered: number; error?: string }>(
                 '/push-subscriptions/test',
-                {},
+                {}
             ),
     },
 
@@ -899,15 +887,13 @@ export const api = {
         create: (input: SetReminderInput) => post<IReminder>('/reminders', input),
         update: (id: number, input: UpdateReminderInput) =>
             patch<IReminder>(`/reminders/${id}`, input),
-        cancel: (id: number) =>
-            request<IReminder>(`/reminders/${id}`, { method: 'DELETE' }),
+        cancel: (id: number) => request<IReminder>(`/reminders/${id}`, { method: 'DELETE' }),
     },
 
     scratchPad: {
         list: () => get<IScratchPad[]>('/scratch-pad'),
         get: (id: string) => get<IScratchPad>(`/scratch-pad/${id}`),
-        create: (input: CreateScratchPadInput = {}) =>
-            post<IScratchPad>('/scratch-pad', input),
+        create: (input: CreateScratchPadInput = {}) => post<IScratchPad>('/scratch-pad', input),
         update: (id: string, input: UpdateScratchPadInput) =>
             patch<IScratchPad>(`/scratch-pad/${id}`, input),
         delete: (id: string) => del(`/scratch-pad/${id}`),
@@ -1008,11 +994,7 @@ export const api = {
                 body_ps1: string;
                 sort_order: number;
             }>
-        ) =>
-            patch<IProjectGuardrailScript>(
-                `/projects/${projectId}/guardrail-scripts/${id}`,
-                data,
-            ),
+        ) => patch<IProjectGuardrailScript>(`/projects/${projectId}/guardrail-scripts/${id}`, data),
         remove: (projectId: string, id: string) =>
             del(`/projects/${projectId}/guardrail-scripts/${id}`),
     },
@@ -1041,7 +1023,8 @@ export const api = {
                 qs.set('agent_id', params.agent_id.join(','));
             if (params.status) qs.set('status', params.status);
             if (params.updated) qs.set('updated', params.updated);
-            if (params.labels && params.labels.length > 0) qs.set('labels', params.labels.join(','));
+            if (params.labels && params.labels.length > 0)
+                qs.set('labels', params.labels.join(','));
             if (params.limit) qs.set('limit', String(params.limit));
             return get<
                 Array<{
@@ -1060,11 +1043,8 @@ export const api = {
     },
 
     run: {
-        trigger: (
-            agent_id: string,
-            issue_type: IssueType | null,
-            issue_id: string | null
-        ) => post<{ runId: string }>('/run', { agent_id, issue_type, issue_id }),
+        trigger: (agent_id: string, issue_type: IssueType | null, issue_id: string | null) =>
+            post<{ runId: string }>('/run', { agent_id, issue_type, issue_id }),
         get: (id: string, opts?: { since?: number }) => {
             const qs =
                 typeof opts?.since === 'number' && Number.isFinite(opts.since)
@@ -1076,12 +1056,15 @@ export const api = {
             issue_type?: IssueType;
             issue_id?: string;
             project_id?: string;
+            /** Only runs in these statuses. */
+            status?: RunStatus[];
             limit?: number;
         }) => {
             const params = new URLSearchParams();
             if (opts?.issue_type) params.set('issue_type', opts.issue_type);
             if (opts?.issue_id) params.set('issue_id', opts.issue_id);
             if (opts?.project_id) params.set('project_id', opts.project_id);
+            if (opts?.status?.length) params.set('status', opts.status.join(','));
             if (opts?.limit) params.set('limit', String(opts.limit));
             const qs = params.toString();
             return get<IAgentRun[]>(`/run${qs ? `?${qs}` : ''}`);
@@ -1122,22 +1105,20 @@ export const api = {
             list: (opts?: { project_id?: string; standalone?: boolean }) => {
                 const params = new URLSearchParams();
                 if (opts?.project_id) params.set('project_id', opts.project_id);
-                if (opts?.standalone !== undefined) params.set('standalone', String(opts.standalone));
+                if (opts?.standalone !== undefined)
+                    params.set('standalone', String(opts.standalone));
                 const qs = params.toString();
                 return get<ICliSession[]>(`/cli/sessions${qs ? `?${qs}` : ''}`);
             },
             get: (id: string) => get<ICliSession>(`/cli/sessions/${id}`),
-            create: (input: CliSessionCreateInput) =>
-                post<ICliSession>('/cli/sessions', input),
+            create: (input: CliSessionCreateInput) => post<ICliSession>('/cli/sessions', input),
             // Standalone terminals — a PTY on a folder the Owner picked, with
             // no project and no worktree. Separate endpoint (not a flag on
             // `create`) because the server-side payloads are disjoint.
             createStandalone: (input: CliSessionStandaloneCreateInput) =>
                 post<ICliSession>('/cli/sessions/standalone', input),
-            pause: (id: string) =>
-                post<ICliSession>(`/cli/sessions/${id}/pause`, {}),
-            resume: (id: string) =>
-                post<ICliSession>(`/cli/sessions/${id}/resume`, {}),
+            pause: (id: string) => post<ICliSession>(`/cli/sessions/${id}/pause`, {}),
+            resume: (id: string) => post<ICliSession>(`/cli/sessions/${id}/resume`, {}),
             preflightStop: (id: string) =>
                 post<CliSessionPreflightStopResponse>(`/cli/sessions/${id}/preflight-stop`, {}),
             stop: (id: string, input: CliSessionStopInput) =>
@@ -1146,16 +1127,15 @@ export const api = {
             // preflightStop) because both are pure reads, so React Query can
             // cache them — per-file patches especially, since a worktree
             // snapshot is immutable for the modal's lifetime.
-            diff: (id: string) =>
-                get<CliSessionDiffSummaryResponse>(`/cli/sessions/${id}/diff`),
+            diff: (id: string) => get<CliSessionDiffSummaryResponse>(`/cli/sessions/${id}/diff`),
             diffFile: (
                 id: string,
-                q: { scope: CliSessionDiffScopeName; path: string; context?: number },
+                q: { scope: CliSessionDiffScopeName; path: string; context?: number }
             ) => {
                 const params = new URLSearchParams({ scope: q.scope, path: q.path });
                 if (q.context !== undefined) params.set('context', String(q.context));
                 return get<CliSessionFilePatchResponse>(
-                    `/cli/sessions/${id}/diff/file?${params.toString()}`,
+                    `/cli/sessions/${id}/diff/file?${params.toString()}`
                 );
             },
             transcript: (id: string) =>
@@ -1170,7 +1150,7 @@ export const api = {
     workflows: {
         list: (projectId?: string) =>
             get<IWorkflow[]>(
-                `/workflows${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`,
+                `/workflows${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`
             ),
         templates: () => get<IWorkflowTemplate[]>('/workflows/templates'),
         // Bundles: the workflow + its sub-workflows + every agent they use.
@@ -1187,7 +1167,8 @@ export const api = {
         get: (id: string) => get<IWorkflow>(`/workflows/${id}`),
         // Re-take the marketplace source. Replaces the graph, so it is always
         // the Owner's explicit call — never fired automatically from a read.
-        upgrade: (id: string) => post<IWorkflow>(`/workflows/${encodeURIComponent(id)}/upgrade`, {}),
+        upgrade: (id: string) =>
+            post<IWorkflow>(`/workflows/${encodeURIComponent(id)}/upgrade`, {}),
         create: (input: CreateWorkflowInput) => post<IWorkflow>('/workflows', input),
         createFromTemplate: (templateId: string, projectId: string) =>
             post<IWorkflow>('/workflows/from-template', {
@@ -1203,21 +1184,25 @@ export const api = {
                 ...(itemId ? { item_id: itemId } : {}),
                 ...(opts.fromSubtasks ? { from_subtasks: true } : {}),
             }),
-        itemRuns: (itemId: string) =>
-            get<IWorkflowRunSummary[]>(`/items/${itemId}/workflow-runs`),
+        itemRuns: (itemId: string) => get<IWorkflowRunSummary[]>(`/items/${itemId}/workflow-runs`),
         setItemWorkflow: (itemId: string, workflowId: string | null) =>
             put<void>(`/items/${itemId}/workflow`, { workflow_id: workflowId }),
         // Stores the export bundle in the Marketplace; again replaces the entry.
-        publish: (id: string) => post<IPublishedWorkflow>(`/workflows/${encodeURIComponent(id)}/publish`, {}),
+        publish: (id: string) =>
+            post<IPublishedWorkflow>(`/workflows/${encodeURIComponent(id)}/publish`, {}),
     },
 
     // Workflows the Owner published to the Marketplace (each stores its bundle).
     publishedWorkflows: {
         list: () => get<IPublishedWorkflow[]>('/marketplace/workflows'),
-        get: (id: string) => get<IPublishedWorkflowDetail>(`/marketplace/workflows/${encodeURIComponent(id)}`),
-        exportZipUrl: (id: string) => apiUrl(`/marketplace/workflows/${encodeURIComponent(id)}/export`),
+        get: (id: string) =>
+            get<IPublishedWorkflowDetail>(`/marketplace/workflows/${encodeURIComponent(id)}`),
+        exportZipUrl: (id: string) =>
+            apiUrl(`/marketplace/workflows/${encodeURIComponent(id)}/export`),
         use: (id: string, projectId: string) =>
-            post<IWorkflowImportResult>(`/marketplace/workflows/${encodeURIComponent(id)}/use`, { project_id: projectId }),
+            post<IWorkflowImportResult>(`/marketplace/workflows/${encodeURIComponent(id)}/use`, {
+                project_id: projectId,
+            }),
         unpublish: (id: string) => del(`/marketplace/workflows/${encodeURIComponent(id)}`),
     },
 
@@ -1236,7 +1221,7 @@ export const api = {
                 name: string;
                 item_template: AgentTestItemTemplate;
                 expectations?: AgentTestExpectations;
-            },
+            }
         ) => post<AgentTest>(`/agents/${agentId}/tests`, body),
         update: (
             testId: string,
@@ -1246,7 +1231,7 @@ export const api = {
                 name?: string;
                 item_template?: AgentTestItemTemplate;
                 expectations?: AgentTestExpectations;
-            },
+            }
         ) => patch<AgentTest>(`/agent-tests/${testId}`, body),
         remove: (testId: string) => del(`/agent-tests/${testId}`),
         run: (
@@ -1258,7 +1243,7 @@ export const api = {
                 repo_id?: string | null;
                 /** Run in the Tests sandbox project, whatever the fixture is pinned to. */
                 sandbox?: boolean;
-            } = {},
+            } = {}
         ) => post<AgentTestBatch>(`/agent-tests/${testId}/run`, body),
         /** Every fixture this agent has, in one press, under one label. */
         runSuite: (
@@ -1270,21 +1255,26 @@ export const api = {
                 repo_id?: string | null;
                 /** Run in the Tests sandbox project, whatever the fixture is pinned to. */
                 sandbox?: boolean;
-            } = {},
+            } = {}
         ) => post<AgentTestBatch[]>(`/agents/${agentId}/test-suite/runs`, body),
         /** Is this agent qualified, and is that still true of the agent as it is now? */
         qualification: (agentId?: string) =>
             get<AgentQualification[]>(
-                agentId ? `/agent-qualification?agent_id=${encodeURIComponent(agentId)}` : '/agent-qualification',
+                agentId
+                    ? `/agent-qualification?agent_id=${encodeURIComponent(agentId)}`
+                    : '/agent-qualification'
             ),
         runs: (testId: string) => get<AgentTestRun[]>(`/agent-tests/${testId}/runs`),
         /** The same runs, folded into the batches the Owner actually pressed. */
         batches: (testId: string, limit?: number) =>
-            get<AgentTestBatch[]>(`/agent-tests/${testId}/batches${limit ? `?limit=${limit}` : ''}`),
+            get<AgentTestBatch[]>(
+                `/agent-tests/${testId}/batches${limit ? `?limit=${limit}` : ''}`
+            ),
         /** ATL-140 — what this agent's own runs already prove. */
         performance: (agentId: string) => get<AgentPerformance>(`/agents/${agentId}/performance`),
         /** Every agent side by side, plus what the fleet delivered. */
-        fleetPerformance: (days: FleetWindowDays) => get<FleetPerformance>(`/agents/performance?days=${days}`),
+        fleetPerformance: (days: FleetWindowDays) =>
+            get<FleetPerformance>(`/agents/performance?days=${days}`),
         /** ADR 0023 phase 4 — the tests this agent ships with. */
         starter: (agentId: string) => get<StarterTest[]>(`/agents/${agentId}/starter-tests`),
         /** ADR 0023 phase 3 — fixtures pointed at a whole workflow. */
@@ -1298,10 +1288,11 @@ export const api = {
                 name: string;
                 item_template: AgentTestItemTemplate;
                 expectations?: AgentTestExpectations;
-            },
+            }
         ) => post<AgentTest>(`/workflows/${workflowId}/tests`, body),
         /** ATL-173 — fixtures of this workflow that are waiting on an answer. */
-        parked: (workflowId: string) => get<ParkedFixture[]>(`/workflows/${workflowId}/evals/parked`),
+        parked: (workflowId: string) =>
+            get<ParkedFixture[]>(`/workflows/${workflowId}/evals/parked`),
     },
 
     workflowRuns: {
@@ -1315,7 +1306,7 @@ export const api = {
         diff: (id: string) => get<WorkflowRunDiffResponse>(`/workflow-runs/${id}/diff`),
         diffFile: (
             id: string,
-            q: { repoId: string; scope: CliSessionDiffScopeName; path: string; context: number },
+            q: { repoId: string; scope: CliSessionDiffScopeName; path: string; context: number }
         ) => {
             const params = new URLSearchParams({
                 repo_id: q.repoId,
@@ -1323,7 +1314,9 @@ export const api = {
                 path: q.path,
                 context: String(q.context),
             });
-            return get<CliSessionFilePatchResponse>(`/workflow-runs/${id}/diff/file?${params.toString()}`);
+            return get<CliSessionFilePatchResponse>(
+                `/workflow-runs/${id}/diff/file?${params.toString()}`
+            );
         },
     },
 
@@ -1331,7 +1324,7 @@ export const api = {
     workflowQueue: {
         get: (projectId?: string) =>
             get<IWorkflowQueue>(
-                `/workflow-queue${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`,
+                `/workflow-queue${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`
             ),
     },
 };

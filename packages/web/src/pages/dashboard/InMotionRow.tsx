@@ -1,15 +1,16 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
-import type { IAgent, IssueType } from '@atlas/shared';
+import type { IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import type { QueueItem } from '../../api/types.js';
 import { StatusPill } from './StatusPill.js';
 import { itemPath } from '../../utils/itemPath.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface IInMotionRowProps {
     row: QueueItem;
-    agent: IAgent | undefined;
+    agent: AgentSummary | undefined;
 }
 
 const MONO_FONT = '"JetBrains Mono", monospace';

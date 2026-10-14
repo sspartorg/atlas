@@ -8,7 +8,18 @@ import { asAgentRun } from '../services/agents.js';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
-import { type ApiErrorBody, type IssueType } from '@atlas/shared';
+import { type ApiErrorBody, type IssueType, type RunStatus } from '@atlas/shared';
+
+// Every RunStatus, as a record so the compiler flags a status added to the
+// union but not here. Validates `GET /api/run?status=`.
+const RUN_STATUSES: Record<RunStatus, true> = {
+    queued: true,
+    in_progress: true,
+    completed: true,
+    error: true,
+    cancelled: true,
+    setup_failed: true,
+};
 
 // List-mode projection for `output_text`: keep the head (so the
 // `[SIMULATED…]` marker that `isSimulatedRun` looks for survives) plus
@@ -94,7 +105,10 @@ export async function runRoutes(app: FastifyInstance) {
                         .execute();
                 } catch (updateErr) {
                     /* v8 ignore next */
-                    req.log.error({ err: updateErr, runId }, 'spawn-failed: could not mark row as error');
+                    req.log.error(
+                        { err: updateErr, runId },
+                        'spawn-failed: could not mark row as error'
+                    );
                 }
             });
         });
@@ -336,11 +350,13 @@ export async function runRoutes(app: FastifyInstance) {
     });
 
     app.get('/api/run', async (req, reply) => {
-        const { issue_type, issue_id, project_id, agent_id, limit } = req.query as {
+        const { issue_type, issue_id, project_id, agent_id, status, limit } = req.query as {
             issue_type?: string;
             issue_id?: string;
             project_id?: string;
             agent_id?: string;
+            /** Comma-separated run statuses, e.g. `queued,in_progress`. */
+            status?: string;
             limit?: string;
         };
         // The previous ceiling was 200; bumping to 500 to match the Queue /
@@ -409,6 +425,13 @@ export async function runRoutes(app: FastifyInstance) {
         // sees the full chronology without the client having to enumerate
         // every child id.
         if (project_id) q = q.where('i.project_id', '=', project_id);
+        // "What's working right now" (header mascot, dashboard) asks for just
+        // the live runs instead of paging the last 500 runs to find them.
+        const statuses = status
+            ?.split(',')
+            .map((s) => s.trim())
+            .filter((s): s is RunStatus => Object.hasOwn(RUN_STATUSES, s));
+        if (statuses?.length) q = q.where('r.status', 'in', statuses);
         const rows = await q.orderBy('r.created_at', 'desc').limit(n).execute();
         /* v8 ignore next */
         return reply.send(

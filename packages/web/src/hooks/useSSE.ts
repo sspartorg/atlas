@@ -199,6 +199,8 @@ export function useSSE() {
             if (event.type === 'workflow_run_updated') {
                 invalidate(['workflows']);
                 invalidate(['workflow-queue']);
+                // The dashboard's Running now panel rides on its payload.
+                invalidate(['dashboard']);
                 if (event.workflowRunId) {
                     invalidate(['workflow-run', event.workflowRunId]);
                 }

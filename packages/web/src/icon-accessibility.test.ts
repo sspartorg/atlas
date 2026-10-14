@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { globSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ICON_FONT_URL } from './theme/icons.js';
 
 // G-015 — two coupled invariants about Material-Symbols icons, enforced over
 // the source because the failure is a *convention* drifting rather than one
@@ -111,12 +112,17 @@ describe('Material-Symbols icon accessibility (G-015)', () => {
                 if (!body.includes('material-symbols-rounded')) continue;
                 // Drop the icon element entirely, glyph text included — it is
                 // aria-hidden — then see what is left to name the button.
-                const withoutIcon = body.replace(/<Box[^>]*material-symbols-rounded[\s\S]*?<\/Box>/g, '');
+                const withoutIcon = body.replace(
+                    /<Box[^>]*material-symbols-rounded[\s\S]*?<\/Box>/g,
+                    ''
+                );
                 if (withoutIcon.replace(/<[^>]*>/g, '').trim().length > 0) continue;
                 offenders.push(`${file.replace(SRC, 'src')}:${lineOf(src, m.index)}`);
             }
         }
-        expect(offenders, `icon-only IconButtons with no name:\n${offenders.join('\n')}`).toEqual([]);
+        expect(offenders, `icon-only IconButtons with no name:\n${offenders.join('\n')}`).toEqual(
+            []
+        );
     });
 });
 
@@ -133,10 +139,13 @@ describe('Material-Symbols icon accessibility (G-015)', () => {
 // wrong here — which is precisely why this is easy to "tidy" into consistency.
 describe('Material Symbols font loading', () => {
     it('requests display=block so icons never paint as ligature text', () => {
-        const main = readFileSync(join(SRC, 'main.tsx'), 'utf8');
-        const href = /fonts\.googleapis\.com\/css2\?family=Material\+Symbols[^'"]*/.exec(main)?.[0];
-        expect(href, 'Material Symbols stylesheet link not found in main.tsx').toBeTruthy();
-        expect(href).toContain('display=block');
-        expect(href).not.toContain('display=swap');
+        // The URL is built in theme/icons.ts (subset to the icons in use) and
+        // linked from main.tsx.
+        expect(ICON_FONT_URL).toMatch(
+            /^https:\/\/fonts\.googleapis\.com\/css2\?family=Material\+Symbols/
+        );
+        expect(ICON_FONT_URL).toContain('display=block');
+        expect(ICON_FONT_URL).not.toContain('display=swap');
+        expect(readFileSync(join(SRC, 'main.tsx'), 'utf8')).toContain('link.href = ICON_FONT_URL');
     });
 });

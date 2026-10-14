@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { countsService } from '../services/counts.js';
+import { workflowQueueService } from '../services/workflow-queue.js';
 
 export async function countsRoutes(app: FastifyInstance) {
     app.get('/api/counts', async (_req, reply) => {
@@ -16,11 +17,12 @@ export async function countsRoutes(app: FastifyInstance) {
     });
 
     app.get('/api/dashboard', async (_req, reply) => {
-        const [kpis, awaiting, queue] = await Promise.all([
+        const [kpis, awaiting, queue, pipelines] = await Promise.all([
             countsService.getDashboardKpis(),
             countsService.getAwaitingItems(),
             countsService.getQueueItems(),
+            workflowQueueService.dashboardSummary(),
         ]);
-        return reply.send({ kpis, awaiting, queue });
+        return reply.send({ kpis, awaiting, queue, pipelines });
     });
 }

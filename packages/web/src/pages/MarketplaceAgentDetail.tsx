@@ -15,6 +15,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { AddFromMarketplaceModal } from './marketplace/AddFromMarketplaceModal.js';
 import { CliUnavailableAlert } from '../components/CliUnavailableAlert.js';
 import { useMarketplaceAgentFull, useMarketplaceCatalog } from '../hooks/useMarketplace.js';
+import { iconOr } from '../theme/icons.js';
 
 const SECTION_LABEL_SX = {
     fontSize: 11,
@@ -177,7 +178,7 @@ export function MarketplaceAgentDetail() {
                         aria-hidden="true"
                         sx={{ fontSize: 32, fontVariationSettings: "'FILL' 1" }}
                     >
-                        {agent.glyph || 'smart_toy'}
+                        {iconOr(agent.glyph, 'smart_toy')}
                     </Box>
                 </Box>
                 <Box sx={{ gridArea: { xs: 'name', sm: 'auto' }, minWidth: 0 }}>

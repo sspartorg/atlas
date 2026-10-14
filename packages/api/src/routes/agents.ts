@@ -33,13 +33,8 @@ import {
 } from '@atlas/shared';
 
 const AcceptUpgradeBodySchema = z.object({
-    fields: z
-        .array(
-            z.enum(['prompt_md', 'settings_json', 'checklists']),
-        )
-        .min(1),
+    fields: z.array(z.enum(['prompt_md', 'settings_json', 'checklists'])).min(1),
 });
-
 
 const AgentTestItemTemplateSchema = z.object({
     issue_type: z.enum(['task', 'sub_task']),
@@ -65,8 +60,8 @@ const PatternList = z
                         return false;
                     }
                 },
-                { message: 'not a valid regular expression' },
-            ),
+                { message: 'not a valid regular expression' }
+            )
     )
     .max(20)
     .optional();
@@ -96,7 +91,10 @@ const AgentTestExpectationsSchema = z.object({
     commands_forbidden: PatternList,
     no_code_changes: z.boolean().optional(),
     files_changed_only: z.array(z.string().min(1).max(300)).max(20).optional(),
-    script: z.object({ body_sh: z.string().trim().min(1).max(20_000) }).strict().optional(),
+    script: z
+        .object({ body_sh: z.string().trim().min(1).max(20_000) })
+        .strict()
+        .optional(),
 });
 
 const AgentTestBodySchema = z.object({
@@ -162,7 +160,16 @@ function defaultSince(days = PERFORMANCE_WINDOW_DAYS): string {
 const FleetQuerySchema = z.object({ days: z.enum(['30', '90']).default('90') }).strict();
 
 export async function agentsRoutes(app: FastifyInstance) {
-    app.get('/api/agents', async (_req, reply) => reply.send(await agentsService.list()));
+    app.get('/api/agents', async (req, reply) => {
+        const agents = await agentsService.list();
+        // `?view=summary` drops `prompt_md` — most of the payload (a 22-agent
+        // fleet is ~110 KB with prompts, ~20 KB without). The dashboard only
+        // needs names, categories and status.
+        if ((req.query as { view?: string }).view === 'summary') {
+            return reply.send(agents.map(({ prompt_md: _prompt, ...rest }) => rest));
+        }
+        return reply.send(agents);
+    });
 
     app.get('/api/agents/:id', async (req, reply) => {
         const { id } = req.params as { id: string };
@@ -186,7 +193,8 @@ export async function agentsRoutes(app: FastifyInstance) {
 
     app.patch('/api/agents/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const body = UpdateAgentSchema.parse(req.body);
         try {
             return reply.send(await agentsService.update(id, body));
@@ -201,7 +209,8 @@ export async function agentsRoutes(app: FastifyInstance) {
 
     app.delete('/api/agents/:id', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         await agentsService.delete(id);
         return reply.status(204).send();
     });
@@ -216,26 +225,24 @@ export async function agentsRoutes(app: FastifyInstance) {
         return reply.send(await agentsService.getChecklists(id));
     });
 
-    app.put(
-        '/api/agents/:id/checklists',
-        { preHandler: requireMcpToken },
-        async (req, reply) => {
-            const { id } = req.params as { id: string };
-            const body = AgentChecklistsPutSchema.parse(req.body);
-            await agentsService.setChecklists(id, body.items);
-            return reply.send(await agentsService.getChecklists(id));
-        }
-    );
+    app.put('/api/agents/:id/checklists', { preHandler: requireMcpToken }, async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const body = AgentChecklistsPutSchema.parse(req.body);
+        await agentsService.setChecklists(id, body.items);
+        return reply.send(await agentsService.getChecklists(id));
+    });
 
     app.get('/api/agents/:id/memory', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         return reply.send(await agentMemoryService.get(id));
     });
 
     app.put('/api/agents/:id/memory', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const body = AgentMemoryUpdateSchema.parse(req.body);
         // `mode='append'` routes to surgical lesson append (audit row
         // trigger='mcp_update', cadence counter untouched); `mode='replace'`
@@ -251,7 +258,8 @@ export async function agentsRoutes(app: FastifyInstance) {
         { preHandler: requireMcpToken },
         async (req, reply) => {
             const { id } = req.params as { id: string };
-            if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+            if (!(await agentsService.get(id)))
+                return reply.status(404).send({ error: 'Agent not found' });
             const next = await agentMemoryService.regenerate(id, { trigger: 'manual' });
             return reply.status(202).send(next);
         }
@@ -261,7 +269,8 @@ export async function agentsRoutes(app: FastifyInstance) {
     // Agent Detail Memory tab. Newest first; clamped to 1..50.
     app.get('/api/agents/:id/memory/history', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const { limit } = req.query as { limit?: string };
         // Guard against ?limit=<non-numeric>: Number('abc') = NaN, and NaN
         // propagates through Math.min/max as NaN → `LIMIT NaN` which PG
@@ -276,7 +285,8 @@ export async function agentsRoutes(app: FastifyInstance) {
     // Overview tile. Newest first; clamped to 1..50, default 10.
     app.get('/api/agents/:id/commit-verifications', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const { limit } = req.query as { limit?: string };
         // Guard against ?limit=<non-numeric>: Number('abc') = NaN, and NaN
         // propagates through Math.min/max as NaN → `LIMIT NaN` which PG
@@ -296,7 +306,8 @@ export async function agentsRoutes(app: FastifyInstance) {
 
     app.get('/api/agents/:id/prompt-versions', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         return reply.send(await agentsService.listPromptVersions(id));
     });
 
@@ -335,7 +346,8 @@ export async function agentsRoutes(app: FastifyInstance) {
 
     app.get('/api/agents/:id/tests', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const tests = await agentTestsService.list(id);
         // Each row's headline verdict, folded in so the tab needs one request
         // rather than one per test.
@@ -351,7 +363,8 @@ export async function agentsRoutes(app: FastifyInstance) {
      */
     app.get('/api/agents/:id/cost-estimate', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const { n } = req.query as { n?: string };
         const samples = Math.min(10, Math.max(1, Number.parseInt(n ?? '1', 10) || 1));
         const rows = await db
@@ -368,7 +381,8 @@ export async function agentsRoutes(app: FastifyInstance) {
         // The spread was always in the same 20 rows and always thrown away. A
         // mean alone reads as a promise; a range reads as what it is.
         const sorted = [...costs].sort((a, b) => a - b);
-        const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
+        const at = (q: number) =>
+            sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1))];
         const round = (v: number) => Number(v.toFixed(4));
         return reply.send({
             // Null rather than 0: "we do not know yet" and "it is free" are
@@ -381,7 +395,9 @@ export async function agentsRoutes(app: FastifyInstance) {
             // silently costing n-times would undo it.
             estimated_total_usd: mean === null ? null : round(mean * samples),
             estimated_range_usd:
-                sorted.length === 0 ? null : [round((at(0.25) ?? 0) * samples), round((at(0.75) ?? 0) * samples)],
+                sorted.length === 0
+                    ? null
+                    : [round((at(0.25) ?? 0) * samples), round((at(0.75) ?? 0) * samples)],
         });
     });
 
@@ -427,19 +443,21 @@ export async function agentsRoutes(app: FastifyInstance) {
 
     app.get('/api/agents/:id/performance', async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const { since, until } = req.query as { since?: string; until?: string };
         return reply.send(
             await agentPerformance(id, {
                 since: since ?? defaultSince(),
                 ...(until ? { until } : {}),
-            }),
+            })
         );
     });
 
     app.post('/api/agents/:id/tests', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+        if (!(await agentsService.get(id)))
+            return reply.status(404).send({ error: 'Agent not found' });
         const body = AgentTestBodySchema.parse(req.body ?? {});
         return reply.status(201).send(
             await agentTestsService.create({
@@ -449,13 +467,14 @@ export async function agentsRoutes(app: FastifyInstance) {
                 name: body.name,
                 item_template: body.item_template,
                 ...(body.expectations ? { expectations: body.expectations } : {}),
-            }),
+            })
         );
     });
 
     app.patch('/api/agent-tests/:testId', { preHandler: requireMcpToken }, async (req, reply) => {
         const { testId } = req.params as { testId: string };
-        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        if (!(await agentTestsService.get(testId)))
+            return reply.status(404).send({ error: 'Agent test not found' });
         const body = AgentTestPatchSchema.parse(req.body ?? {});
         return reply.send(await agentTestsService.update(testId, body));
     });
@@ -469,37 +488,47 @@ export async function agentsRoutes(app: FastifyInstance) {
     /** Flat runs. Kept so a client from before sampling keeps working. */
     app.get('/api/agent-tests/:testId/runs', async (req, reply) => {
         const { testId } = req.params as { testId: string };
-        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        if (!(await agentTestsService.get(testId)))
+            return reply.status(404).send({ error: 'Agent test not found' });
         return reply.send(await agentTestsService.listRuns(testId));
     });
 
     /** The same runs folded into the batches the Owner actually pressed. */
     app.get('/api/agent-tests/:testId/batches', async (req, reply) => {
         const { testId } = req.params as { testId: string };
-        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
+        if (!(await agentTestsService.get(testId)))
+            return reply.status(404).send({ error: 'Agent test not found' });
         // `?limit=` newest batches. Omitted, the whole history, as before.
         const { limit } = req.query as { limit?: string };
-        const batches = limit === undefined ? undefined : Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 1));
+        const batches =
+            limit === undefined
+                ? undefined
+                : Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 1));
         return reply.send(await agentTestsService.listBatches(testId, { batches }));
     });
 
-    app.post('/api/agent-tests/:testId/run', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { testId } = req.params as { testId: string };
-        if (!(await agentTestsService.get(testId))) return reply.status(404).send({ error: 'Agent test not found' });
-        const body = AgentTestRunBodySchema.parse(req.body ?? {});
-        // 202: the dispatches are asynchronous. Verdicts land when each run
-        // finishes (`evaluateAgentTestRun`), so the batch comes back with
-        // every sample still `running`.
-        return reply.status(202).send(
-            await agentTestsService.run(testId, {
-                ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
-                ...(body.label !== undefined ? { label: body.label } : {}),
-                ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
-                ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
-                ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
-            }),
-        );
-    });
+    app.post(
+        '/api/agent-tests/:testId/run',
+        { preHandler: requireMcpToken },
+        async (req, reply) => {
+            const { testId } = req.params as { testId: string };
+            if (!(await agentTestsService.get(testId)))
+                return reply.status(404).send({ error: 'Agent test not found' });
+            const body = AgentTestRunBodySchema.parse(req.body ?? {});
+            // 202: the dispatches are asynchronous. Verdicts land when each run
+            // finishes (`evaluateAgentTestRun`), so the batch comes back with
+            // every sample still `running`.
+            return reply.status(202).send(
+                await agentTestsService.run(testId, {
+                    ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                    ...(body.label !== undefined ? { label: body.label } : {}),
+                    ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
+                    ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                    ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
+                })
+            );
+        }
+    );
 
     /**
      * Run every fixture this agent has, as one labelled batch set.
@@ -512,26 +541,33 @@ export async function agentsRoutes(app: FastifyInstance) {
      * 409 rather than a second spend if anything of this agent's is already
      * running. This is money.
      */
-    app.post('/api/agents/:id/test-suite/runs', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { id: string };
-        if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
-        const body = SuiteRunBodySchema.parse(req.body ?? {});
-        try {
-            return reply.status(202).send(
-                await agentTestsService.runSuite(id, {
-                    ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
-                    ...(body.label !== undefined ? { label: body.label } : {}),
-                    ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
-                    ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
-                ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
-                }),
-            );
-        } catch (err) {
-            if (err instanceof AgentTestSuiteBusyError) return reply.status(409).send({ error: err.message });
-            if (err instanceof AgentTestSuiteEmptyError) return reply.status(400).send({ error: err.message });
-            throw err;
+    app.post(
+        '/api/agents/:id/test-suite/runs',
+        { preHandler: requireMcpToken },
+        async (req, reply) => {
+            const { id } = req.params as { id: string };
+            if (!(await agentsService.get(id)))
+                return reply.status(404).send({ error: 'Agent not found' });
+            const body = SuiteRunBodySchema.parse(req.body ?? {});
+            try {
+                return reply.status(202).send(
+                    await agentTestsService.runSuite(id, {
+                        ...(body.n_runs !== undefined ? { n_runs: body.n_runs } : {}),
+                        ...(body.label !== undefined ? { label: body.label } : {}),
+                        ...(body.project_id !== undefined ? { project_id: body.project_id } : {}),
+                        ...(body.repo_id !== undefined ? { repo_id: body.repo_id } : {}),
+                        ...(body.sandbox !== undefined ? { sandbox: body.sandbox } : {}),
+                    })
+                );
+            } catch (err) {
+                if (err instanceof AgentTestSuiteBusyError)
+                    return reply.status(409).send({ error: err.message });
+                if (err instanceof AgentTestSuiteEmptyError)
+                    return reply.status(400).send({ error: err.message });
+                throw err;
+            }
         }
-    });
+    );
 
     /**
      * Is this agent qualified — and is that still true of the agent as it is
@@ -559,7 +595,8 @@ export async function agentsRoutes(app: FastifyInstance) {
         { preHandler: requireMcpToken },
         async (req, reply) => {
             const { id, version } = req.params as { id: string; version: string };
-            if (!(await agentsService.get(id))) return reply.status(404).send({ error: 'Agent not found' });
+            if (!(await agentsService.get(id)))
+                return reply.status(404).send({ error: 'Agent not found' });
             const v = Number(version);
             if (!Number.isInteger(v) || v < 1) {
                 return reply.status(400).send({ error: 'Invalid version' });
@@ -594,7 +631,7 @@ export async function agentsRoutes(app: FastifyInstance) {
                 }
                 throw err;
             }
-        },
+        }
     );
 
     app.post(
@@ -610,7 +647,7 @@ export async function agentsRoutes(app: FastifyInstance) {
                 }
                 throw err;
             }
-        },
+        }
     );
 
     app.post('/api/agents/:id/detach', { preHandler: requireMcpToken }, async (req, reply) => {
@@ -649,10 +686,14 @@ export async function agentsRoutes(app: FastifyInstance) {
         /* v8 ignore next */
         const ct = req.headers['content-type'] ?? '';
         if (ct.includes('multipart/form-data')) {
-            const part = await (req as unknown as { file: () => Promise<{
-                toBuffer: () => Promise<Buffer>;
-                fields?: Record<string, unknown>;
-            } | null> }).file();
+            const part = await (
+                req as unknown as {
+                    file: () => Promise<{
+                        toBuffer: () => Promise<Buffer>;
+                        fields?: Record<string, unknown>;
+                    } | null>;
+                }
+            ).file();
             if (!part) return reply.status(400).send({ error: 'no file uploaded' });
             data = await part.toBuffer();
             const fields = part.fields as Record<string, unknown> | undefined;

@@ -172,6 +172,30 @@ interface HeaderMascotProps {
 // within a round-trip of an agent picking up work. Honors
 // prefers-reduced-motion by pausing the Lottie player rather than swapping
 // to a static frame, so the user still sees the "active" tint change.
+// The mascot is decorative: its ~50 KB player and the animation JSON wait
+// until the page has loaded and the browser is idle, so on a slow connection
+// they don't compete with the route's own code and data. The static ring
+// shows until then. Returns a cancel function.
+function afterLoadWhenIdle(run: () => void): () => void {
+    let idleId: number | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => {
+        if (typeof window.requestIdleCallback === 'function') {
+            idleId = window.requestIdleCallback(run, { timeout: 3000 });
+        } else {
+            timer = setTimeout(run, 0);
+        }
+    };
+    const onLoad = () => schedule();
+    if (document.readyState === 'complete') schedule();
+    else window.addEventListener('load', onLoad, { once: true });
+    return () => {
+        window.removeEventListener('load', onLoad);
+        if (idleId !== undefined) window.cancelIdleCallback(idleId);
+        if (timer !== undefined) clearTimeout(timer);
+    };
+}
+
 export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
     const { hasActiveRuns, count } = useActiveRuns();
     const { mode } = useThemeModeContext();
@@ -182,11 +206,14 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
 
     useEffect(() => {
         let cancelled = false;
-        void loadLottie().then((c) => {
-            if (!cancelled) setLottieComponent(() => c);
+        const cancelIdle = afterLoadWhenIdle(() => {
+            void loadLottie().then((c) => {
+                if (!cancelled) setLottieComponent(() => c);
+            });
         });
         return () => {
             cancelled = true;
+            cancelIdle();
         };
     }, []);
 
@@ -200,17 +227,20 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
 
     useEffect(() => {
         let cancelled = false;
-        void (async () => {
-            const [idle, working] = await Promise.all([
-                loadMascot(variantUrls.idle),
-                loadMascot(variantUrls.working),
-            ]);
-            if (cancelled) return;
-            setIdleData(idle);
-            setWorkingData(working);
-        })();
+        const cancelIdle = afterLoadWhenIdle(() => {
+            void (async () => {
+                const [idle, working] = await Promise.all([
+                    loadMascot(variantUrls.idle),
+                    loadMascot(variantUrls.working),
+                ]);
+                if (cancelled) return;
+                setIdleData(idle);
+                setWorkingData(working);
+            })();
+        });
         return () => {
             cancelled = true;
+            cancelIdle();
         };
     }, [variantUrls]);
 

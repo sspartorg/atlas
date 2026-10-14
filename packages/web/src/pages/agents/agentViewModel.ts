@@ -1,6 +1,7 @@
 import type { IAgent, IAgentRun, AgentCategory } from '@atlas/shared';
 import { SDLC_ROLE_LABELS } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { iconOr } from '../../theme/icons.js';
 
 export interface AgentView {
     slug: string;
@@ -101,9 +102,9 @@ export function getAgentView(agent: IAgent): AgentView {
             .map((l) => l.trim())
             .find((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('```')) ??
         'Custom agent.';
-    const glyph = agent.glyph?.trim()
-        ? agent.glyph
-        : (seed?.glyph ?? CATEGORY_GLYPH[agent.category]);
+    // A stored glyph the icon-font subset doesn't carry falls back to the
+    // seed/category glyph rather than rendering as text.
+    const glyph = iconOr(agent.glyph?.trim(), seed?.glyph ?? CATEGORY_GLYPH[agent.category]);
     const description = agent.description?.trim()
         ? agent.description
         : (seed?.description ?? fallbackDescription);

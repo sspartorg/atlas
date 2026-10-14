@@ -48,7 +48,7 @@ None.
 
 ## Related pages
 - [`31-analytics-project.md`](31-analytics-project.md), [`32-analytics-task.md`](32-analytics-task.md) — drill-downs
-- [`01-dashboard.md`](01-dashboard.md) — the KPI strip that must agree with this page
+- [`01-dashboard.md`](01-dashboard.md) — the month-spend figure that must agree with this page
 
 ## Coming soon on this page
 - None.

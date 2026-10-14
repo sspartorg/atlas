@@ -303,7 +303,7 @@ Web client                              API server (single process)
 **Events emitted today** (full catalogue lives in `api-surface.md`):
 
 - Agent run lifecycle: `agent_status`, `agent_output`, `agent_error`, `run_queued`, `run_completed`, `run_error`
-- Workflows (ADR 0014): `workflow_run_updated` (`workflowId`, `workflowRunId`, `workflowRunStatus`, `nodeId`, `issueId?`, `parentWorkflowRunId?` on a sub-task's run) on start, every node move, park, End and stop; the web invalidates `['workflows']`, `['workflow-queue']`, `['workflow-run', id]` (and `['workflow-run', parentWorkflowRunId]`), `['workflow-runs', workflowId]`, `['item-workflow-runs', issueId]`. `run_completed` / `run_error` / `agent_status` also invalidate `['workflow-run']` so a run view's step list refreshes
+- Workflows (ADR 0014): `workflow_run_updated` (`workflowId`, `workflowRunId`, `workflowRunStatus`, `nodeId`, `issueId?`, `parentWorkflowRunId?` on a sub-task's run) on start, every node move, park, End and stop; the web invalidates `['workflows']`, `['workflow-queue']`, `['dashboard']`, `['workflow-run', id]` (and `['workflow-run', parentWorkflowRunId]`), `['workflow-runs', workflowId]`, `['item-workflow-runs', issueId]`. `run_completed` / `run_error` / `agent_status` also invalidate `['workflow-run']` so a run view's step list refreshes
 - Data mutations (push instead of poll): `counts_changed`, `notification_created`, `notification_updated`
 - Clone: `clone_status`, `clone_output`, `clone_completed`, `clone_error`
 - Reclone: `reclone_status`, `reclone_output`, `reclone_completed`, `reclone_error`

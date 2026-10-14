@@ -56,4 +56,17 @@ describe('useActiveRuns', () => {
         await waitFor(() => expect(result.current.count).toBe(0));
         expect(result.current.hasActiveRuns).toBe(false);
     });
+
+    it('asks the API for live runs only, not a page of history', async () => {
+        let search = '';
+        server.use(
+            http.get('http://localhost:3000/api/run', ({ request }) => {
+                search = new URL(request.url).search;
+                return HttpResponse.json([]);
+            }),
+        );
+        const { result } = renderHook(() => useActiveRuns(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.count).toBe(0));
+        expect(new URLSearchParams(search).get('status')).toBe('queued,in_progress');
+    });
 });

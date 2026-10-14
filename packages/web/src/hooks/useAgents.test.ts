@@ -13,6 +13,7 @@ import {
     useAgentPromptVersions,
     useAgentRun,
     useAgentRuns,
+    useAgentSummaries,
     useAgents,
     useItemAgentRuns,
     useProjectAgentRuns,
@@ -43,9 +44,7 @@ describe('useAgents', () => {
 
 describe('useAgent', () => {
     it('returns a single agent by id', async () => {
-        server.use(
-            http.get(`${BASE}/agents/a1`, () => HttpResponse.json(makeAgent({ id: 'a1' }))),
-        );
+        server.use(http.get(`${BASE}/agents/a1`, () => HttpResponse.json(makeAgent({ id: 'a1' }))));
         const { result } = renderHook(() => useAgent('a1'), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
         expect(result.current.data?.id).toBe('a1');
@@ -61,8 +60,8 @@ describe('useUpdateAgent', () => {
     it('writes the response back into the cache on success', async () => {
         server.use(
             http.patch(`${BASE}/agents/a1`, () =>
-                HttpResponse.json(makeAgent({ id: 'a1', name: 'Renamed' })),
-            ),
+                HttpResponse.json(makeAgent({ id: 'a1', name: 'Renamed' }))
+            )
         );
         const { result } = renderHook(() => useUpdateAgent(), { wrapper: makeWrapper() });
         const updated = await result.current.mutateAsync({
@@ -75,26 +74,27 @@ describe('useUpdateAgent', () => {
     it('fires the error toast on failure', async () => {
         server.use(
             http.patch(`${BASE}/agents/a1`, () =>
-                HttpResponse.json({ error: 'boom' }, { status: 500 }),
-            ),
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
         );
         const { result } = renderHook(() => useUpdateAgent(), { wrapper: makeWrapper() });
         await expect(
-            result.current.mutateAsync({ id: 'a1', data: { name: 'X' } }),
+            result.current.mutateAsync({ id: 'a1', data: { name: 'X' } })
         ).rejects.toBeDefined();
     });
 
     it('uses "Unknown error" toast detail when onError receives a non-Error value', async () => {
         // To hit the `else` branch of `err instanceof Error ? err.message : 'Unknown error'`
         // we need the mutationFn to reject with a non-Error. Mock the api call to throw a plain string.
-        const updateSpy = vi.spyOn(apiModule.api.agents, 'update').mockRejectedValueOnce('oops-string');
+        const updateSpy = vi
+            .spyOn(apiModule.api.agents, 'update')
+            .mockRejectedValueOnce('oops-string');
         const { result } = renderHook(() => useUpdateAgent(), { wrapper: makeWrapper() });
-        await expect(
-            result.current.mutateAsync({ id: 'a1', data: { name: 'X' } }),
-        ).rejects.toBe('oops-string');
+        await expect(result.current.mutateAsync({ id: 'a1', data: { name: 'X' } })).rejects.toBe(
+            'oops-string'
+        );
         updateSpy.mockRestore();
     });
-
 });
 
 describe('useAgentRuns', () => {
@@ -107,9 +107,7 @@ describe('useAgentRuns', () => {
 
 describe('useAgentChecklists', () => {
     it('returns the checklist items', async () => {
-        server.use(
-            http.get(`${BASE}/agents/a1/checklists`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/agents/a1/checklists`, () => HttpResponse.json([])));
         const { result } = renderHook(() => useAgentChecklists('a1'), {
             wrapper: makeWrapper(),
         });
@@ -126,18 +124,17 @@ describe('useAgentChecklists', () => {
 
 describe('useAgentMemory + setMemory + regenerateMemory', () => {
     it('returns the memory and respects enabled:false', () => {
-        const { result } = renderHook(
-            () => useAgentMemory('a1', { enabled: false }),
-            { wrapper: makeWrapper() },
-        );
+        const { result } = renderHook(() => useAgentMemory('a1', { enabled: false }), {
+            wrapper: makeWrapper(),
+        });
         expect(result.current.fetchStatus).toBe('idle');
     });
 
     it('fetches memory when enabled', async () => {
         server.use(
             http.get(`${BASE}/agents/a1/memory`, () =>
-                HttpResponse.json({ agent_id: 'a1', body_md: 'memo', updated_at: '' }),
-            ),
+                HttpResponse.json({ agent_id: 'a1', body_md: 'memo', updated_at: '' })
+            )
         );
         const { result } = renderHook(() => useAgentMemory('a1'), {
             wrapper: makeWrapper(),
@@ -149,8 +146,8 @@ describe('useAgentMemory + setMemory + regenerateMemory', () => {
     it('useSetAgentMemory writes the response to the cache', async () => {
         server.use(
             http.put(`${BASE}/agents/a1/memory`, () =>
-                HttpResponse.json({ agent_id: 'a1', body_md: 'new', updated_at: '' }),
-            ),
+                HttpResponse.json({ agent_id: 'a1', body_md: 'new', updated_at: '' })
+            )
         );
         const { result } = renderHook(() => useSetAgentMemory(), {
             wrapper: makeWrapper(),
@@ -162,8 +159,8 @@ describe('useAgentMemory + setMemory + regenerateMemory', () => {
     it('useRegenerateAgentMemory returns the regenerated entry', async () => {
         server.use(
             http.post(`${BASE}/agents/a1/memory/regenerate`, () =>
-                HttpResponse.json({ agent_id: 'a1', body_md: 'regen', updated_at: '' }),
-            ),
+                HttpResponse.json({ agent_id: 'a1', body_md: 'regen', updated_at: '' })
+            )
         );
         const { result } = renderHook(() => useRegenerateAgentMemory(), {
             wrapper: makeWrapper(),
@@ -175,9 +172,7 @@ describe('useAgentMemory + setMemory + regenerateMemory', () => {
 
 describe('useProjectAgentRuns + useItemAgentRuns + useAgentRun', () => {
     it('useProjectAgentRuns fires when projectId is set', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/run`, () => HttpResponse.json([])));
         const { result } = renderHook(() => useProjectAgentRuns('p1'), {
             wrapper: makeWrapper(),
         });
@@ -224,9 +219,7 @@ describe('useProjectAgentRuns + useItemAgentRuns + useAgentRun', () => {
 
 describe('useAgentPromptVersions + useRevertAgentPrompt', () => {
     it('fetches the prompt versions', async () => {
-        server.use(
-            http.get(`${BASE}/agents/a1/prompt-versions`, () => HttpResponse.json([])),
-        );
+        server.use(http.get(`${BASE}/agents/a1/prompt-versions`, () => HttpResponse.json([])));
         const { result } = renderHook(() => useAgentPromptVersions('a1'), {
             wrapper: makeWrapper(),
         });
@@ -235,15 +228,29 @@ describe('useAgentPromptVersions + useRevertAgentPrompt', () => {
 
     it('reverts a prompt to a specific version', async () => {
         server.use(
-            http.post(
-                `${BASE}/agents/a1/prompt-versions/3/revert`,
-                () => HttpResponse.json(makeAgent({ id: 'a1' })),
-            ),
+            http.post(`${BASE}/agents/a1/prompt-versions/3/revert`, () =>
+                HttpResponse.json(makeAgent({ id: 'a1' }))
+            )
         );
         const { result } = renderHook(() => useRevertAgentPrompt(), {
             wrapper: makeWrapper(),
         });
         const updated = await result.current.mutateAsync({ id: 'a1', version: 3 });
         expect(updated.id).toBe('a1');
+    });
+});
+
+describe('useAgentSummaries', () => {
+    it('asks for the summary view (no prompts) under its own key', async () => {
+        let search = '';
+        server.use(
+            http.get('http://localhost:3000/api/agents', ({ request }) => {
+                search = new URL(request.url).search;
+                return HttpResponse.json([{ id: 'a1', name: 'Coder' }]);
+            })
+        );
+        const { result } = renderHook(() => useAgentSummaries(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.data).toHaveLength(1));
+        expect(search).toBe('?view=summary');
     });
 });

@@ -5,15 +5,16 @@ import Typography from '@mui/material/Typography';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
-import type { IAgent, IssueType } from '@atlas/shared';
+import type { IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE, ELEVATION } from '../../theme/tokens.js';
 import type { QueueItem } from '../../api/types.js';
 import { InMotionRow } from './InMotionRow.js';
 import { FormHeading } from '../../components/FormHeading.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface IInMotionPanelProps {
     rows: QueueItem[];
-    agents: IAgent[];
+    agents: AgentSummary[];
     isLoading: boolean;
 }
 

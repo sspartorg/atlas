@@ -1,4 +1,4 @@
-import type { AgentCli, IssueType } from '@atlas/shared';
+import type { AgentCli, IAgent, IssueType, IWorkflowRunSummary } from '@atlas/shared';
 
 export interface SidenavCounts {
     projects: number;
@@ -44,9 +44,9 @@ interface CategoryStat {
     running: number;
 }
 
-export type AgentStatsByCategory = Record<AgentCategoryKey, CategoryStat>;
+type AgentStatsByCategory = Record<AgentCategoryKey, CategoryStat>;
 
-export interface TodaysPassItem {
+interface TodaysPassItem {
     run_id: string;
     agent_id: string;
     agent_name: string;
@@ -57,7 +57,7 @@ export interface TodaysPassItem {
     completed_at: string;
 }
 
-export interface TodaysPass {
+interface TodaysPass {
     items: TodaysPassItem[];
     total: number;
 }
@@ -74,7 +74,6 @@ interface DashboardKpis {
     costSummary30d?: CostSummary;
     terminalCostSummary30d?: TerminalCostSummary;
 }
-
 
 export interface AwaitingItem {
     issue_type: IssueType;
@@ -95,10 +94,22 @@ export interface QueueItem {
     accent_color: string | null;
 }
 
+/** An agent without its prompt: `GET /api/agents?view=summary`. */
+export type AgentSummary = Omit<IAgent, 'prompt_md'>;
+
+/** The Running now panel's slice of the workflow queue: live runs, waiting Tasks only counted. */
+export interface DashboardPipelines {
+    runs: Array<IWorkflowRunSummary & { workflow_name: string }>;
+    queued: Array<{ workflow_id: string; workflow_name: string; count: number }>;
+    unassigned: number;
+}
+
 export interface DashboardResponse {
     kpis: DashboardKpis;
     awaiting: AwaitingItem[];
     queue: QueueItem[];
+    /** Absent from an older API; the panel then reads as nothing running. */
+    pipelines?: DashboardPipelines;
 }
 
 interface AnalyticsDailyRow {
@@ -501,7 +512,6 @@ export interface AgentCostEstimate {
     estimated_range_usd: [number, number] | null;
 }
 
-
 // ── Agent performance (ADR 0023 phase 2, ATL-140) ────────────────────────
 
 /**
@@ -522,7 +532,13 @@ export interface AgentPerformance {
     agent_id: string;
     role_id: string | null;
     window: { since: string | null; until: string | null };
-    quality: { steps: number; dispatches: number; first_pass: FirstPass; loops: number; gate_catch: number };
+    quality: {
+        steps: number;
+        dispatches: number;
+        first_pass: FirstPass;
+        loops: number;
+        gate_catch: number;
+    };
     cost: {
         total_usd: number;
         per_step_usd: number | null;
@@ -532,7 +548,12 @@ export interface AgentPerformance {
         cache_creation_tokens: number;
         cache_hit_pct: number | null;
     };
-    latency: { p50_s: number | null; p95_s: number | null; max_s: number | null; ttft_p50_ms: number | null };
+    latency: {
+        p50_s: number | null;
+        p95_s: number | null;
+        max_s: number | null;
+        ttft_p50_ms: number | null;
+    };
     tools: {
         /** Traces exist only from migration 017 on — hence a stated denominator. */
         runs_with_trace: number;
@@ -603,7 +624,6 @@ export interface FleetPerformance {
     delivery: FleetDelivery;
 }
 
-
 /**
  * A test an agent ships with (ADR 0023 phase 4).
  *
@@ -631,13 +651,7 @@ export interface StarterTest {
  * declares what a pass IS, so a reviewer's fixture expects `rejected`.
  */
 export type QualificationVerdict =
-    | 'no_tests'
-    | 'never_run'
-    | 'running'
-    | 'failing'
-    | 'blocked'
-    | 'stale'
-    | 'qualified';
+    'no_tests' | 'never_run' | 'running' | 'failing' | 'blocked' | 'stale' | 'qualified';
 
 interface QualificationFixture {
     agent_test_id: string;
@@ -668,7 +682,11 @@ export interface AgentQualification {
     cost_usd: number;
     stale: boolean;
     stale_reason: string | null;
-    ran_at_config: { model: string | null; effort: string | null; prompt_version: number | null } | null;
+    ran_at_config: {
+        model: string | null;
+        effort: string | null;
+        prompt_version: number | null;
+    } | null;
     per_fixture: QualificationFixture[];
 }
 

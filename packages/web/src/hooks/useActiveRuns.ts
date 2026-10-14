@@ -1,17 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api/api.js';
 
-// Header mascot needs a "is any agent working right now?" signal. The same
-// ['runs','all'] queryKey is already populated by Agents.tsx / Queue.tsx and
-// is auto-invalidated by useSSE on `run_queued`, `agent_status`,
-// `run_completed`, and `run_error` events — so subscribing here gives us a
-// live state flip without any new transport or polling.
+// "Is any agent working right now, and which?" — the header mascot and the
+// dashboard's fleet strip and roster. Asks the API for queued/in-progress
+// runs only. Under the ['runs'] prefix, which useSSE invalidates on
+// `run_queued`, `agent_status`, `run_completed` and `run_error`, so the state
+// flips live without polling.
 //
 // Audit 2026-06-09 (B2) — `refetchOnMount: false`. Topbar mounts once per
 // session; child component remounts during page navigation were re-firing
-// the ~6KB GET /api/run?limit=500 fetch on every page despite staleTime.
-// SSE keeps the cache fresh via invalidation on run lifecycle events, so
-// the no-mount-refetch path is safe.
+// the fetch on every page despite staleTime. SSE keeps the cache fresh via
+// invalidation on run lifecycle events, so the no-mount-refetch path is safe.
 export function useActiveRuns(): {
     hasActiveRuns: boolean;
     count: number;
@@ -19,8 +18,11 @@ export function useActiveRuns(): {
     agentIds: Set<string>;
 } {
     const { data } = useQuery({
-        queryKey: ['runs', 'all'],
-        queryFn: () => api.run.list({ limit: 500 }),
+        // Only the live runs: paging the last 500 runs to find the few that
+        // are queued or running cost ~180 KB on every cold load. Still under
+        // ['runs'], so useSSE's run-event invalidation keeps it live.
+        queryKey: ['runs', 'active'],
+        queryFn: () => api.run.list({ status: ['queued', 'in_progress'], limit: 500 }),
         staleTime: 30_000,
         refetchOnMount: false,
     });

@@ -93,15 +93,18 @@ change it later in `Settings → Profile`.
 
 ## 3. Dashboard
 
-![Dashboard — what needs you, what is in motion, today's pass](images/doc-03-dashboard.png)
+![Dashboard — what needs you, what is running, what is in motion](images/doc-03-dashboard.png)
 
-The Dashboard (`/`) opens with a one-line read of the day, then a KPI strip: items **awaiting your
-review**, live runs by agent category, and the month's **AI cost**.
+The Dashboard (`/`) opens with a one-line read of the day and three figures: your active agents, runs
+live now, and the month's **AI spend**.
 
+- **Running now** shows every task a workflow is working on as a route map of that workflow's steps:
+  finished steps filled, the current step lit (amber when the task is waiting on you, with the reason),
+  upcoming steps hollow. Below it, **Up next** counts the tasks queued for each workflow.
 - **Awaiting You** lists what is waiting on you: every Task in `waiting_for_info`, and every Task in
   review that no live run still owns. A Task a workflow is still working is never on this list.
 - **In Motion** lists runs in flight right now.
-- **Today's Pass** lists today's agent outputs, grouped by category.
+- **Your agents** lists your active agents by category, working agents first.
 
 ---
 

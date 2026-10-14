@@ -46,8 +46,11 @@ const DIST_ASSETS = join(__dirname, '..', 'dist', 'assets');
 // 0014): `@xyflow/react` is a 53.9 KB gz lazy chunk plus ~12.5 KB of
 // workflow pages, measured 863.9 KB. Initial chunk unchanged (231.8 KB) —
 // the canvas only loads on /workflows routes.
-const BUDGET_INITIAL_GZ = 264 * 1024;
-const BUDGET_TOTAL_GZ = 880 * 1024;
+// 2026-10-14 — ADR 0030: initial 264 → 230 KB (measured 223.0) after the
+// startup chunk stopped carrying zod, the shared schemas and page components;
+// total 880 → 900 KB (measured 894.3) for the per-chunk overhead of that split.
+const BUDGET_INITIAL_GZ = 230 * 1024;
+const BUDGET_TOTAL_GZ = 900 * 1024;
 const BUDGET_RECHARTS_GZ = 130 * 1024;
 // Per-MUI-bucket budgets (measured 2026-07-01, +5 KB gz headroom).
 const BUDGET_MUI_CORE_GZ = 90 * 1024;   // measured 85.3 KB gz

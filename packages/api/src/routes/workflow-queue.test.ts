@@ -2,7 +2,10 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import type { IWorkflowQueue } from '@atlas/shared';
 
-vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, broadcastSSE: vi.fn() }));
+vi.mock('../routes/events.js', () => ({
+    eventsRoutes: async () => undefined,
+    broadcastSSE: vi.fn(),
+}));
 
 import { buildApp } from '../server.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
@@ -12,19 +15,41 @@ let app: FastifyInstance;
 
 const EMPTY_GRAPH = JSON.stringify({ nodes: [], edges: [] });
 
-async function workflow(id: string, project_id: string, input_kind: 'item' | 'none' | 'sub_task' = 'item') {
+async function workflow(
+    id: string,
+    project_id: string,
+    input_kind: 'item' | 'none' | 'sub_task' = 'item'
+) {
     await testDb.insertInto('workflows').values({ id, project_id, name: id, input_kind }).execute();
 }
 
-async function run(id: string, workflow_id: string, item_id: string | null, status: string, extra: Record<string, unknown> = {}) {
+async function run(
+    id: string,
+    workflow_id: string,
+    item_id: string | null,
+    status: string,
+    extra: Record<string, unknown> = {}
+) {
     await testDb
         .insertInto('workflow_runs')
-        .values({ id, workflow_id, item_id, project_id: 'p1', status: status as never, graph_snapshot: EMPTY_GRAPH, ...extra })
+        .values({
+            id,
+            workflow_id,
+            item_id,
+            project_id: 'p1',
+            status: status as never,
+            graph_snapshot: EMPTY_GRAPH,
+            ...extra,
+        })
         .execute();
 }
 
 async function queueFor(workflowId: string, ...itemIds: string[]) {
-    await testDb.updateTable('items').set({ workflow_id: workflowId }).where('id', 'in', itemIds).execute();
+    await testDb
+        .updateTable('items')
+        .set({ workflow_id: workflowId })
+        .where('id', 'in', itemIds)
+        .execute();
 }
 
 async function getQueue(query = ''): Promise<IWorkflowQueue> {
@@ -51,14 +76,49 @@ afterAll(async () => {
 describe('GET /api/workflow-queue', () => {
     it('groups live Task runs and queued Tasks under their workflow, in dispatch order', async () => {
         await workflow('wf-dev', 'p1');
-        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Running one', status: 'in_progress' });
-        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Parked one', status: 'waiting_for_info' });
-        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', title: 'Newer', status: 'ready' });
-        await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', title: 'Older', status: 'ready' });
-        await insertItem({ id: 'ATL-5', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'task', status: 'in_progress' });
+        await insertItem({
+            id: 'ATL-1',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Running one',
+            status: 'in_progress',
+        });
+        await insertItem({
+            id: 'ATL-2',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Parked one',
+            status: 'waiting_for_info',
+        });
+        await insertItem({
+            id: 'ATL-3',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Newer',
+            status: 'ready',
+        });
+        await insertItem({
+            id: 'ATL-4',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Older',
+            status: 'ready',
+        });
+        await insertItem({
+            id: 'ATL-5',
+            type: 'sub_task',
+            project_id: 'p1',
+            parent_id: 'ATL-1',
+            parent_type: 'task',
+            status: 'in_progress',
+        });
         await queueFor('wf-dev', 'ATL-1', 'ATL-2', 'ATL-3', 'ATL-4');
         // The updated_at trigger stamps every write; touching ATL-3 makes it the newer one.
-        await testDb.updateTable('items').set({ title: 'Newer' }).where('id', '=', 'ATL-3').execute();
+        await testDb
+            .updateTable('items')
+            .set({ title: 'Newer' })
+            .where('id', '=', 'ATL-3')
+            .execute();
         await run('r-1', 'wf-dev', 'ATL-1', 'running', { current_node_id: 'subtasks' });
         await run('r-2', 'wf-dev', 'ATL-2', 'waiting_for_owner', { park_reason: 'Which API?' });
         // A sub-task's run lives inside its Task's run, never on the queue.
@@ -69,10 +129,16 @@ describe('GET /api/workflow-queue', () => {
         expect(workflows).toHaveLength(1);
         const [entry] = workflows;
         expect(entry?.workflow).toMatchObject({ id: 'wf-dev', max_parallel_runs: 1 });
-        expect(entry?.running.map((r) => [r.id, r.item_title, r.current_node_id])).toEqual([['r-1', 'Running one', 'subtasks']]);
+        expect(entry?.running.map((r) => [r.id, r.item_title, r.current_node_id])).toEqual([
+            ['r-1', 'Running one', 'subtasks'],
+        ]);
         expect(entry?.waiting.map((r) => [r.id, r.park_reason])).toEqual([['r-2', 'Which API?']]);
         expect(entry?.queued.map((t) => t.id)).toEqual(['ATL-4', 'ATL-3']);
-        expect(entry?.queued[0]).toMatchObject({ title: 'Older', workflow_id: 'wf-dev', status: 'ready' });
+        expect(entry?.queued[0]).toMatchObject({
+            title: 'Older',
+            workflow_id: 'wf-dev',
+            status: 'ready',
+        });
         expect(unassigned).toEqual([]);
     });
 
@@ -82,12 +148,30 @@ describe('GET /api/workflow-queue', () => {
     // is unchanged: `oldestReadyItem` still only ever takes `ready`.
     it('lists paused workflows and Tasks no workflow will pick up, draft or ready', async () => {
         await workflow('wf-dev', 'p1');
-        await testDb.updateTable('workflows').set({ status: 'inactive' }).where('id', '=', 'wf-dev').execute();
-        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 'Loose', status: 'ready' });
-        await insertItem({ id: 'ATL-2', type: 'task', project_id: 'p1', title: 'Draft', status: 'draft' });
+        await testDb
+            .updateTable('workflows')
+            .set({ status: 'inactive' })
+            .where('id', '=', 'wf-dev')
+            .execute();
+        await insertItem({
+            id: 'ATL-1',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Loose',
+            status: 'ready',
+        });
+        await insertItem({
+            id: 'ATL-2',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Draft',
+            status: 'draft',
+        });
 
         const { workflows, unassigned } = await getQueue();
-        expect(workflows.map((e) => [e.workflow.id, e.workflow.status])).toEqual([['wf-dev', 'inactive']]);
+        expect(workflows.map((e) => [e.workflow.id, e.workflow.status])).toEqual([
+            ['wf-dev', 'inactive'],
+        ]);
         expect(unassigned.map((t) => t.id).sort()).toEqual(['ATL-1', 'ATL-2']);
     });
 
@@ -123,5 +207,63 @@ describe('GET /api/workflow-queue', () => {
         expect(scoped.workflows.map((e) => e.workflow.id)).toEqual(['wf-b']);
         expect(scoped.unassigned.map((t) => t.id)).toEqual(['OTH-1']);
         expect((await getQueue()).unassigned.map((t) => t.id).sort()).toEqual(['ATL-1', 'OTH-1']);
+    });
+});
+
+describe('GET /api/dashboard pipelines', () => {
+    it('sends live runs in full but only counts the Tasks waiting behind them', async () => {
+        await workflow('wf-dev', 'p1');
+        await workflow('wf-quick', 'p1');
+        await workflow('wf-build', 'p1', 'sub_task');
+        await insertItem({
+            id: 'ATL-1',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Running one',
+            status: 'in_progress',
+        });
+        await insertItem({
+            id: 'ATL-2',
+            type: 'task',
+            project_id: 'p1',
+            title: 'Parked one',
+            status: 'waiting_for_info',
+        });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1', status: 'ready' });
+        await insertItem({ id: 'ATL-4', type: 'task', project_id: 'p1', status: 'ready' });
+        await insertItem({ id: 'ATL-5', type: 'task', project_id: 'p1', status: 'draft' });
+        await insertItem({ id: 'ATL-6', type: 'task', project_id: 'p1', status: 'ready' });
+        await insertItem({ id: 'ATL-7', type: 'task', project_id: 'p1', status: 'draft' });
+        await queueFor('wf-dev', 'ATL-1', 'ATL-3', 'ATL-4', 'ATL-5');
+        await queueFor('wf-quick', 'ATL-2');
+        await run('r-1', 'wf-dev', 'ATL-1', 'running', { current_node_id: 'coder' });
+        await run('r-2', 'wf-quick', 'ATL-2', 'waiting_for_owner', { park_reason: 'Which API?' });
+        await run('r-child', 'wf-dev', null, 'running', { parent_workflow_run_id: 'r-1' });
+
+        const res = await app.inject({ method: 'GET', url: '/api/dashboard' });
+        expect(res.statusCode).toBe(200);
+        const { pipelines } = res.json();
+        expect(
+            pipelines.runs.map((r: { id: string; workflow_name: string; item_title: string }) => [
+                r.id,
+                r.workflow_name,
+                r.item_title,
+            ])
+        ).toEqual([
+            ['r-1', 'wf-dev', 'Running one'],
+            ['r-2', 'wf-quick', 'Parked one'],
+        ]);
+        expect(pipelines.runs[0].graph_snapshot).toEqual({ nodes: [], edges: [] });
+        // ATL-1 has a live run, ATL-5 is a draft: neither is queued.
+        expect(pipelines.queued).toEqual([
+            { workflow_id: 'wf-dev', workflow_name: 'wf-dev', count: 2 },
+        ]);
+        // ATL-6 (ready) and ATL-7 (draft) have no workflow.
+        expect(pipelines.unassigned).toBe(2);
+    });
+
+    it('is empty with nothing set up', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/dashboard' });
+        expect(res.json().pipelines).toEqual({ runs: [], queued: [], unassigned: 0 });
     });
 });

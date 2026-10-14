@@ -1,4 +1,6 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { createReadStream, existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
+import { brotliCompressSync, constants as zlib } from 'zlib';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { config as loadDotenv } from 'dotenv';
@@ -21,6 +23,60 @@ loadDotenv({ path: path.resolve(__dirname, '..', '..', envFile) });
 const WEB_PORT = Number(process.env.WEB_PORT ?? process.env.PORT) || 4000;
 const API_TARGET = process.env.API_PROXY_TARGET || 'http://127.0.0.1:4001';
 
+// Production is served by `vite preview` (`pnpm start`), which gzips on the
+// fly and marks every file `Cache-Control: no-cache`. For hashed assets that
+// is the slow-network worst case twice over. This plugin:
+//  - at build, writes a max-quality Brotli copy next to each JS/CSS asset
+//    (~15% smaller than gzip; the cost is paid once, here);
+//  - in preview, serves that copy to browsers that accept `br`, and marks
+//    `/assets/*` immutable: the file names carry a content hash, so a repeat
+//    visit needs no round trip per file. `index.html` stays `no-cache`, so a
+//    deploy is still picked up on the next load.
+function compressedImmutableAssets(): Plugin {
+  const assetsDir = path.resolve(__dirname, 'dist', 'assets');
+  const IMMUTABLE = 'public, max-age=31536000, immutable';
+  return {
+    name: 'atlas-compressed-immutable-assets',
+    closeBundle() {
+      if (!existsSync(assetsDir)) return;
+      for (const f of readdirSync(assetsDir)) {
+        if (!/\.(js|css)$/.test(f)) continue;
+        const file = path.join(assetsDir, f);
+        writeFileSync(
+          `${file}.br`,
+          brotliCompressSync(readFileSync(file), {
+            params: { [zlib.BROTLI_PARAM_QUALITY]: zlib.BROTLI_MAX_QUALITY },
+          }),
+        );
+      }
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = (req.url ?? '').split('?')[0] ?? '';
+        if (!url.startsWith('/assets/')) return next();
+        const file = path.join(assetsDir, url.slice('/assets/'.length));
+        // Never serve outside dist/assets (`..` in the URL).
+        if (!file.startsWith(assetsDir + path.sep)) return next();
+        res.setHeader('Cache-Control', IMMUTABLE);
+        res.setHeader('Vary', 'Accept-Encoding');
+        const br = `${file}.br`;
+        if (/\bbr\b/.test(String(req.headers['accept-encoding'] ?? '')) && existsSync(br)) {
+          res.setHeader('Content-Encoding', 'br');
+          res.setHeader('Content-Type', file.endsWith('.css') ? 'text/css' : 'text/javascript');
+          createReadStream(br).pipe(res);
+          return;
+        }
+        // Falling through to the static server, which would reset the header
+        // to `no-cache`: keep ours.
+        const setHeader = res.setHeader.bind(res);
+        res.setHeader = (name, value) =>
+          name.toLowerCase() === 'cache-control' ? res : setHeader(name, value);
+        next();
+      });
+    },
+  };
+}
+
 // Audit 2026-06-09 — bundle visualizer behind `--mode analyze`.
 // `pnpm -F @atlas/web build --mode analyze` writes `dist/stats.html`
 // (gzip + brotli sizes per chunk) for inspecting bundle composition
@@ -29,6 +85,7 @@ const API_TARGET = process.env.API_PROXY_TARGET || 'http://127.0.0.1:4001';
 export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
+    compressedImmutableAssets(),
     ...(mode === 'analyze'
       ? [
           visualizer({
@@ -100,6 +157,18 @@ export default defineConfig(({ mode }) => ({
     // shared deps into stable chunks the browser can long-cache.
     sourcemap: false,
     rollupOptions: {
+      // Our own modules (web src and @atlas/shared) do no work at import
+      // time beyond defining exports (CSS aside), so the bundler may drop any
+      // whose exports go unused. Without this, importing one name through a
+      // barrel (`components/index.ts`, `@atlas/shared`) kept every module
+      // behind it: zod, the shared schemas and a dozen page components rode
+      // in the startup chunk. Nothing here is imported for side effects only;
+      // if that ever changes, list the file here.
+      treeshake: {
+        moduleSideEffects: (id) =>
+          /\.css$/.test(id) ||
+          !(id.includes('/packages/web/src/') || id.includes('/packages/shared/src/')),
+      },
       output: {
         // react-router-dom is intentionally NOT split into its own chunk —
         // it cycles with @mui through composed `Link` usage, which made

@@ -17,6 +17,19 @@ import type { IAgent, IAgentMemory } from '@atlas/shared';
 // hitting the API twice on /projects/:id). 30s is short enough that a
 // page-level remount after navigation still gets fresh data; concurrent
 // child mounts within the same paint share the in-flight fetch.
+// The agents without their prompts, for surfaces that only show names and
+// state (the dashboard). Under the ['agents'] prefix, so every invalidation
+// of the full list refreshes it too.
+export function useAgentSummaries() {
+    return useQuery({
+        queryKey: ['agents', 'summary'],
+        queryFn: () => api.agents.listSummaries(),
+        staleTime: 30_000,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+    });
+}
+
 export function useAgents(opts: { enabled?: boolean } = {}) {
     const { enabled = true } = opts;
     return useQuery({

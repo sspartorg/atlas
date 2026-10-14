@@ -26,7 +26,7 @@ export function GreetingBlock({ ownerFirstName, awaitingCount }: IGreetingBlockP
     const sentenceTwo = awaitingCount === 0 ? 'Everything is in motion.' : 'The rest is in motion.';
 
     return (
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
             <Typography
                 sx={{
                     fontSize: '0.6875rem',

@@ -20,6 +20,7 @@ import {
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { ProjectGuardrailScriptsTab } from './projectGuardrails/ProjectGuardrailScriptsTab.js';
+import { iconOr } from '../theme/icons.js';
 
 function RuleCard({ rule, projectId }: { rule: IProjectGuardrail; projectId: string }) {
     const toggle = useToggleProjectGuardrail(projectId);
@@ -53,7 +54,7 @@ function RuleCard({ rule, projectId }: { rule: IProjectGuardrail; projectId: str
                         aria-hidden="true"
                         sx={{ fontSize: 22, color: ATLAS_PALETTE.purple }}
                     >
-                        {rule.icon}
+                        {iconOr(rule.icon, 'shield')}
                     </Box>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
