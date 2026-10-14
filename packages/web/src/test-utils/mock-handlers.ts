@@ -35,7 +35,7 @@ export const defaultHandlers = [
     http.get(`${BASE}/dashboard`, ok({})),
     http.get(
         `${BASE}/issues/tree`,
-        ok({ tree: [], projects: [], agents: [], tasks: [] }),
+        ok({ tree: [], projects: [], tasks: [] }),
     ),
     // The Projects page calls `useEnabledSchedules` which hits this endpoint.
     // Returning an empty list keeps the page rendering without an unhandled-request

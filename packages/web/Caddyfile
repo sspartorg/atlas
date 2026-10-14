@@ -1,0 +1,53 @@
+# HTTPS + HTTP/2 (and HTTP/3) in front of the production build — ADR 0031.
+# Started by `pnpm prod:https` through scripts/serve.mjs, which sets
+# ATLAS_HTTPS_PORT, API_PORT and ATLAS_WEB_DIST.
+#
+# Why: `vite preview` speaks HTTP/1.1, so a browser opens six connections
+# and queues the rest; a cold page makes 30–65 requests. HTTP/2 multiplexes
+# them over one connection.
+#
+# The certificate comes from Caddy's own local CA. Trust it once with
+# `caddy trust` (asks for your password); until then the browser warns.
+
+{
+	local_certs
+	admin off
+}
+
+https://localhost:{$ATLAS_HTTPS_PORT}, https://127.0.0.1:{$ATLAS_HTTPS_PORT} {
+	tls internal
+
+	# The API compresses its own responses; Caddy passes them through.
+	# flush_interval -1 keeps the SSE stream (/api/events) unbuffered;
+	# WebSockets (terminal sessions) upgrade through reverse_proxy as-is.
+	handle /api/* {
+		reverse_proxy 127.0.0.1:{$API_PORT} {
+			flush_interval -1
+		}
+	}
+
+	# The build manifest is for the bundle budget, not browsers.
+	handle /.vite/* {
+		respond 404
+	}
+
+	# Content-hashed files: cache forever, serve the build's Brotli copy.
+	handle /assets/* {
+		root * {$ATLAS_WEB_DIST}
+		header Cache-Control "public, max-age=31536000, immutable"
+		encode gzip
+		file_server {
+			precompressed br
+		}
+	}
+
+	# index.html and other public files: revalidate, so a deploy shows up.
+	# Unknown paths are app routes: hand them index.html.
+	handle {
+		root * {$ATLAS_WEB_DIST}
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		encode gzip
+		file_server
+	}
+}

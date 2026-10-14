@@ -128,11 +128,11 @@ A08 â€” `POST /api/agents` and `PATCH /api/agents/:id` accept an optional `
 | DELETE | `/api/sub-tasks/:id` | 204 |
 
 ### `routes/issues.ts` â€” Composite
-**Why this group exists**: Project Detail and the workflow run dialog / run view need every Task and sub-task of a project plus the projects + agents dictionaries in one round-trip. `/api/issues/tree` is a performance composite; it duplicates data that's individually fetchable from the typed routes above.
+**Why this group exists**: Project Detail and the workflow run dialog / run view need every Task and sub-task of a project plus the projects dictionary in one round-trip. `/api/issues/tree` is a performance composite; it duplicates data that's individually fetchable from the typed routes above.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/issues/tree?project_id=…&include_archived=…` | `IIssueTreeResponse`: `tree` (Tasks with their sub-tasks nested as `children`; nodes carry `task_id` / `task_title`), `tasks` (raw `ITask[]`), and inline `projects` + `agents` dictionaries (`services/issue-tree.ts`). Consumers: Project Detail, `RunWorkflowDialog`, the workflow run view's item link. |
+| GET | `/api/issues/tree?project_id=…&include_archived=…` | `IIssueTreeResponse`: `tree` (Tasks with their sub-tasks nested as `children`; nodes carry `task_id` / `task_title`), `tasks` (raw `ITask[]`), and an inline `projects` dictionary (`services/issue-tree.ts`). **2026-10-14 (ADR 0031):** the `agents` dictionary was removed — every agent with its full prompt, ~156 KB per project page, read by nothing; screens use `GET /api/agents?view=summary`. Consumers: Project Detail, `RunWorkflowDialog`, the workflow run view's item link. |
 
 ### Theme 09 â€” agents route validation extensions
 

@@ -2,13 +2,55 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as OS from 'node:os';
 
 const FIXTURE_INTERFACES = {
-    lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true, netmask: '255.0.0.0', mac: '00:00:00:00:00:00', cidr: '127.0.0.1/8' }],
-    eth0: [
-        { address: '192.168.1.50', family: 'IPv4', internal: false, netmask: '255.255.255.0', mac: 'aa:bb:cc:dd:ee:ff', cidr: '192.168.1.50/24' },
-        { address: 'fe80::1', family: 'IPv6', internal: false, netmask: 'ffff:ffff:ffff:ffff::', mac: 'aa:bb:cc:dd:ee:ff', scopeid: 0, cidr: 'fe80::1/64' },
+    lo: [
+        {
+            address: '127.0.0.1',
+            family: 'IPv4',
+            internal: true,
+            netmask: '255.0.0.0',
+            mac: '00:00:00:00:00:00',
+            cidr: '127.0.0.1/8',
+        },
     ],
-    vEthernet: [{ address: '169.254.42.7', family: 'IPv4', internal: false, netmask: '255.255.0.0', mac: '11:22:33:44:55:66', cidr: '169.254.42.7/16' }],
-    en1: [{ address: '10.0.0.5', family: 'IPv4', internal: false, netmask: '255.0.0.0', mac: '99:88:77:66:55:44', cidr: '10.0.0.5/8' }],
+    eth0: [
+        {
+            address: '192.168.1.50',
+            family: 'IPv4',
+            internal: false,
+            netmask: '255.255.255.0',
+            mac: 'aa:bb:cc:dd:ee:ff',
+            cidr: '192.168.1.50/24',
+        },
+        {
+            address: 'fe80::1',
+            family: 'IPv6',
+            internal: false,
+            netmask: 'ffff:ffff:ffff:ffff::',
+            mac: 'aa:bb:cc:dd:ee:ff',
+            scopeid: 0,
+            cidr: 'fe80::1/64',
+        },
+    ],
+    vEthernet: [
+        {
+            address: '169.254.42.7',
+            family: 'IPv4',
+            internal: false,
+            netmask: '255.255.0.0',
+            mac: '11:22:33:44:55:66',
+            cidr: '169.254.42.7/16',
+        },
+    ],
+    en1: [
+        {
+            address: '10.0.0.5',
+            family: 'IPv4',
+            internal: false,
+            netmask: '255.0.0.0',
+            mac: '99:88:77:66:55:44',
+            cidr: '10.0.0.5/8',
+        },
+    ],
 };
 
 vi.mock('node:os', async (importOriginal) => {
@@ -69,10 +111,7 @@ describe('lan-origins', () => {
 
     it('getAllowedOrigins always includes the two static localhost origins', async () => {
         const { getAllowedOrigins } = await import('./lan-origins.js');
-        expect(getAllowedOrigins()).toEqual([
-            'http://localhost:4000',
-            'http://127.0.0.1:4000',
-        ]);
+        expect(getAllowedOrigins()).toEqual(['http://localhost:4000', 'http://127.0.0.1:4000']);
     });
 
     it('getAllowedOrigins appends LAN origins when the env is on', async () => {
@@ -91,5 +130,21 @@ describe('lan-origins', () => {
         expect(trusted.has('http://localhost:4000')).toBe(true);
         expect(trusted.has('http://127.0.0.1:4000')).toBe(true);
         expect(trusted.has('http://192.168.1.50:4000')).toBe(true);
+    });
+
+    it('trusts the HTTPS origin only when ATLAS_HTTPS_PORT is set', async () => {
+        const { getAllowedOrigins } = await import('./lan-origins.js');
+        delete process.env['ATLAS_HTTPS_PORT'];
+        expect(getAllowedOrigins().some((o) => o.startsWith('https://'))).toBe(false);
+        process.env['ATLAS_HTTPS_PORT'] = '5443';
+        try {
+            expect(getAllowedOrigins()).toEqual(
+                expect.arrayContaining(['https://localhost:5443', 'https://127.0.0.1:5443'])
+            );
+            process.env['ATLAS_HTTPS_PORT'] = 'not-a-port';
+            expect(getAllowedOrigins().some((o) => o.startsWith('https://'))).toBe(false);
+        } finally {
+            delete process.env['ATLAS_HTTPS_PORT'];
+        }
     });
 });

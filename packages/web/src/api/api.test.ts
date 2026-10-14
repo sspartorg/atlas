@@ -308,12 +308,12 @@ describe('api.subTasks', () => {
 
 describe('api.issues.tree', () => {
     it('appends project_id when given', async () => {
-        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], tasks: [] });
         await api.issues.tree({ projectId: 'p1' });
         expect(cap.url).toContain('project_id=p1');
     });
     it('omits query when no project_id', async () => {
-        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], tasks: [] });
         await api.issues.tree({});
         expect(cap.url).toMatch(/\/issues\/tree$/);
     });
@@ -799,7 +799,7 @@ describe('api.tasks.list (includeArchived)', () => {
 
 describe('api.issues.tree (includeArchived)', () => {
     it('appends include_archived when true', async () => {
-        const cap = captureGet('/issues/tree', { tree: [], projects: [], agents: [], tasks: [] });
+        const cap = captureGet('/issues/tree', { tree: [], projects: [], tasks: [] });
         await api.issues.tree({ includeArchived: true });
         expect(cap.url).toContain('include_archived=true');
     });

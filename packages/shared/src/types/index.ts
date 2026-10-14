@@ -461,7 +461,9 @@ export interface IIssueTreeNode {
 
 export interface IIssueTreeResponse {
     projects: IProject[];
-    agents: IAgent[];
+    // 2026-10-14 (ADR 0031): `agents: IAgent[]` removed. It carried every
+    // agent with its full prompt (~156 KB per project page) and nothing in
+    // web or MCP read it; screens get agents from GET /api/agents.
     tree: IIssueTreeNode[];
     tasks: ITask[];
 }

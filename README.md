@@ -223,6 +223,27 @@ pnpm prod                        # first boot starts atlas-postgres-prod
                                  # and runs migrations against atlas_prod
 ```
 
+### Faster prod: HTTPS + HTTP/2 (`pnpm prod:https`)
+
+`vite preview` speaks HTTP/1.1, so the browser fetches six files at a time
+while a cold page makes 30–65 requests. `pnpm prod:https` runs the same prod
+chain but serves the UI through [Caddy](https://caddyserver.com) at
+**https://localhost:5443** with HTTP/2 and HTTP/3, the build's Brotli files,
+immutable caching for `/assets`, and `/api` (SSE + WebSockets) proxied to
+the API. Measured on slow 4G it loads pages 5–25% sooner (ADR 0031).
+
+```bash
+brew install caddy     # once (Linux: your package manager; Windows: winget install CaddyServer.Caddy)
+caddy trust            # once: trusts Caddy's local CA (asks for your password)
+pnpm prod:https        # https://localhost:5443
+```
+
+It sets `ATLAS_HTTPS_PORT=5443`, which makes the web serve via Caddy
+(`packages/web/Caddyfile`, started by `scripts/serve.mjs`) and makes the API
+trust `https://localhost:5443` as a browser origin. Plain `pnpm prod` is
+unchanged. LAN access over HTTPS isn't covered — LAN devices keep using
+`http://<ip>:5000`.
+
 Useful prod-side scripts (all driven by `cross-env ATLAS_ENV=prod`):
 
 ```

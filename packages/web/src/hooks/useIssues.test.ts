@@ -10,7 +10,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 expect(request.url).not.toContain('project_id');
-                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
+                return HttpResponse.json({ tree: [], projects: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues(), { wrapper: makeWrapper() });
@@ -21,7 +21,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 expect(request.url).toContain('project_id=p1');
-                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
+                return HttpResponse.json({ tree: [], projects: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues({ projectId: 'p1' }), {
@@ -35,7 +35,7 @@ describe('useIssues', () => {
         server.use(
             http.get('http://localhost:3000/api/issues/tree', ({ request }) => {
                 captured = new URL(request.url).search;
-                return HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] });
+                return HttpResponse.json({ tree: [], projects: [], tasks: [] });
             }),
         );
         const { result } = renderHook(() => useIssues({ includeArchived: true }), {

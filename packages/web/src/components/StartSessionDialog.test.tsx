@@ -72,7 +72,7 @@ beforeEach(() => {
         http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([makeProjectRepo()])),
         http.get(`${BASE}/cli-models`, () => HttpResponse.json([])),
         http.get(`${BASE}/issues/tree`, () =>
-            HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] })
+            HttpResponse.json({ tree: [], projects: [], tasks: [] })
         ),
         http.get(`${BASE}/settings`, () =>
             HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 })
@@ -495,7 +495,6 @@ describe('StartSessionDialog — buildItemOptions via Autocomplete', () => {
                         },
                     ],
                     projects: [{ id: 'p1', name: 'Alpha' }],
-                    agents: [],
                     tasks: [
                         {
                             id: 'T1',
@@ -662,7 +661,6 @@ describe('StartSessionDialog — Autocomplete item selection', () => {
                 HttpResponse.json({
                     tree: [],
                     projects: [{ id: 'p1', name: 'Alpha' }],
-                    agents: [],
                     tasks: [
                         {
                             id: 'E-42',
@@ -768,7 +766,7 @@ describe('StartSessionDialog — issue tree fetch', () => {
         server.use(
             http.get(`${BASE}/issues/tree`, ({ request }) => {
                 urls.push(new URL(request.url).search);
-                return HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] });
+                return HttpResponse.json({ projects: [], tree: [], tasks: [] });
             })
         );
         renderDialog({ open: false });

@@ -227,7 +227,7 @@ describe('itemPathIn', () => {
         };
         const sub: IIssueTreeNode = { ...base, id: 'ATL-3', kind: 'sub_task', task_id: 'ATL-1', task_title: 'Add login', children: [] };
         const task: IIssueTreeNode = { ...base, id: 'ATL-1', kind: 'task', task_id: null, task_title: null, children: [sub] };
-        return { projects: [], agents: [], tree: [task], tasks: [makeTask({ id: 'ATL-1' })] };
+        return { projects: [], tree: [task], tasks: [makeTask({ id: 'ATL-1' })] };
     }
 
     // The panel renders before the tree query resolves; it must link nowhere

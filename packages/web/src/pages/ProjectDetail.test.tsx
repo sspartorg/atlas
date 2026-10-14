@@ -446,7 +446,7 @@ describe('ProjectDetail page', () => {
         registerProjectMocks(
             undefined,
             http.get('http://localhost:3000/api/issues/tree', () =>
-                HttpResponse.json({ tree: [], projects: [], agents: [], tasks: [] })
+                HttpResponse.json({ tree: [], projects: [], tasks: [] })
             )
         );
         renderWithProviders(
@@ -472,7 +472,6 @@ describe('ProjectDetail page', () => {
                         taskNode('ATL-9'),
                     ],
                     projects: [],
-                    agents: [],
                     tasks: [
                         makeTask({ id: 'ATL-1', title: 'Task With Sub-tasks' }),
                         makeTask({ id: 'ATL-9', title: 'Task Without Sub-tasks' }),
@@ -573,7 +572,6 @@ describe('ProjectDetail page', () => {
                         ]),
                     ],
                     projects: [],
-                    agents: [],
                     tasks: [
                         makeTask({ id: 'ATL-1', assignee_agent_id: 'agent-a' }),
                         makeTask({

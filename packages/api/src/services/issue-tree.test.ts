@@ -20,14 +20,14 @@ describe('buildIssueTree', () => {
         const r = await buildIssueTree();
         expect(r.tree).toEqual([]);
         expect(r.projects).toEqual([]);
-        expect(r.agents).toEqual([]);
+        // ADR 0031: agents are no longer part of the tree response.
+        expect(r).not.toHaveProperty('agents');
     });
 
     it('builds tasks as roots with their sub-tasks as children', async () => {
         await seedFullTree();
         const r = await buildIssueTree();
         expect(r.projects).toHaveLength(1);
-        expect(r.agents).toHaveLength(1);
         expect(r.tasks.map((t) => t.id)).toEqual(['ATL-1']);
         expect(r.tree).toHaveLength(1);
         const task = r.tree[0]!;

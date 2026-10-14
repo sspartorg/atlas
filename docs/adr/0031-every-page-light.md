@@ -46,5 +46,5 @@ Every measured route now downloads 355–543 KB cold; repeat visits move only AP
 
 ## Not done
 
-- **`IIssueTreeResponse.agents`** (156 KB raw per project page, read by nothing in web or MCP) and the duplicated **`tasks`** list need a change to `@atlas/shared` — an Owner decision.
-- **HTTP/2.** `vite preview` speaks HTTP/1.1: six connections, and a cold page makes 30–65 requests. A TLS reverse proxy (Caddy/nginx) in front would remove most of the remaining request queueing.
+- ~~`IIssueTreeResponse.agents`~~ — done, with Owner approval: removed from `@atlas/shared` and the API (156 KB raw per project page, read by nothing in web or MCP). `tasks` stays: it is not a duplicate of the tree nodes — the project Tasks table needs the full `ITask` rows the thin nodes don't carry.
+- ~~**HTTP/2.**~~ — done: `pnpm prod:https` serves the UI through Caddy (`packages/web/Caddyfile`) over HTTPS + HTTP/2/3 at https://localhost:5443, with `ATLAS_HTTPS_PORT` making the API trust that origin (and only then). Same profile, HTTP/1.1 → HTTP/2, network idle: project history 5.0 → 3.7 s, agent runs 4.2 → 3.4 s, agent tests 4.5 → 4.0 s, marketplace 3.7 → 3.2 s, settings 3.6 → 3.2 s, dashboard 3.4 → 3.2 s. Verified through the proxy: SSE unbuffered, WebSocket upgrade (101), writes rejected (401) without `ATLAS_HTTPS_PORT` and accepted (201) with it.

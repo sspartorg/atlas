@@ -12,6 +12,7 @@
     "build": "pnpm -r build",
     "start": "pnpm build && pnpm db:up && pnpm db:wait && pnpm db:migrate && pnpm --parallel --filter @atlas/api --filter @atlas/web start",
     "prod": "cross-env ATLAS_ENV=prod pnpm build && cross-env ATLAS_ENV=prod pnpm db:up && cross-env ATLAS_ENV=prod pnpm db:wait && cross-env ATLAS_ENV=prod pnpm db:migrate && cross-env ATLAS_ENV=prod pnpm --parallel --filter @atlas/api --filter @atlas/web start",
+    "prod:https": "cross-env ATLAS_HTTPS_PORT=5443 pnpm prod",
     "db:up:prod": "cross-env ATLAS_ENV=prod pnpm -F @atlas/api db:up",
     "db:down:prod": "cross-env ATLAS_ENV=prod pnpm -F @atlas/api db:down",
     "db:down:prod:purge": "cross-env ATLAS_ENV=prod pnpm -F @atlas/api db:down:purge",

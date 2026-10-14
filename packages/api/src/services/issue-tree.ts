@@ -7,7 +7,6 @@ import type {
     IProject,
     ISubTask,
     ITask,
-    IAgent,
 } from '@atlas/shared';
 
 interface BuildOpts {
@@ -56,13 +55,9 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
         else subTasks.push(rowToSubTask(r as never));
     }
 
-    // 2. Projects + agents — small tables, fetch in full.
-    const [projectRows, agentRows] = await Promise.all([
-        db.selectFrom('projects').selectAll().execute(),
-        db.selectFrom('agents').selectAll().execute(),
-    ]);
+    // 2. Projects — a small table, fetch in full.
+    const projectRows = await db.selectFrom('projects').selectAll().execute();
     const projects = projectRows.map((r) => projectFromRow(r as never));
-    const agents = agentRows as unknown as IAgent[];
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const taskById = new Map(tasks.map((t) => [t.id, t]));
 
@@ -121,5 +116,5 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
     }
     topLevel.sort((a, b) => (b.updated_at > a.updated_at ? 1 : -1));
 
-    return { projects, agents, tree: topLevel, tasks };
+    return { projects, tree: topLevel, tasks };
 }

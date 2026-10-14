@@ -2,10 +2,16 @@ import * as os from 'node:os';
 
 const WEB_PORT = Number(process.env['WEB_PORT'] ?? process.env['PORT']) || 4000;
 
-const STATIC_ORIGINS = [
-    `http://localhost:${WEB_PORT}`,
-    `http://127.0.0.1:${WEB_PORT}`,
-] as const;
+const STATIC_ORIGINS = [`http://localhost:${WEB_PORT}`, `http://127.0.0.1:${WEB_PORT}`] as const;
+
+// `pnpm prod:https` (ADR 0031) serves the UI through Caddy over HTTPS +
+// HTTP/2 on ATLAS_HTTPS_PORT; trust that origin only when it is configured.
+// Read per call: tests and main.ts set env after this module loads.
+function httpsOrigins(): string[] {
+    const port = Number(process.env['ATLAS_HTTPS_PORT']);
+    if (!Number.isInteger(port) || port <= 0) return [];
+    return [`https://localhost:${port}`, `https://127.0.0.1:${port}`];
+}
 
 function isLanAccessEnabled(): boolean {
     const v = process.env['ATLAS_LAN_ACCESS'];
@@ -39,13 +45,16 @@ export function getLanOrigins(): string[] {
     // level as its LAN IPs. Browsers lowercase the host in the Origin header,
     // and macOS os.hostname() may already carry the .local suffix, so
     // normalize both before appending.
-    const host = os.hostname().toLowerCase().replace(/\.local$/, '');
+    const host = os
+        .hostname()
+        .toLowerCase()
+        .replace(/\.local$/, '');
     if (host) origins.push(`http://${host}.local:${WEB_PORT}`);
     return origins;
 }
 
 export function getAllowedOrigins(): string[] {
-    return [...STATIC_ORIGINS, ...getLanOrigins()];
+    return [...STATIC_ORIGINS, ...httpsOrigins(), ...getLanOrigins()];
 }
 
 // Mirrors the static + LAN union used by CORS so the MCP-token gate trusts
