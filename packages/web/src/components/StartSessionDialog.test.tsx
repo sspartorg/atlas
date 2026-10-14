@@ -759,3 +759,24 @@ describe('StartSessionDialog — useEffect defaultProjectId sync', () => {
         expect(document.body).toBeTruthy();
     });
 });
+
+describe('StartSessionDialog — issue tree fetch', () => {
+    // ADR 0030: the dialog is always mounted on the Terminal pages; closed (or
+    // with no project) it fetched every project's tree and threw it away.
+    it("fetches no tree while closed, and only the picked project's when open", async () => {
+        const urls: string[] = [];
+        server.use(
+            http.get(`${BASE}/issues/tree`, ({ request }) => {
+                urls.push(new URL(request.url).search);
+                return HttpResponse.json({ projects: [], agents: [], tree: [], tasks: [] });
+            })
+        );
+        renderDialog({ open: false });
+        await new Promise((r) => setTimeout(r, 50));
+        expect(urls).toEqual([]);
+
+        renderDialog({ open: true, defaultProjectId: 'p1' });
+        await waitFor(() => expect(urls.length).toBeGreaterThan(0));
+        expect(urls.every((u) => new URLSearchParams(u).get('project_id') === 'p1')).toBe(true);
+    });
+});

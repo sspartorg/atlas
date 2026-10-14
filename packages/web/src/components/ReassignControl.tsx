@@ -5,12 +5,12 @@ import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
-import type { IAgent } from '@atlas/shared';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { agentSubtitle } from '../pages/agents/agentViewModel.js';
 import { InitialAvatar } from './InitialAvatar.js';
+import type { AgentSummary } from '../api/types.js';
 
 interface Props {
     assigneeAgentId: string | null;
@@ -26,7 +26,7 @@ export function ReassignControl({ assigneeAgentId, onAssign, loading }: Props) {
     const assignee = agents.find((w) => w.id === assigneeAgentId);
     const ownerName = settings?.owner_name ?? 'Owner';
 
-    const activeAgents = agents.filter((w: IAgent) => w.status === 'active');
+    const activeAgents = agents.filter((w: AgentSummary) => w.status === 'active');
 
     return (
         <>

@@ -5,16 +5,17 @@ import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
 import Switch from '@mui/material/Switch';
 import Link from '@mui/material/Link';
-import type { IAgent, IProject, IWorkflow } from '@atlas/shared';
+import type { IProject, IWorkflow } from '@atlas/shared';
 import { SelectableCard } from '../../components/SchedulePresetFields.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { SectionLabel, StartInspector } from './StartInspector.js';
 import type { IWfNodeData, WfNode } from './graph.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface Props {
     workflow: IWorkflow;
     node: WfNode | null;
-    agents: IAgent[];
+    agents: AgentSummary[];
     projects: IProject[];
     workflows: IWorkflow[];
     onChange: (patch: Partial<IWorkflow>) => void;
@@ -151,18 +152,15 @@ function AgentPanel({
             <Explain>
                 Done takes the green <Box component="strong">pass</Box> connection. A failure — a
                 reviewer rejects the work or a required checklist item is missed — takes the red{' '}
-                <Box component="strong">fail</Box> connection to the agent that fixes it; with no fail
-                connection it comes to you. Errors and questions always come to you as Waiting for
-                info.
+                <Box component="strong">fail</Box> connection to the agent that fixes it; with no
+                fail connection it comes to you. Errors and questions always come to you as Waiting
+                for info.
             </Explain>
         </Box>
     );
 }
 
-function ScriptPanel({
-    node,
-    onNodeData,
-}: Pick<Props, 'onNodeData'> & { node: WfNode }) {
+function ScriptPanel({ node, onNodeData }: Pick<Props, 'onNodeData'> & { node: WfNode }) {
     const empty = (node.data.command ?? '').trim() === '';
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -191,10 +189,10 @@ function ScriptPanel({
                 fullWidth
             />
             <Explain>
-                You type the command, and Atlas runs it itself with no AI. Exit 0 takes the green pass
-                connection. Any other exit takes the red fail connection to the fixer, who reads the
-                full output in <Box component="code">.atlas/checks/</Box>. A step saved with no command
-                parks the run instead of passing.
+                You type the command, and Atlas runs it itself with no AI. Exit 0 takes the green
+                pass connection. Any other exit takes the red fail connection to the fixer, who
+                reads the full output in <Box component="code">.atlas/checks/</Box>. A step saved
+                with no command parks the run instead of passing.
             </Explain>
         </Box>
     );
@@ -368,10 +366,10 @@ export function WorkflowInspector(props: Props) {
             )}
             {type === 'owner' && (
                 <Explain>
-                    Optional — add this only when you want to approve before the workflow
-                    continues. When a step connects here, the run pauses and the item comes back to
-                    you as Waiting for info. Reply on the item and the run continues along this
-                    node&apos;s pass connection.
+                    Optional — add this only when you want to approve before the workflow continues.
+                    When a step connects here, the run pauses and the item comes back to you as
+                    Waiting for info. Reply on the item and the run continues along this node&apos;s
+                    pass connection.
                 </Explain>
             )}
             {type === 'subtasks' && props.node && (

@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { globSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ICONS, ICON_FONT_URL, iconOr } from './icons.js';
+import { ICONS, iconOr } from './icons.js';
 
 // The icon font ships only the glyphs in ICONS (see icons.ts). An icon used
 // but missing from the list would render as its raw ligature text, so this
-// scans the sources the way the subset was built and fails on any gap.
+// scans the sources the way the subset was built and fails on any gap, and
+// checks the committed font was built from the current list.
 //
 // `scripts/material-symbols-rounded.names` is Google's full Material Symbols
 // name list (from google/material-design-icons, variablefont codepoints). It
@@ -65,8 +66,13 @@ describe('icon font subset', () => {
     it('lists only real Material Symbols names, sorted and unique, as Google requires', () => {
         expect(ICONS.filter((n) => !ALL_NAMES.has(n))).toEqual([]);
         expect([...ICONS]).toEqual([...new Set(ICONS)].sort());
-        expect(ICON_FONT_URL).toContain(`icon_names=${ICONS.join(',')}`);
-        expect(ICON_FONT_URL).toContain('display=block');
+    });
+
+    it('ships a font built from this exact list (run `pnpm -F @atlas/web fonts:fetch`)', () => {
+        const built = readFileSync(join(WEB, 'src', 'assets', 'fonts', 'icons.names'), 'utf8')
+            .split('\n')
+            .filter(Boolean);
+        expect(built).toEqual([...ICONS]);
     });
 
     it('falls back for glyphs the subset does not carry', () => {

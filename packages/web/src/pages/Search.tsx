@@ -4,7 +4,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import type { IAgent } from '@atlas/shared';
 import { SearchTextInput } from '../components/index.js';
-import { useAgents } from '../hooks/useAgents.js';
+import { useAgentsWithPrompts } from '../hooks/useAgents.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useProjectLabels } from '../hooks/useProjectLabels.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -39,7 +39,7 @@ export function Search() {
     useSetPageTitle('Search');
     const toast = useToast();
     const [urlParams, setUrlParams] = useSearchParams();
-    const { data: agents = [] } = useAgents();
+    const { data: agents = [] } = useAgentsWithPrompts();
     const { data: projects = [] } = useProjects();
     const { data: settings } = useSettings();
     // Task 2 — label suggestions for the Labels filter chip; the Search

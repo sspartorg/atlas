@@ -17,26 +17,29 @@ import type { IAgent, IAgentMemory } from '@atlas/shared';
 // hitting the API twice on /projects/:id). 30s is short enough that a
 // page-level remount after navigation still gets fresh data; concurrent
 // child mounts within the same paint share the in-flight fetch.
-// The agents without their prompts, for surfaces that only show names and
-// state (the dashboard). Under the ['agents'] prefix, so every invalidation
-// of the full list refreshes it too.
-export function useAgentSummaries() {
+//
+// 2026-10-14 (ADR 0030) — the list comes WITHOUT `prompt_md`
+// (`?view=summary`): prompts were ~80% of the payload and every page that
+// shows agents loaded them, while only the Agents page and Search read them.
+// Those two use `useAgentsWithPrompts`.
+export function useAgents(opts: { enabled?: boolean } = {}) {
+    const { enabled = true } = opts;
     return useQuery({
-        queryKey: ['agents', 'summary'],
+        queryKey: ['agents'],
         queryFn: () => api.agents.listSummaries(),
+        enabled,
+        refetchOnMount: true,
         staleTime: 30_000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
     });
 }
 
-export function useAgents(opts: { enabled?: boolean } = {}) {
-    const { enabled = true } = opts;
+/** The full list, prompts included: the Agents page and Search. */
+export function useAgentsWithPrompts() {
     return useQuery({
-        queryKey: ['agents'],
+        queryKey: ['agents', 'with-prompts'],
         queryFn: () => api.agents.list(),
-        enabled,
-        refetchOnMount: true,
         staleTime: 30_000,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,

@@ -16,6 +16,7 @@ import { relativeTime } from '../../utils/time.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import type { IAgentRun, RunStatus } from '@atlas/shared';
 import { itemPath } from '../../utils/itemPath.js';
+import { ShowMoreButton, usePaged } from '../../components/ShowMore.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -213,6 +214,7 @@ export function HistoryTabContent({ projectId }: Props) {
         }
         return hasAny ? sum : null;
     }, [runs]);
+    const paged = usePaged(runs ?? []);
 
     if (isPending) {
         return (
@@ -327,9 +329,10 @@ export function HistoryTabContent({ projectId }: Props) {
                 </Box>
             ) : (
                 <Box>
-                    {rows.map((run) => (
+                    {paged.visible.map((run) => (
                         <RunRow key={run.id} run={run} agent={agentsById.get(run.agent_id)} />
                     ))}
+                    <ShowMoreButton remaining={paged.remaining} onMore={paged.more} />
                 </Box>
             )}
         </Box>

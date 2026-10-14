@@ -13,7 +13,7 @@ import {
     useAgentPromptVersions,
     useAgentRun,
     useAgentRuns,
-    useAgentSummaries,
+    useAgentsWithPrompts,
     useAgents,
     useItemAgentRuns,
     useProjectAgentRuns,
@@ -240,17 +240,29 @@ describe('useAgentPromptVersions + useRevertAgentPrompt', () => {
     });
 });
 
-describe('useAgentSummaries', () => {
-    it('asks for the summary view (no prompts) under its own key', async () => {
-        let search = '';
+describe('agent list views', () => {
+    function capture() {
+        const searches: string[] = [];
         server.use(
             http.get('http://localhost:3000/api/agents', ({ request }) => {
-                search = new URL(request.url).search;
+                searches.push(new URL(request.url).search);
                 return HttpResponse.json([{ id: 'a1', name: 'Coder' }]);
             })
         );
-        const { result } = renderHook(() => useAgentSummaries(), { wrapper: makeWrapper() });
+        return searches;
+    }
+
+    it('useAgents asks for the summary view: no prompts', async () => {
+        const searches = capture();
+        const { result } = renderHook(() => useAgents(), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.data).toHaveLength(1));
-        expect(search).toBe('?view=summary');
+        expect(searches).toEqual(['?view=summary']);
+    });
+
+    it('useAgentsWithPrompts asks for the full list', async () => {
+        const searches = capture();
+        const { result } = renderHook(() => useAgentsWithPrompts(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.data).toHaveLength(1));
+        expect(searches).toEqual(['']);
     });
 });

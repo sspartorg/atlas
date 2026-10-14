@@ -55,6 +55,7 @@ import { ApiError, asErrorBody } from './utils/errors.js';
 import { getAllowedOrigins, getLanOrigins } from './utils/lan-origins.js';
 import { requireMcpToken } from './plugins/mcp-auth.js';
 import type { ApiErrorBody } from '@atlas/shared';
+import { registerCompression } from './plugins/compression.js';
 
 // ATLAS_LOG_LEVEL is the source of truth for the Fastify logger level.
 // Editable via Settings → Environment; the file-on-disk change takes effect
@@ -111,7 +112,7 @@ function ensureLogFileDirWritable(filePath: string): { ok: true } | { ok: false;
         fs.unlinkSync(probe);
         return { ok: true };
     } catch (err) {
-        const reason = err instanceof Error ? (err.message || err.name) : String(err);
+        const reason = err instanceof Error ? err.message || err.name : String(err);
         return { ok: false, reason };
     }
 }
@@ -138,14 +139,12 @@ export function buildDefaultLoggerOptions(): {
         // We can't use the logger here because it's what we're trying to build.
         process.stderr.write(
             `[atlas] WARN ATLAS_LOG_LEVEL=${JSON.stringify(rawLevel)} is not one of ` +
-                `${VALID_LOG_LEVELS.join('|')}; falling back to 'info'.\n`,
+                `${VALID_LOG_LEVELS.join('|')}; falling back to 'info'.\n`
         );
     }
 
     const logFileEnv = (process.env['ATLAS_LOG_FILE'] ?? '').trim();
-    const targets: LogTarget[] = [
-        { target: 'pino/file', level, options: { destination: 1 } },
-    ];
+    const targets: LogTarget[] = [{ target: 'pino/file', level, options: { destination: 1 } }];
     if (logFileEnv.toLowerCase() !== 'off') {
         const filePath = logFileEnv.length > 0 ? logFileEnv : defaultLogFilePath();
         const check = ensureLogFileDirWritable(filePath);
@@ -161,7 +160,7 @@ export function buildDefaultLoggerOptions(): {
             process.stderr.write(
                 `[atlas] WARN log-file target disabled: cannot prepare ${filePath} ` +
                     `(${check.reason}). Set ATLAS_LOG_FILE=off to silence this warning, ` +
-                    `or point it at a writable directory. Continuing with stdout-only logs.\n`,
+                    `or point it at a writable directory. Continuing with stdout-only logs.\n`
             );
         }
     }
@@ -197,10 +196,13 @@ function installThreadStreamRescue(): void {
         // Heuristic: ThreadStream-from-Pino crashes surface ENOENT/EACCES on
         // mkdir/open inside a worker. If it's that family, swallow + warn.
         // Anything else re-throws so Node's default handler runs.
-        if (/ThreadStream|pino\/file|thread-stream/.test(msg) || /mkdir|ENOENT|EACCES|EPERM/.test(msg)) {
+        if (
+            /ThreadStream|pino\/file|thread-stream/.test(msg) ||
+            /mkdir|ENOENT|EACCES|EPERM/.test(msg)
+        ) {
             process.stderr.write(
                 `[atlas] WARN Pino transport worker error swallowed (logs may stop ` +
-                    `writing to the file appender):\n${msg}\n`,
+                    `writing to the file appender):\n${msg}\n`
             );
             return;
         }
@@ -295,6 +297,8 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     // X-Atlas-Token when ATLAS_MCP_TOKEN is set. Reads (GET) are unaffected.
     // Per-route `preHandler: requireMcpToken` still works alongside this — it
     // just runs after the same plugin already passed.
+    registerCompression(server);
+
     const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
     server.addHook('onRequest', async (req, reply) => {
         if (!WRITE_METHODS.has(req.method)) return;
@@ -304,7 +308,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     const lanOrigins = getLanOrigins();
     if (lanOrigins.length > 0) {
         server.log.info(
-            `[security] ATLAS_LAN_ACCESS=true — trusting LAN origins for CORS + MCP-token gate: ${lanOrigins.join(', ')}`,
+            `[security] ATLAS_LAN_ACCESS=true — trusting LAN origins for CORS + MCP-token gate: ${lanOrigins.join(', ')}`
         );
     }
     await server.register(cors, {
@@ -320,10 +324,8 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
     });
     // Raw zip body support (curl + MCP) — register a parser so the import
     // route's `req.body instanceof Buffer` branch lights up.
-    server.addContentTypeParser(
-        'application/zip',
-        { parseAs: 'buffer' },
-        (_req, body, done) => done(null, body),
+    server.addContentTypeParser('application/zip', { parseAs: 'buffer' }, (_req, body, done) =>
+        done(null, body)
     );
 
     // 2026-06-22 — Terminal v1. WebSocket plugin powers the PTY byte-stream
@@ -343,7 +345,10 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
             servers: [
                 {
                     url: `http://localhost:${process.env['API_PORT'] ?? process.env['PORT'] ?? 4001}`,
-                    description: process.env['ATLAS_ENV']?.toLowerCase() === 'prod' ? 'Local prod' : 'Local dev',
+                    description:
+                        process.env['ATLAS_ENV']?.toLowerCase() === 'prod'
+                            ? 'Local prod'
+                            : 'Local dev',
                 },
             ],
         },

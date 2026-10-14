@@ -2,15 +2,16 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IAgent, IWorkflow } from '@atlas/shared';
+import type { IWorkflow } from '@atlas/shared';
 import { ATLAS_PALETTE, ELEVATION, TYPOGRAPHY } from '../../theme/tokens.js';
 import { getAgentView } from '../agents/agentViewModel.js';
 import { LiveDot } from '../../components/LiveDot.js';
 import type { INodeRunInfo, WfNode } from './graph.js';
 import { INPUT_KIND_LABEL, TRIGGER_LABEL, deliveryLabel, subtasksLabel } from './labels.js';
+import type { AgentSummary } from '../../api/types.js';
 
 export interface ICanvasContext {
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     workflowsById: Map<string, IWorkflow>;
     errorNodeIds: Set<string>;
     runStates: Map<string, INodeRunInfo> | null;

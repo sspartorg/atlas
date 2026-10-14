@@ -82,7 +82,10 @@ export function StartSessionDialog({
 
     const { data: repos = [] } = useProjectRepos(projectId);
     const effectiveRepoId = repoId || repos[0]?.id || '';
-    const { data: issuesData } = useIssues(projectId ? { projectId } : undefined);
+    // Only while open and scoped to a project: the dialog is always mounted,
+    // and with no project this fetched every project's tree (3.4 MB on a
+    // 2,100-task workspace) on every Terminal visit, then discarded it.
+    const { data: issuesData } = useIssues({ projectId, enabled: open && Boolean(projectId) });
     const itemOptions = useMemo<ItemPickerOption[]>(() => {
         if (!projectId || !issuesData) return [];
         return buildItemOptions(issuesData);

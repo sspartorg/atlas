@@ -5,7 +5,8 @@
 // computes per-chunk gzipped size, and asserts against the budget Owner
 // set:
 //   - Initial route chunk (entry + react-vendor + mui-*) < 260 KB gz
-//   - Total app (sum of every chunk) < 830 KB gz
+//   - Each route's first visit (startup + route import graph) < 290 KB gz,
+//     with named exceptions for the canvas, chart and terminal routes
 //   - Recharts split chunk < 130 KB gz (held over from prior baseline)
 //   - mui-core split chunk < 90 KB gz
 //   - mui-form split chunk < 18 KB gz
@@ -50,7 +51,27 @@ const DIST_ASSETS = join(__dirname, '..', 'dist', 'assets');
 // startup chunk stopped carrying zod, the shared schemas and page components;
 // total 880 → 900 KB (measured 894.3) for the per-chunk overhead of that split.
 const BUDGET_INITIAL_GZ = 230 * 1024;
-const BUDGET_TOTAL_GZ = 900 * 1024;
+// 2026-10-14 — ADR 0031: the total-app budget is replaced by per-route
+// budgets. The total summed every lazy chunk (a number no visit downloads)
+// and grew whenever code moved OUT of a page into a lazy tab or dialog, so it
+// penalised the splitting that keeps pages light. Each route's first visit is
+// priced instead: the startup chunks plus the route's static import graph,
+// from dist/.vite/manifest.json.
+const BUDGET_ROUTE_GZ = 290 * 1024;
+// Routes that carry a heavy library on purpose (~5% over measured).
+const BUDGET_ROUTE_EXCEPTIONS_GZ = {
+    // @xyflow/react graph canvas
+    'src/pages/workflows/WorkflowBuilder.tsx': 480 * 1024,
+    'src/pages/workflows/WorkflowRunDetail.tsx': 450 * 1024,
+    // recharts
+    'src/pages/AnalyticsProject.tsx': 375 * 1024,
+    'src/pages/AnalyticsTask.tsx': 375 * 1024,
+    'src/pages/FleetPerformance.tsx': 365 * 1024,
+    'src/pages/Analytics.tsx': 365 * 1024,
+    // xterm.js
+    'src/pages/TerminalLayout.tsx': 360 * 1024,
+    'src/pages/TerminalSession.tsx': 345 * 1024,
+};
 const BUDGET_RECHARTS_GZ = 130 * 1024;
 // Per-MUI-bucket budgets (measured 2026-07-01, +5 KB gz headroom).
 const BUDGET_MUI_CORE_GZ = 90 * 1024;   // measured 85.3 KB gz
@@ -96,6 +117,35 @@ function chunkBudgetCheck(breaches, chunk, budget, label) {
     }
 }
 
+// What a first visit to each lazily-loaded page downloads: the entry's static
+// import closure (startup) plus the page module's own static closure.
+function routeCosts() {
+    const manifestPath = join(__dirname, '..', 'dist', '.vite', 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const gzOf = new Map();
+    const gz = (file) => {
+        if (!gzOf.has(file)) gzOf.set(file, gzippedSize(join(__dirname, '..', 'dist', file)));
+        return gzOf.get(file);
+    };
+    const closure = (key, acc = new Set()) => {
+        const chunk = manifest[key];
+        if (!chunk || acc.has(chunk.file)) return acc;
+        acc.add(chunk.file);
+        for (const dep of chunk.imports ?? []) closure(dep, acc);
+        return acc;
+    };
+    const entry = Object.keys(manifest).find((k) => manifest[k].isEntry);
+    const startup = closure(entry);
+    return (manifest[entry].dynamicImports ?? [])
+        .filter((k) => k.startsWith('src/pages/'))
+        .map((route) => {
+            const files = closure(route, new Set(startup));
+            const total = [...files].filter((f) => f.endsWith('.js')).reduce((n, f) => n + gz(f), 0);
+            return { route, gz: total, budget: BUDGET_ROUTE_EXCEPTIONS_GZ[route] ?? BUDGET_ROUTE_GZ };
+        })
+        .sort((a, b) => b.gz - a.gz);
+}
+
 function main() {
     const chunks = loadChunks().sort((a, b) => b.gz - a.gz);
     const totalGz = chunks.reduce((sum, c) => sum + c.gz, 0);
@@ -114,10 +164,13 @@ function main() {
             `initial chunk: ${fmtKb(initialGz)} gz (budget ${fmtKb(BUDGET_INITIAL_GZ)}, over by ${fmtKb(initialGz - BUDGET_INITIAL_GZ)})`,
         );
     }
-    if (totalGz > BUDGET_TOTAL_GZ) {
-        breaches.push(
-            `total app: ${fmtKb(totalGz)} gz (budget ${fmtKb(BUDGET_TOTAL_GZ)}, over by ${fmtKb(totalGz - BUDGET_TOTAL_GZ)})`,
-        );
+    const routes = routeCosts();
+    for (const r of routes) {
+        if (r.gz > r.budget) {
+            breaches.push(
+                `route ${r.route}: ${fmtKb(r.gz)} gz on first visit (budget ${fmtKb(r.budget)}, over by ${fmtKb(r.gz - r.budget)})`,
+            );
+        }
     }
     if (rechartsChunk && rechartsChunk.gz > BUDGET_RECHARTS_GZ) {
         breaches.push(
@@ -136,7 +189,11 @@ function main() {
     }
     console.log('');
     console.log(`Initial chunk total: ${fmtKb(initialGz)} gz (budget ${fmtKb(BUDGET_INITIAL_GZ)})`);
-    console.log(`Total app size:      ${fmtKb(totalGz)} gz (budget ${fmtKb(BUDGET_TOTAL_GZ)})`);
+    console.log(`Total app size:      ${fmtKb(totalGz)} gz (all chunks; not budgeted, see ADR 0031)`);
+    console.log(`Heaviest first visits (startup + route):`);
+    for (const r of routes.slice(0, 8)) {
+        console.log(`  ${r.route.padEnd(48)} ${fmtKb(r.gz).padStart(10)} gz (budget ${fmtKb(r.budget)})`);
+    }
     if (rechartsChunk) {
         console.log(
             `Recharts chunk:      ${fmtKb(rechartsChunk.gz)} gz (budget ${fmtKb(BUDGET_RECHARTS_GZ)})`,

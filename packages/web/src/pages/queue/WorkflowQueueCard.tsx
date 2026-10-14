@@ -6,17 +6,18 @@ import LinearProgress from '@mui/material/LinearProgress';
 import Link from '@mui/material/Link';
 import Switch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
-import type { IAgent, IWorkflowQueueEntry, IWorkflowRunSummary } from '@atlas/shared';
+import type { IWorkflowQueueEntry, IWorkflowRunSummary } from '@atlas/shared';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { itemPath } from '../../utils/itemPath.js';
 import { formatAbsolute } from '../../utils/time.js';
 import { TRIGGER_LABEL, agentLabel } from '../workflows/labels.js';
 import { WorkflowRunStatusChip } from '../workflows/WorkflowRunStatusChip.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface Props {
     entry: IWorkflowQueueEntry;
     projectName: string;
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     onToggleActive: (active: boolean) => void;
     onStart: (taskId: string) => void;
     starting: boolean;
@@ -32,7 +33,7 @@ const NODE_LABEL = {
     end: 'Delivering',
 } as const;
 
-function stepName(run: IWorkflowRunSummary, agentsById: Map<string, IAgent>): string {
+function stepName(run: IWorkflowRunSummary, agentsById: Map<string, AgentSummary>): string {
     const node = run.graph_snapshot.nodes.find((n) => n.id === run.current_node_id);
     if (!node) return NODE_LABEL.start;
     if (node.type === 'agent')

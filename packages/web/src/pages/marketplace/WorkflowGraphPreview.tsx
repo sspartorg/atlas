@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
-import type { IAgent, IWorkflow, IWorkflowGraph } from '@atlas/shared';
+import type { IWorkflow, IWorkflowGraph } from '@atlas/shared';
 import { WorkflowCanvas } from '../workflows/WorkflowCanvas.js';
 import type { ICanvasContext } from '../workflows/WorkflowNodes.js';
 import { toFlow } from '../workflows/graph.js';
+import type { AgentSummary } from '../../api/types.js';
 
 // Loaded lazily by the marketplace workflow detail page so `@xyflow/react`
 // stays in the workflow chunk.
@@ -13,7 +14,7 @@ interface Props {
     /** A Sub-tasks step's `sub_workflow_id` → that sub-workflow's name. */
     subNames: Map<string, string>;
     delivery: ICanvasContext['delivery'];
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
 }
 
 export function WorkflowGraphPreview({ graph, subNames, delivery, agentsById }: Props) {

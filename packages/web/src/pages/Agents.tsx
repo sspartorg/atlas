@@ -19,7 +19,7 @@ import { BRAND_SECONDARY_ACCENTS, DEFAULT_MODEL_BY_CLI } from '@atlas/shared';
 import { CLI_OPTIONS } from '../utils/cliPresentation.js';
 import { AgentCard, ModelSelect } from '../components/index.js';
 import { AccentColorPicker } from './settings/AccentColorPicker.js';
-import { useAgents, useUpdateAgent } from '../hooks/useAgents.js';
+import { useAgentsWithPrompts, useUpdateAgent } from '../hooks/useAgents.js';
 import { useAgentFavorites } from '../hooks/useAgentFavorites.js';
 import { useQueueDepthByAgent } from '../hooks/useQueueDepthByAgent.js';
 import { useAgentQualification } from '../hooks/useAgentTests.js';
@@ -66,7 +66,7 @@ export function Agents() {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
     const toast = useToast();
-    const { data: agents, isLoading, isError, refetch } = useAgents();
+    const { data: agents, isLoading, isError, refetch } = useAgentsWithPrompts();
     const updateAgent = useUpdateAgent();
     const favorites = useAgentFavorites();
 
@@ -105,7 +105,7 @@ export function Agents() {
     const { data: qualifications } = useAgentQualification();
     const qualificationByAgentId = useMemo(
         () => new Map((qualifications ?? []).map((q) => [q.agent_id, q.verdict])),
-        [qualifications],
+        [qualifications]
     );
     const upgradeByAgentId = useMemo(() => {
         const map = new Map<string, boolean>();

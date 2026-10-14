@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTabParam } from '../hooks/useTabParam.js';
 import Box from '@mui/material/Box';
@@ -25,19 +25,41 @@ import { AgentBreadcrumbs } from './agents/AgentBreadcrumbs.js';
 import { AgentHero } from './agents/AgentHero.js';
 import { AgentSidebar } from './agents/AgentSidebar.js';
 import { OverviewTab } from './agents/OverviewTab.js';
-import { PromptTab } from './agents/PromptTab.js';
-import { RunsTab } from './agents/RunsTab.js';
-import { MemoryTab } from './agents/MemoryTab.js';
-import { RunNowDialog } from './agents/RunNowDialog.js';
-import { DuplicateAgentModal } from './agents/DuplicateAgentModal.js';
-import { EditAgentColorModal } from './agents/EditAgentColorModal.js';
-import { GlyphPickerModal } from './agents/GlyphPickerModal.js';
-import { DeleteAgentModal } from './agents/DeleteAgentModal.js';
 import { MarketplaceUpgradeBanner } from './agents/MarketplaceUpgradeBanner.js';
-import { TestsTabContent } from './agents/TestsTabContent.js';
-import { PerformanceTabContent } from './agents/PerformanceTabContent.js';
 import { useSetPageTitle } from '../components/shell/index.js';
 import { TeamManagedAlert } from '../components/TeamManagedAlert.js';
+import { lazyNamed } from '../utils/lazyNamed.js';
+
+// Only the default tab (Overview) loads with the page; the other tabs and
+// every dialog load when opened. The Performance tab alone pulled in the
+// charting library (94 KB), and the page couldn't start its own API calls
+// until it had arrived (ADR 0030).
+const PromptTab = lazyNamed(() => import('./agents/PromptTab.js'), 'PromptTab');
+const RunsTab = lazyNamed(() => import('./agents/RunsTab.js'), 'RunsTab');
+const MemoryTab = lazyNamed(() => import('./agents/MemoryTab.js'), 'MemoryTab');
+const RunNowDialog = lazyNamed(() => import('./agents/RunNowDialog.js'), 'RunNowDialog');
+const DuplicateAgentModal = lazyNamed(
+    () => import('./agents/DuplicateAgentModal.js'),
+    'DuplicateAgentModal'
+);
+const EditAgentColorModal = lazyNamed(
+    () => import('./agents/EditAgentColorModal.js'),
+    'EditAgentColorModal'
+);
+const GlyphPickerModal = lazyNamed(
+    () => import('./agents/GlyphPickerModal.js'),
+    'GlyphPickerModal'
+);
+const DeleteAgentModal = lazyNamed(
+    () => import('./agents/DeleteAgentModal.js'),
+    'DeleteAgentModal'
+);
+const TestsTabContent = lazyNamed(() => import('./agents/TestsTabContent.js'), 'TestsTabContent');
+// Its module also exports helpers, which lazyNamed's component-only type
+// doesn't allow, so it goes through React.lazy directly.
+const PerformanceTabContent = lazy(() =>
+    import('./agents/PerformanceTabContent.js').then((m) => ({ default: m.PerformanceTabContent }))
+);
 
 const TAB_KEYS = ['overview', 'prompt', 'tests', 'performance', 'runs', 'memory'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
@@ -134,7 +156,9 @@ export function AgentDetail() {
     if (!agent || !view) {
         return (
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4, textAlign: 'center' }}>
-                <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>Agent not found</Typography>
+                <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>
+                    Agent not found
+                </Typography>
                 <Button onClick={() => navigate('/agents')}>Back to Agents</Button>
             </Box>
         );
@@ -324,11 +348,19 @@ export function AgentDetail() {
                     </Box>
 
                     {tab === 'overview' && <OverviewTab agent={agent} view={view} />}
-                    {tab === 'prompt' && <PromptTab agent={agent} />}
-                    {tab === 'tests' && <TestsTabContent agent={agent} />}
-                    {tab === 'performance' && <PerformanceTabContent agent={agent} />}
-                    {tab === 'runs' && <RunsTab agent={agent} runs={runs ?? []} />}
-                    {tab === 'memory' && <MemoryTab agent={agent} memory={memory} />}
+                    <Suspense
+                        fallback={
+                            <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
+                                <CircularProgress size={24} />
+                            </Box>
+                        }
+                    >
+                        {tab === 'prompt' && <PromptTab agent={agent} />}
+                        {tab === 'tests' && <TestsTabContent agent={agent} />}
+                        {tab === 'performance' && <PerformanceTabContent agent={agent} />}
+                        {tab === 'runs' && <RunsTab agent={agent} runs={runs ?? []} />}
+                        {tab === 'memory' && <MemoryTab agent={agent} memory={memory} />}
+                    </Suspense>
                 </Box>
 
                 <Box sx={{ position: { xs: 'static', md: 'sticky' }, top: 24 }}>
@@ -344,40 +376,46 @@ export function AgentDetail() {
             {/* Conditionally mount modals so their internal hooks
                 (DuplicateAgentModal needs the full agent list) don't fire until
                 the Owner actually opens them. Each modal still gets its
-                expected `open` prop in case React Query needs it for warmup. */}
-            {duplicateOpen && (
-                <DuplicateAgentModal
-                    open
-                    agent={agent}
-                    existingIds={allAgents.map((w) => w.id)}
-                    onClose={() => setDuplicateOpen(false)}
-                />
-            )}
+                expected `open` prop in case React Query needs it for warmup.
+                Their code loads on first open too (null fallback: a dialog
+                appearing a beat later beats a spinner flash). */}
+            <Suspense fallback={null}>
+                {duplicateOpen && (
+                    <DuplicateAgentModal
+                        open
+                        agent={agent}
+                        existingIds={allAgents.map((w) => w.id)}
+                        onClose={() => setDuplicateOpen(false)}
+                    />
+                )}
 
-            {runNowOpen && <RunNowDialog open agent={agent} onClose={() => setRunNowOpen(false)} />}
+                {runNowOpen && (
+                    <RunNowDialog open agent={agent} onClose={() => setRunNowOpen(false)} />
+                )}
 
-            {colorOpen && (
-                <EditAgentColorModal open agent={agent} onClose={() => setColorOpen(false)} />
-            )}
+                {colorOpen && (
+                    <EditAgentColorModal open agent={agent} onClose={() => setColorOpen(false)} />
+                )}
 
-            {glyphOpen && (
-                <GlyphPickerModal
-                    open
-                    agent={agent}
-                    currentGlyph={view.glyph}
-                    onClose={() => setGlyphOpen(false)}
-                />
-            )}
+                {glyphOpen && (
+                    <GlyphPickerModal
+                        open
+                        agent={agent}
+                        currentGlyph={view.glyph}
+                        onClose={() => setGlyphOpen(false)}
+                    />
+                )}
 
-            {deleteOpen && (
-                <DeleteAgentModal
-                    open
-                    agent={agent}
-                    busy={deleting}
-                    onConfirm={confirmDelete}
-                    onClose={() => setDeleteOpen(false)}
-                />
-            )}
+                {deleteOpen && (
+                    <DeleteAgentModal
+                        open
+                        agent={agent}
+                        busy={deleting}
+                        onConfirm={confirmDelete}
+                        onClose={() => setDeleteOpen(false)}
+                    />
+                )}
+            </Suspense>
         </Box>
     );
 }

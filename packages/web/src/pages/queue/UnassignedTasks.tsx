@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import type { ITask, IWorkflow } from '@atlas/shared';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { itemPath } from '../../utils/itemPath.js';
+import { ShowMoreButton, usePaged } from '../../components/ShowMore.js';
 
 interface Props {
     tasks: ITask[];
@@ -17,6 +18,7 @@ interface Props {
 }
 
 export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props) {
+    const paged = usePaged(tasks);
     if (tasks.length === 0) return null;
     return (
         <Box component="section" aria-label="Needs a workflow" sx={{ mt: 8 }}>
@@ -41,7 +43,7 @@ export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props
                     borderRadius: '12px',
                 }}
             >
-                {tasks.map((t, i) => {
+                {paged.visible.map((t, i) => {
                     const options = workflows.filter((w) => w.project_id === t.project_id);
                     return (
                         <Box
@@ -125,6 +127,7 @@ export function UnassignedTasks({ tasks, workflows, projectName, onPick }: Props
                     );
                 })}
             </Box>
+            <ShowMoreButton remaining={paged.remaining} onMore={paged.more} />
         </Box>
     );
 }

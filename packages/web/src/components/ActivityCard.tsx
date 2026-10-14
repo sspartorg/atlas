@@ -25,7 +25,6 @@ import {
     type IIssueEvent,
     type IssueType,
     type IssueStatus,
-    type IAgent,
     type IAgentRun,
 } from '@atlas/shared';
 import IconButton from '@mui/material/IconButton';
@@ -39,6 +38,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { relativeTime, formatAbsolute } from '../utils/time.js';
 import { InitialAvatar } from './InitialAvatar.js';
 import { MarkdownPreview } from './MarkdownPreview.js';
+import type { AgentSummary } from '../api/types.js';
 
 interface Props {
     issueType: IssueType;
@@ -46,7 +46,7 @@ interface Props {
     /** When supplied, skips the internal useActivity fetch. */
     activity?: IActivityItem[];
     /** When supplied, skips the internal useAgents fetch. */
-    agents?: IAgent[];
+    agents?: AgentSummary[];
 }
 
 // B11 — human-friendly labels for the `field_updated` activity entries.
@@ -100,7 +100,7 @@ function CommentRow({
     ownerAccent,
 }: {
     comment: IComment;
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
 }) {
@@ -417,7 +417,7 @@ function EventRow({
     ownerAccent,
 }: {
     event: IIssueEvent;
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
 }) {
@@ -661,14 +661,14 @@ function useActivityData(
     issueType: IssueType,
     issueId: string,
     propActivity: IActivityItem[] | undefined,
-    propAgents: IAgent[] | undefined
+    propAgents: AgentSummary[] | undefined
 ) {
     const { data: fetchedActivity = [] } = useActivity(issueType, issueId, {
         enabled: !propActivity,
     });
     const { data: fetchedAgents = [] } = useAgents({ enabled: !propAgents });
     const items: IActivityItem[] = propActivity ?? fetchedActivity;
-    const agents: IAgent[] = propAgents ?? fetchedAgents;
+    const agents: AgentSummary[] = propAgents ?? fetchedAgents;
     const { data: settings } = useSettings();
     const agentsById = useMemo(() => new Map(agents.map((w) => [w.id, w])), [agents]);
     const ownerName = settings?.owner_name ?? 'Owner';

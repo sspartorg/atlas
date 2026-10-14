@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { ComponentType } from 'react';
 import Box from '@mui/material/Box';
 import Tooltip from '@mui/material/Tooltip';
@@ -172,25 +173,32 @@ interface HeaderMascotProps {
 // within a round-trip of an agent picking up work. Honors
 // prefers-reduced-motion by pausing the Lottie player rather than swapping
 // to a static frame, so the user still sees the "active" tint change.
-// The mascot is decorative: its ~50 KB player and the animation JSON wait
-// until the page has loaded and the browser is idle, so on a slow connection
-// they don't compete with the route's own code and data. The static ring
-// shows until then. Returns a cancel function.
-function afterLoadWhenIdle(run: () => void): () => void {
+// The mascot is decorative: its ~43 KB player and the animation JSON wait
+// until the page has loaded AND the app has no data requests in flight, then
+// for an idle moment. `load` alone fired before the route's own code and API
+// calls had started, so on slow 4G the player competed with the dashboard's
+// data (ADR 0030). The static ring shows until then. Returns a cancel.
+function whenQuietThenIdle(isQuiet: () => boolean, run: () => void): () => void {
     let idleId: number | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    // A page that never goes quiet (a polling query) still gets its mascot.
+    const giveUpAt = Date.now() + 8000;
     const schedule = () => {
+        if (cancelled) return;
+        if (Date.now() < giveUpAt && (document.readyState !== 'complete' || !isQuiet())) {
+            timer = setTimeout(schedule, 250);
+            return;
+        }
         if (typeof window.requestIdleCallback === 'function') {
             idleId = window.requestIdleCallback(run, { timeout: 3000 });
         } else {
             timer = setTimeout(run, 0);
         }
     };
-    const onLoad = () => schedule();
-    if (document.readyState === 'complete') schedule();
-    else window.addEventListener('load', onLoad, { once: true });
+    schedule();
     return () => {
-        window.removeEventListener('load', onLoad);
+        cancelled = true;
         if (idleId !== undefined) window.cancelIdleCallback(idleId);
         if (timer !== undefined) clearTimeout(timer);
     };
@@ -203,10 +211,13 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
     const [workingData, setWorkingData] = useState<MascotData | null>(null);
     const [LottieComponent, setLottieComponent] = useState<LottieDefault | null>(null);
     const lottieRef = useRef<LottieRefCurrentProps | null>(null);
+    const queryClient = useQueryClient();
+    // Read through a ref-stable callback so the effects below run once.
+    const isQuiet = useCallback(() => queryClient.isFetching() === 0, [queryClient]);
 
     useEffect(() => {
         let cancelled = false;
-        const cancelIdle = afterLoadWhenIdle(() => {
+        const cancelIdle = whenQuietThenIdle(isQuiet, () => {
             void loadLottie().then((c) => {
                 if (!cancelled) setLottieComponent(() => c);
             });
@@ -215,7 +226,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
             cancelled = true;
             cancelIdle();
         };
-    }, []);
+    }, [isQuiet]);
 
     // Pick a stable variant pair for the lifetime of this mount. Re-picking
     // when hasActiveRuns flips would feel jittery — we want one bot per
@@ -227,7 +238,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
 
     useEffect(() => {
         let cancelled = false;
-        const cancelIdle = afterLoadWhenIdle(() => {
+        const cancelIdle = whenQuietThenIdle(isQuiet, () => {
             void (async () => {
                 const [idle, working] = await Promise.all([
                     loadMascot(variantUrls.idle),
@@ -242,7 +253,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
             cancelled = true;
             cancelIdle();
         };
-    }, [variantUrls]);
+    }, [variantUrls, isQuiet]);
 
     const prefersReducedMotion = useMemo(() => {
         if (typeof window === 'undefined' || !window.matchMedia) return false;

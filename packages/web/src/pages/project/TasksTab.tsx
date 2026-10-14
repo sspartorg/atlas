@@ -1,14 +1,15 @@
 import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
-import type { ITaskListItem, IProject, IAgent } from '@atlas/shared';
+import type { ITaskListItem, IProject } from '@atlas/shared';
 import { useDeferredMount } from '../../hooks/useDeferredMount.js';
 import { TasksTabContent } from './TasksTabContent.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface Props {
     projectId: string;
     tasks: ITaskListItem[] | undefined;
     projects: IProject[];
-    agents: IAgent[];
+    agents: AgentSummary[];
     ownerName: string;
     ownerAccent: string;
 }

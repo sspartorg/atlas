@@ -1,10 +1,11 @@
-// Material Symbols the app renders. The icon font is requested with
-// `icon_names=` so Google serves only these glyphs: ~26 KB instead of the
-// ~540 KB full font, which was 40% of a cold dashboard load on slow 4G.
+// Material Symbols the app renders. The self-hosted icon font
+// (src/assets/fonts/material-symbols-rounded-all.woff2) carries only these
+// glyphs: ~26 KB instead of the ~540 KB full font (ADR 0030).
 //
 // Adding an icon? Add its name here (keep the list sorted; Google requires
-// it). `icons.test.ts` scans the web, shared and API sources and fails on any icon
-// name that's used but missing, so a forgotten one can't ship as raw text.
+// it), then run `pnpm -F @atlas/web fonts:fetch` to rebuild the font.
+// `icons.test.ts` fails on any icon used in the web, shared or API sources
+// but missing here, and while the font was built from a different list.
 // The list is a superset: a plain string that happens to be an icon name
 // ('start', 'code'...) is in it too, which costs a few bytes and nothing else.
 // prettier-ignore
@@ -46,15 +47,3 @@ const ICON_SET: ReadonlySet<string> = new Set(ICONS);
 export function iconOr(name: string | null | undefined, fallback: string): string {
     return name && ICON_SET.has(name) ? name : fallback;
 }
-
-// Only FILL varies in the app (0/1); the other axes stay at the font's
-// defaults. Requesting their full ranges made current Chrome download the
-// whole 5.2 MB variable font.
-//
-// `display=block` is load-bearing, not a tweak. Without it the face resolves
-// to `font-display: auto`, and during the swap period every icon paints as its
-// raw ligature text. `block` keeps the glyph box blank until the font arrives.
-// Never use `swap` on an icon font.
-export const ICON_FONT_URL =
-    'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0' +
-    `&icon_names=${ICONS.join(',')}&display=block`;

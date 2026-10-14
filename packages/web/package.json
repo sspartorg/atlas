@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
+    "fonts:fetch": "node scripts/fetch-fonts.mjs",
     "bundle:check": "node scripts/check-bundle-budget.mjs",
     "bundle:analyze": "vite build --mode analyze",
     "typecheck": "tsc --noEmit",

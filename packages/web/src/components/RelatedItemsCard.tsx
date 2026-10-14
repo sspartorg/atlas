@@ -15,7 +15,6 @@ import type {
     IIssueLinkRow,
     IItemExternalLink,
     IssueType,
-    IAgent,
 } from '@atlas/shared';
 import { useIssueLinks, useDeleteIssueLink } from '../hooks/useIssueLinks.js';
 import {
@@ -32,6 +31,7 @@ import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
 import { itemPath } from '../utils/itemPath.js';
+import type { AgentSummary } from '../api/types.js';
 
 interface Props {
     issueType: IssueType;
@@ -43,7 +43,7 @@ interface Props {
      *  supplied, the inner useIssueExternalLinks fetch is skipped. */
     externalLinks?: IItemExternalLink[];
     /** Pre-loaded agents from the parent's /full response. */
-    agents?: IAgent[];
+    agents?: AgentSummary[];
     /**
      * Open the (parent-owned) LinkPickerDialog with the given relation
      * mode. Lifted to the parent so the same dialog instance serves both
@@ -114,7 +114,7 @@ export function RelatedItemsCard({
     const jiraLinks = allExtLinks.filter(
         (l) => l.link_kind === 'jira_issue' && /^https?:\/\//i.test(l.url)
     );
-    const agents: IAgent[] = propAgents ?? fetchedAgents;
+    const agents: AgentSummary[] = propAgents ?? fetchedAgents;
 
     const deleteLink = useDeleteIssueLink(issueType, issueId);
     const deleteExtLink = useDeleteIssueExternalLink(issueType, issueId);

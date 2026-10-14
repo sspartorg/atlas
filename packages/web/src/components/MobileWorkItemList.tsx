@@ -1,20 +1,20 @@
 import type { ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IAgent } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
 import { AgentChip } from './AgentChip.js';
 import { KindIcon } from './KindIcon.js';
 import { LiveDot } from './LiveDot.js';
 import { ATLAS_PALETTE, TOUCH } from '../theme/tokens.js';
 import type { WorkItemTableRow } from './WorkItemTable.js';
+import type { AgentSummary } from '../api/types.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
 interface Props {
     title?: string;
     rows: WorkItemTableRow[];
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
     onRowClick: (row: WorkItemTableRow) => void;

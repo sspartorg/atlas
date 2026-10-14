@@ -1,7 +1,7 @@
 # 0030. Budget What a Visit Downloads: Initial 230 KB, Total 900 KB
 
 **Date:** 2026-10-14
-**Status:** Accepted
+**Status:** Accepted — decision 6's total-app budget superseded by 0031 (per-route budgets)
 
 ## Context
 

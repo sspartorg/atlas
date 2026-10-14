@@ -53,6 +53,12 @@ function compressedImmutableAssets(): Plugin {
     configurePreviewServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = (req.url ?? '').split('?')[0] ?? '';
+        // The build manifest is for the bundle budget, not for browsers.
+        if (url.startsWith('/.vite/')) {
+          res.statusCode = 404;
+          res.end();
+          return;
+        }
         if (!url.startsWith('/assets/')) return next();
         const file = path.join(assetsDir, url.slice('/assets/'.length));
         // Never serve outside dist/assets (`..` in the URL).
@@ -151,6 +157,10 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     target: 'es2022',
+    // dist/.vite/manifest.json — the chunk import graph the bundle budget
+    // walks to price each route's first visit (scripts/check-bundle-budget.mjs).
+    // The preview plugin below refuses to serve it.
+    manifest: true,
     // Don't ship sourcemaps to the production bundle — they leak source
     // paths and roughly double the artifact size. Pages are already
     // code-split via `lazyNamed`, so manualChunks just pulls the largest

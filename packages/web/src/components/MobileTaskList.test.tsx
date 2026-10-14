@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeTaskListItem, makeProject } from '../test-utils/factories.js';
 import { MobileTaskList } from './MobileTaskList.js';
@@ -154,5 +155,22 @@ describe('MobileTaskList', () => {
         );
         expect(screen.getByText('First')).toBeInTheDocument();
         expect(screen.getByText('Last')).toBeInTheDocument();
+    });
+});
+
+describe('MobileTaskList paging', () => {
+    it('renders 50 cards at a time and grows on "Show more"', async () => {
+        const rows = Array.from({ length: 120 }, (_, i) =>
+            makeTaskListItem({ id: `ATL-${i}`, title: `Task ${i}` })
+        );
+        renderWithProviders(
+            <MobileTaskList rows={rows} projects={[]} agents={[]} ownerName="O" ownerAccent="" />
+        );
+        expect(screen.getAllByRole('button', { name: /Task \d+/ })).toHaveLength(50);
+        await userEvent.click(screen.getByRole('button', { name: 'Show 50 more of 70' }));
+        expect(screen.getAllByRole('button', { name: /Task \d+/ })).toHaveLength(100);
+        await userEvent.click(screen.getByRole('button', { name: 'Show 20 more of 20' }));
+        expect(screen.getAllByRole('button', { name: /Task \d+/ })).toHaveLength(120);
+        expect(screen.queryByRole('button', { name: /more of/ })).not.toBeInTheDocument();
     });
 });

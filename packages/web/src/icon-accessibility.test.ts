@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { globSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ICON_FONT_URL } from './theme/icons.js';
 
 // G-015 — two coupled invariants about Material-Symbols icons, enforced over
 // the source because the failure is a *convention* drifting rather than one
@@ -138,14 +137,22 @@ describe('Material-Symbols icon accessibility (G-015)', () => {
 // `swap` is right for the Inter / JetBrains Mono text faces in index.html and
 // wrong here — which is precisely why this is easy to "tidy" into consistency.
 describe('Material Symbols font loading', () => {
-    it('requests display=block so icons never paint as ligature text', () => {
-        // The URL is built in theme/icons.ts (subset to the icons in use) and
-        // linked from main.tsx.
-        expect(ICON_FONT_URL).toMatch(
-            /^https:\/\/fonts\.googleapis\.com\/css2\?family=Material\+Symbols/
+    it('blocks (never swaps) the icon font so icons never paint as ligature text', () => {
+        // Self-hosted since ADR 0030: src/theme/fonts.css, imported by main.tsx.
+        const css = readFileSync(join(SRC, 'theme', 'fonts.css'), 'utf8');
+        const iconFace = css
+            .split('@font-face')
+            .find((block) => block.includes("'Material Symbols Rounded'"));
+        expect(iconFace, 'Material Symbols @font-face missing from fonts.css').toBeTruthy();
+        expect(iconFace).toContain('font-display: block');
+        expect(readFileSync(join(SRC, 'main.tsx'), 'utf8')).toContain(
+            "import './theme/fonts.css';"
         );
-        expect(ICON_FONT_URL).toContain('display=block');
-        expect(ICON_FONT_URL).not.toContain('display=swap');
-        expect(readFileSync(join(SRC, 'main.tsx'), 'utf8')).toContain('link.href = ICON_FONT_URL');
+    });
+
+    it('loads no font from a third-party origin', () => {
+        const html = readFileSync(join(SRC, '..', 'index.html'), 'utf8');
+        const css = readFileSync(join(SRC, 'theme', 'fonts.css'), 'utf8');
+        expect(html + css).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
     });
 });

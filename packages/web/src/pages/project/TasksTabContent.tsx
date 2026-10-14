@@ -1,15 +1,16 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
-import type { ITaskListItem, IProject, IAgent } from '@atlas/shared';
+import type { ITaskListItem, IProject } from '@atlas/shared';
 import { TaskTable } from '../../components/index.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface Props {
     projectId: string;
     tasks: ITaskListItem[];
     projects: IProject[];
-    agents: IAgent[];
+    agents: AgentSummary[];
     ownerName: string;
     ownerAccent: string;
 }

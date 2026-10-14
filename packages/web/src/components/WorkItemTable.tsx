@@ -2,7 +2,7 @@ import { memo, useCallback, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
-import type { IssueStatus, IssueType, IAgent, SubTaskStatus } from '@atlas/shared';
+import type { IssueStatus, IssueType, SubTaskStatus } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
 import { AgentChip } from './AgentChip.js';
 import { KindIcon } from './KindIcon.js';
@@ -12,6 +12,7 @@ import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MobileWorkItemList } from './MobileWorkItemList.js';
 import { useShellVirtualizer } from '../hooks/useShellVirtualizer.js';
+import type { AgentSummary } from '../api/types.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -72,7 +73,7 @@ interface SortSpec {
 interface Props {
     title?: string;
     rows: WorkItemTableRow[];
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
     onRowClick: (row: WorkItemTableRow) => void;
@@ -93,8 +94,8 @@ interface Props {
 // longer reconcile every row's children.
 interface WorkItemRowProps {
     row: WorkItemTableRow;
-    reporter: IAgent | null;
-    assignee: IAgent | null;
+    reporter: AgentSummary | null;
+    assignee: AgentSummary | null;
     ownerName: string;
     ownerAccent: string;
     showLiveDot: boolean;
@@ -131,7 +132,13 @@ const WorkItemRow = memo(function WorkItemRow({
             style={
                 offsetY === undefined
                     ? undefined
-                    : { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${offsetY}px)` }
+                    : {
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          transform: `translateY(${offsetY}px)`,
+                      }
             }
             sx={{
                 display: 'grid',
@@ -258,7 +265,7 @@ const WorkItemRow = memo(function WorkItemRow({
 // so the rest of the page chrome is unaffected.
 interface VirtualBodyProps {
     rows: WorkItemTableRow[];
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
     showLiveDot: boolean;
@@ -279,7 +286,10 @@ function VirtualBody({
     formatRelative,
     gridTemplate,
 }: VirtualBodyProps) {
-    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(rows.length, ROW_HEIGHT_PX);
+    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(
+        rows.length,
+        ROW_HEIGHT_PX
+    );
 
     const items = virtualizer.getVirtualItems();
     const totalHeight = virtualizer.getTotalSize();

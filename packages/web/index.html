@@ -7,12 +7,10 @@
     <link rel="icon" type="image/png" sizes="any" href="/atlas.png" />
     <title>Atlas</title>
     <meta name="description" content="Atlas runs AI agent workflows on your projects: plan, build and test a Task on one branch and one PR." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted (src/theme/fonts.css) and deliberately NOT
+         preloaded: on slow 4G a preload competes for bandwidth with the JS that
+         has to run before anything renders, and measured 0.5 s slower to first
+         content (ADR 0030). Text swaps in; icons arrive before content does. -->
     <style>
       *, *::before, *::after { box-sizing: border-box; }
       html, body, #root { height: 100%; margin: 0; padding: 0; }

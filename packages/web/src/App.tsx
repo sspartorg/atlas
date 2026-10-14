@@ -189,33 +189,45 @@ function RouteGuard() {
     const location = useLocation();
     const { data: settings, isLoading } = useSettings();
 
-    if (isLoading) {
-        // F-003 fix: use the BrandedFallback so the Atlas logo is visible
-        // during the settings fetch. The previous bare CircularProgress on
-        // pageBg looked like an outage in dark mode (#050505 surface, tiny
-        // green dot — no chrome, no brand).
-        return (
+    // F-003 fix: use the BrandedFallback so the Atlas logo is visible
+    // during the settings fetch. The previous bare CircularProgress on
+    // pageBg looked like an outage in dark mode (#050505 surface, tiny
+    // green dot — no chrome, no brand).
+    //
+    // The route renders during the fetch too, hidden, so its code chunk and
+    // its API calls start now instead of after settings arrive (ADR 0030: on
+    // slow 4G that wait chained onto every cold load). The wrapper keeps the
+    // route at one position in the tree, so revealing it never remounts it;
+    // `display: contents` makes the wrapper invisible to layout.
+    let route = <Outlet />;
+    if (!isLoading && !settings?.onboarding_complete && location.pathname !== '/onboarding') {
+        route = <Navigate to="/onboarding" replace />;
+    } else if (!isLoading && settings?.onboarding_complete && location.pathname === '/onboarding') {
+        route = <Navigate to="/" replace />;
+    }
+    return (
+        <>
+            {isLoading && (
+                <Box
+                    sx={{
+                        minHeight: '100vh',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: ATLAS_PALETTE.pageBg,
+                    }}
+                >
+                    <BrandedFallback />
+                </Box>
+            )}
             <Box
-                sx={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: ATLAS_PALETTE.pageBg,
-                }}
+                sx={{ display: isLoading ? 'none' : 'contents' }}
+                aria-hidden={isLoading || undefined}
             >
-                <BrandedFallback />
+                {route}
             </Box>
-        );
-    }
-
-    if (!settings?.onboarding_complete && location.pathname !== '/onboarding') {
-        return <Navigate to="/onboarding" replace />;
-    }
-    if (settings?.onboarding_complete && location.pathname === '/onboarding') {
-        return <Navigate to="/" replace />;
-    }
-    return <Outlet />;
+        </>
+    );
 }
 
 function Wrap({ name, children }: { name: string; children: React.ReactNode }) {

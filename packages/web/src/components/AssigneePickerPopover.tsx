@@ -3,12 +3,13 @@ import Typography from '@mui/material/Typography';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import ListSubheader from '@mui/material/ListSubheader';
-import type { IAgent, SdlcRole } from '@atlas/shared';
+import type { SdlcRole } from '@atlas/shared';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { agentSubtitle } from '../pages/agents/agentViewModel.js';
 import { InitialAvatar } from './InitialAvatar.js';
+import type { AgentSummary } from '../api/types.js';
 
 interface Props {
     anchorEl: HTMLElement | null;
@@ -37,11 +38,11 @@ export function AssigneePickerPopover({
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
 
-    const activeAgents = agents.filter((w: IAgent) => w.status === 'active');
+    const activeAgents = agents.filter((w: AgentSummary) => w.status === 'active');
     const suggested = suggestedRole ? activeAgents.filter((w) => w.role_id === suggestedRole) : [];
     const others = activeAgents.filter((w) => !suggested.includes(w));
 
-    const agentItem = (w: IAgent) => (
+    const agentItem = (w: AgentSummary) => (
         <MenuItem
             key={w.id}
             onClick={() => {

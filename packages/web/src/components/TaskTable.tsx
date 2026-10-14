@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import AddRounded from '@mui/icons-material/AddRounded';
 import { useNavigate } from 'react-router-dom';
-import type { ITaskListItem, IProject, IAgent } from '@atlas/shared';
+import type { ITaskListItem, IProject } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
 import { ProjectTag } from './ProjectTag.js';
 import { AgentChip } from './AgentChip.js';
@@ -15,13 +15,14 @@ import { MobileTaskList } from './MobileTaskList.js';
 import { relativeTime } from '../utils/time.js';
 import { TestItemTag } from './TestItemTag.js';
 import { useShellVirtualizer } from '../hooks/useShellVirtualizer.js';
+import type { AgentSummary } from '../api/types.js';
 
 export type TaskTablePageSize = 20 | 50 | 100 | 'all';
 
 interface Props {
     rows: ITaskListItem[];
     projects: IProject[];
-    agents: IAgent[];
+    agents: AgentSummary[];
     ownerName: string;
     ownerAccent: string;
     /** Optional callback wired to the empty-state "New Task" button. When
@@ -109,8 +110,8 @@ function SortableHeader({
 interface TaskRowProps {
     row: ITaskListItem;
     project: IProject | undefined;
-    reporter: IAgent | null;
-    assignee: IAgent | null;
+    reporter: AgentSummary | null;
+    assignee: AgentSummary | null;
     ownerName: string;
     ownerAccent: string;
     isLast: boolean;
@@ -137,7 +138,13 @@ const TaskRow = memo(function TaskRow({
             style={
                 offsetY === undefined
                     ? undefined
-                    : { position: 'absolute', top: 0, left: 0, right: 0, transform: `translateY(${offsetY}px)` }
+                    : {
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          transform: `translateY(${offsetY}px)`,
+                      }
             }
             sx={{
                 display: 'grid',
@@ -246,7 +253,7 @@ const TaskRow = memo(function TaskRow({
 interface VirtualBodyProps {
     rows: ITaskListItem[];
     projectsById: Map<string, IProject>;
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
     onOpen: (id: string) => void;
@@ -260,7 +267,10 @@ function VirtualBody({
     ownerAccent,
     onOpen,
 }: VirtualBodyProps) {
-    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(rows.length, ROW_HEIGHT_PX);
+    const { parentRef, virtualizer, scrollMargin } = useShellVirtualizer(
+        rows.length,
+        ROW_HEIGHT_PX
+    );
 
     const items = virtualizer.getVirtualItems();
     const totalHeight = virtualizer.getTotalSize();

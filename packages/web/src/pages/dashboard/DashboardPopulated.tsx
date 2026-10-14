@@ -4,7 +4,7 @@ import Grid from '@mui/material/Grid';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import type { Theme } from '@mui/material/styles';
 import { useSettings } from '../../hooks/useSettings.js';
-import { useAgentSummaries } from '../../hooks/useAgents.js';
+import { useAgents } from '../../hooks/useAgents.js';
 import type { DashboardResponse } from '../../api/types.js';
 import { GreetingBlock } from './GreetingBlock.js';
 import { FleetStrip } from './FleetStrip.js';
@@ -20,7 +20,7 @@ interface IDashboardPopulatedProps {
 
 export function DashboardPopulated({ data }: IDashboardPopulatedProps) {
     const { data: settings } = useSettings();
-    const { data: agents = [] } = useAgentSummaries();
+    const { data: agents = [] } = useAgents();
 
     const ownerFullName = settings?.owner_name ?? '';
     const ownerFirstName = ownerFullName.trim().split(/\s+/)[0] || 'there';

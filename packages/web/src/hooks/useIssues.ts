@@ -14,10 +14,16 @@ export function makeShortId(_kind: IssueListKind, id: string): string {
 
 // One HTTP round-trip: Tasks with their Sub-tasks nested, plus the project
 // and agent dictionaries, assembled server-side.
-export function useIssues(opts?: { projectId?: string | undefined; includeArchived?: boolean | undefined }) {
+export function useIssues(opts?: {
+    projectId?: string | undefined;
+    includeArchived?: boolean | undefined;
+    /** Default true. Lets an always-mounted dialog hold off until it's open. */
+    enabled?: boolean | undefined;
+}) {
     const projectId = opts?.projectId ?? null;
     const includeArchived = opts?.includeArchived ?? false;
     return useQuery<IIssueTreeResponse>({
+        enabled: opts?.enabled ?? true,
         queryKey: ['issues', 'tree', { projectId, includeArchived }],
         queryFn: () =>
             api.issues.tree({

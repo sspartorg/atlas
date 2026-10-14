@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IAgent } from '@atlas/shared';
 import { SearchTextInput } from '../../components/SearchTextInput.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import type { AgentSummary } from '../../api/types.js';
 
 export const PALETTE_MIME = 'application/x-atlas-workflow-node';
 
@@ -95,7 +95,7 @@ function Heading({ children }: { children: string }) {
 }
 
 interface PaletteProps {
-    agents: IAgent[];
+    agents: AgentSummary[];
     /** Sub-tasks steps belong to workflows that run on a Task. */
     showSubtasks: boolean;
     onAdd: (item: IPaletteItem) => void;

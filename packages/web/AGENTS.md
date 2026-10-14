@@ -54,7 +54,7 @@ import { ATLAS_PALETTE, MOTION } from '@/theme/tokens';
 - Use MUI components only: `Box`, `Typography`, `Stack`, `Card`, `Chip`, `Button`, etc.
 - No raw `<div>`, `<span>`, `<p>` — use `<Box component="div">` only when MUI has no equivalent
 - One exception: `<Box component="span" className="material-symbols-rounded">` for Material icons
-  - The icon font ships only the names in `src/theme/icons.ts` (subset via `icon_names=`; ADR 0030). A new icon must be added there, sorted, or it renders as text — `src/theme/icons.test.ts` fails with the missing name. An icon that comes from data (agent glyph, rule icon) goes through `iconOr(name, fallback)`.
+  - The self-hosted icon font ships only the names in `src/theme/icons.ts` (ADR 0030/0031). A new icon: add it there (sorted), then run `pnpm -F @atlas/web fonts:fetch` — `src/theme/icons.test.ts` fails with the missing name, or while the font is stale. An icon that comes from data (agent glyph, rule icon) goes through `iconOr(name, fallback)`.
 - The only allowed library stylesheet is `@xyflow/react/dist/base.css`, imported once in `pages/workflows/WorkflowCanvas.tsx` (lazy workflow routes only). Theme the canvas with `sx` + tokens on its wrapper; never import `@xyflow/react/dist/style.css`.
 
 ## Data Fetching Pattern
@@ -145,3 +145,12 @@ Do not invent a new subtitle shape (no status pills, no bold-keyword paragraphs 
 - No Tailwind, no CSS modules, no styled-components
 - No `console.log` (use browser dev tools; remove before committing)
 - No `any` type without a comment explaining why
+
+## Page weight (ADR 0031)
+
+- `useAgents()` returns agents **without** `prompt_md`; use `useAgentsWithPrompts()` only where the prompt is read (Agents page, Search). Type list props as `AgentSummary` (`api/types.ts`) so either fits.
+- Tabs other than the default, and dialogs, load lazily (`lazyNamed` / `React.lazy` + `Suspense`); render dialogs only while open.
+- A list that can grow with the workspace renders a page at a time on phones (`components/ShowMore.tsx`) or virtualises (`useShellVirtualizer`).
+- Don't fetch for a closed dialog: pass `enabled` (e.g. `useIssues({ ..., enabled: open })`).
+- `pnpm -F @atlas/web bundle:check` prices every route's first visit; keep a route under 290 KB gz unless it is listed with a reason in `scripts/check-bundle-budget.mjs`.
+

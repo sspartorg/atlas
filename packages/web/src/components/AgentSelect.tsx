@@ -3,8 +3,9 @@ import Autocomplete, { createFilterOptions } from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { IAgent, SdlcRole } from '@atlas/shared';
+import type { SdlcRole } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
+import type { AgentSummary } from '../api/types.js';
 
 // Searchable assignee picker used by TaskNew.
 // Each row shows: accent dot + agent name + designation (or category fallback
@@ -21,7 +22,7 @@ export interface AgentSelectOption {
 }
 
 interface Props {
-    agents: IAgent[];
+    agents: AgentSummary[];
     /** Stable id value owned by the parent: 'OWNER', '' (unselected), or an agent id. */
     value: string;
     onChange: (value: string) => void;

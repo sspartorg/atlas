@@ -2,6 +2,7 @@ import type { IAgent, IAgentRun, AgentCategory } from '@atlas/shared';
 import { SDLC_ROLE_LABELS } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { iconOr } from '../../theme/icons.js';
+import type { AgentSummary } from '../../api/types.js';
 
 export interface AgentView {
     slug: string;
@@ -94,10 +95,12 @@ const SEED_VIEW: Record<string, SeedView> = {
     },
 };
 
-export function getAgentView(agent: IAgent): AgentView {
+// The prompt is optional: list surfaces get agents without it (ADR 0030),
+// and only the description's last-resort fallback reads it.
+export function getAgentView(agent: AgentSummary & { prompt_md?: string }): AgentView {
     const seed = SEED_VIEW[agent.id];
     const fallbackDescription =
-        agent.prompt_md
+        (agent.prompt_md ?? '')
             .split('\n')
             .map((l) => l.trim())
             .find((l) => l.length > 0 && !l.startsWith('#') && !l.startsWith('```')) ??

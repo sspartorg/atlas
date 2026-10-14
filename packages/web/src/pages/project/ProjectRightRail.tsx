@@ -2,16 +2,16 @@ import { memo } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink } from 'react-router-dom';
-import type { IAgent } from '@atlas/shared';
 import { InfoPanel, InfoRow, AgentChip } from '../../components/index.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { useProjectHealth } from '../../hooks/useProjects.js';
 import { useActiveRuns } from '../../hooks/useActiveRuns.js';
 import { formatSpan } from '../../utils/time.js';
+import type { AgentSummary } from '../../api/types.js';
 
 interface Props {
     projectId: string;
-    activeAgents: IAgent[];
+    activeAgents: AgentSummary[];
     guardrailsMd: string;
     onEditGuardrails?: () => void;
 }
@@ -55,16 +55,24 @@ function HealthPanel({ projectId }: { projectId: string }) {
 
     return (
         <InfoPanel label="Health · 30 d">
-            <InfoRow label="PRs merged">{value(ofTotal(data?.prs_merged ?? 0, data?.prs_opened ?? 0))}</InfoRow>
+            <InfoRow label="PRs merged">
+                {value(ofTotal(data?.prs_merged ?? 0, data?.prs_opened ?? 0))}
+            </InfoRow>
             <InfoRow label="Specs accepted first try">
                 {value(ofTotal(data?.specs.accepted_first_try ?? 0, data?.specs.reviewed ?? 0))}
             </InfoRow>
-            <InfoRow label="Median time to PR">{value(formatSpan(data?.median_s_to_pr ?? null))}</InfoRow>
+            <InfoRow label="Median time to PR">
+                {value(formatSpan(data?.median_s_to_pr ?? null))}
+            </InfoRow>
             <InfoRow label="Tasks that needed you">
-                {value(data?.escalations.since === null ? '—' : String(data?.escalations.items ?? 0))}
+                {value(
+                    data?.escalations.since === null ? '—' : String(data?.escalations.items ?? 0)
+                )}
             </InfoRow>
             {caption && (
-                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, mt: 1.5, lineHeight: 1.5 }}>
+                <Typography
+                    sx={{ fontSize: 11, color: ATLAS_PALETTE.slate40, mt: 1.5, lineHeight: 1.5 }}
+                >
                     {caption}
                 </Typography>
             )}

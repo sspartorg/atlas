@@ -55,6 +55,39 @@ describe('App', () => {
         resolveSettings(undefined);
     });
 
+    // ADR 0030 — the route mounts (hidden) while settings load, so its code and
+    // data are fetched in parallel instead of after the settings round trip.
+    it("starts the route's own requests before settings arrive", async () => {
+        queryClient.clear();
+        let resolveSettings!: (v: unknown) => void;
+        const settingsPromise = new Promise((res) => {
+            resolveSettings = res;
+        });
+        let dashboardRequestedWhileSettingsPending = false;
+        let settingsDone = false;
+        // Specific handlers first: MSW takes the first match.
+        server.use(
+            http.get(`${BASE}/settings`, async () => {
+                await settingsPromise;
+                settingsDone = true;
+                return HttpResponse.json({ id: 1, owner_name: 'Owner', onboarding_complete: 1 });
+            }),
+            http.get(`${BASE}/dashboard`, () => {
+                if (!settingsDone) dashboardRequestedWhileSettingsPending = true;
+                return HttpResponse.json({ kpis: { projectCount: 0 }, awaiting: [], queue: [] });
+            }),
+            ...defaultHandlers
+        );
+        window.history.pushState({}, '', '/');
+        render(
+            <ThemeModeProvider>
+                <App />
+            </ThemeModeProvider>
+        );
+        await waitFor(() => expect(dashboardRequestedWhileSettingsPending).toBe(true));
+        resolveSettings(undefined);
+    });
+
     it('redirects to /onboarding when onboarding_complete is 0', async () => {
         server.use(
             ...defaultHandlers,

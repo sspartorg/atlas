@@ -8,7 +8,6 @@ import {
     getValidNextStatuses,
     type IssueStatus,
     type IssueType,
-    type IAgent,
 } from '@atlas/shared';
 import { KindIcon } from './KindIcon.js';
 import { LiveDot } from './LiveDot.js';
@@ -16,6 +15,7 @@ import { AgentChip } from './AgentChip.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE, STATUS_PALETTE } from '../theme/tokens.js';
+import type { AgentSummary } from '../api/types.js';
 
 export interface KanbanItem {
     id: string;
@@ -28,7 +28,7 @@ export interface KanbanItem {
 
 interface Props {
     items: KanbanItem[];
-    agents: IAgent[];
+    agents: AgentSummary[];
     ownerName: string;
     ownerAccent: string;
     /** Called when a card is dropped on a column. `override` is true when the
@@ -110,7 +110,7 @@ function Card({
     draggable,
 }: {
     item: KanbanItem;
-    agentsById: Map<string, IAgent>;
+    agentsById: Map<string, AgentSummary>;
     ownerName: string;
     ownerAccent: string;
     onDragStart: (e: DragEvent<HTMLDivElement>, item: KanbanItem) => void;
@@ -327,7 +327,9 @@ export function WorkItemKanban({
                                 <Button
                                     size="small"
                                     fullWidth
-                                    onClick={() => setShown((m) => ({ ...m, [status]: cap + COLUMN_PAGE * 2 }))}
+                                    onClick={() =>
+                                        setShown((m) => ({ ...m, [status]: cap + COLUMN_PAGE * 2 }))
+                                    }
                                 >
                                     Show {Math.min(hidden, COLUMN_PAGE * 2)} more · {hidden} hidden
                                 </Button>

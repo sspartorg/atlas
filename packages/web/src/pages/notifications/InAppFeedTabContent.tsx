@@ -5,7 +5,7 @@ import Alert from '@mui/material/Alert';
 import Tooltip from '@mui/material/Tooltip';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import { useNavigate } from 'react-router-dom';
-import type { INotification, IAgent, NotificationKind } from '@atlas/shared';
+import type { INotification, NotificationKind } from '@atlas/shared';
 import { useMarkNotificationRead } from '../../hooks/useNotifications.js';
 import { useNow } from '../../hooks/useNow.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
@@ -13,6 +13,7 @@ import { FilterPill } from '../../components/filterPrimitives.js';
 import { InitialAvatar } from '../../components/InitialAvatar.js';
 import { relativeShort } from './timeFormat.js';
 import { itemPath } from '../../utils/itemPath.js';
+import type { AgentSummary } from '../../api/types.js';
 
 const MONO = '"JetBrains Mono", monospace';
 type Filter = 'all' | NotificationKind;
@@ -24,7 +25,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 interface Props {
     allRows: INotification[];
-    agents: IAgent[];
+    agents: AgentSummary[];
 }
 
 export function InAppFeedTabContent({ allRows, agents }: Props) {
@@ -161,7 +162,7 @@ function FeedItem({
     onOpen,
 }: {
     row: INotification;
-    agent: IAgent | undefined;
+    agent: AgentSummary | undefined;
     isLast: boolean;
     onOpen: () => void;
 }) {
