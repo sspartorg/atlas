@@ -26,12 +26,12 @@ describe('MoreSheet', () => {
         expect(document.body.textContent).toContain('Reminders');
     });
 
-    it('clicking the header close-X calls onClose without navigating', () => {
+    it('has no header close-X (drag, backdrop and Escape dismiss it); Escape calls onClose', () => {
         server.use(...defaultHandlers);
         const onClose = vi.fn();
         renderWithProviders(<MoreSheet open onClose={onClose} />);
-        const closeBtn = screen.getByRole('button', { name: 'Close' });
-        fireEvent.click(closeBtn);
+        expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+        fireEvent.keyDown(screen.getByRole('presentation'), { key: 'Escape' });
         expect(onClose).toHaveBeenCalledOnce();
     });
 

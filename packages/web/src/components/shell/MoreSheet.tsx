@@ -1,6 +1,5 @@
 import Box from '@mui/material/Box';
-import Drawer from '@mui/material/Drawer';
-import IconButton from '@mui/material/IconButton';
+import SwipeableDrawer from '@mui/material/SwipeableDrawer';
 import Typography from '@mui/material/Typography';
 import { useNavigate } from 'react-router-dom';
 import { ATLAS_PALETTE, TOUCH } from '../../theme/tokens.js';
@@ -70,10 +69,15 @@ export function MoreSheet({ open, onClose }: Props) {
     };
 
     return (
-        <Drawer
+        // Swipeable so the grab handle actually works: drag the sheet down to
+        // dismiss. Swipe-to-open is off — the bottom edge belongs to the
+        // BottomNav and the iOS home gesture; the More tab opens it.
+        <SwipeableDrawer
             anchor="bottom"
             open={open}
             onClose={onClose}
+            onOpen={() => {}}
+            disableSwipeToOpen
             PaperProps={{
                 sx: {
                     borderTopLeftRadius: 16,
@@ -115,20 +119,6 @@ export function MoreSheet({ open, onClose }: Props) {
                     >
                         More
                     </Typography>
-                    <IconButton
-                        aria-label="Close"
-                        onClick={onClose}
-                        sx={{ color: ATLAS_PALETTE.slate60 }}
-                    >
-                        <Box
-                            component="span"
-                            className="material-symbols-rounded"
-                            aria-hidden="true"
-                            sx={{ fontSize: 22 }}
-                        >
-                            close
-                        </Box>
-                    </IconButton>
                 </Box>
                 {ITEMS.map((item) => {
                     const count = item.countKey ? counts[item.countKey] : 0;
@@ -240,6 +230,6 @@ export function MoreSheet({ open, onClose }: Props) {
                     </Typography>
                 </Box>
             </Box>
-        </Drawer>
+        </SwipeableDrawer>
     );
 }
