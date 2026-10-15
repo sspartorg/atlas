@@ -46,3 +46,16 @@ test('model registry: add, duplicate, edit twice, delete', async ({ page, reques
     await expect(page.getByText('Model removed')).toBeVisible();
     await expect.poll(() => findModel(request)).toBeUndefined();
 });
+
+test('a model an agent still uses cannot be removed', async ({ page, request }) => {
+    const agents = await apiGet<{ model: string | null }[]>(request, '/api/agents');
+    const used = new Set(agents.map((a) => a.model).filter(Boolean));
+    const target = (await apiGet<Model[]>(request, '/api/cli-models')).find((m) => used.has(m.model_name));
+    test.skip(!target, 'no seeded agent uses a registry model');
+    await goto(page, '/settings?tab=models', { allow: [/409 \(Conflict\)/] });
+    await page.locator(`button[aria-label="Remove ${target!.model_name}"]`).first().click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete model' }).click();
+    await expect(page.getByText("Couldn't remove the model")).toBeVisible();
+    expect((await apiGet<Model[]>(request, '/api/cli-models')).some((m) => m.id === target!.id)).toBe(true);
+});
+

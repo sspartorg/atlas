@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 import { API, apiGet } from '../helpers/api.js';
@@ -85,4 +87,44 @@ test.describe('Shared secrets', () => {
         await expect(page.getByText('Secrets imported')).toBeVisible();
         await expect.poll(() => secretValue(request, 'E2E_BUNDLE')).toBe('original');
     });
+});
+
+test('secrets: unicode values round-trip; reveal shows them; export passphrase rules', async ({ page, request }) => {
+    await request.put(`${API}/api/environment-secrets`, { data: { vars: [] } });
+    await goto(page, '/settings?tab=secrets');
+    await page.getByRole('button', { name: /Add secret/ }).click();
+    await page.getByPlaceholder('UPPER_SNAKE_CASE').fill('E2E_UNICODE');
+    await page.getByPlaceholder('value').fill('pässwörd 🔑 = "quoted" & <tag>');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect.poll(() => secretValue(request, 'E2E_UNICODE')).toBe('pässwörd 🔑 = "quoted" & <tag>');
+    await page.reload();
+    await page.getByRole('button', { name: /Reveal/ }).first().click();
+    await expect(page.locator('input[value="pässwörd 🔑 = \\"quoted\\" & <tag>"]')).toBeVisible();
+
+    await goto(page, '/settings');
+    await page.getByRole('button', { name: /Export all secrets/ }).click();
+    const exportBtn = page.getByRole('dialog').getByRole('button', { name: 'Export' });
+    await page.getByLabel('Passphrase', { exact: true }).fill('short');
+    await page.getByLabel('Confirm passphrase').fill('short');
+    await expect(exportBtn).toBeDisabled();
+    await page.getByLabel('Passphrase', { exact: true }).fill('long enough one');
+    await page.getByLabel('Confirm passphrase').fill('long enough two');
+    await expect(exportBtn).toBeDisabled();
+});
+
+test('import refuses a JSON file that is not a bundle, and a non-JSON file', async ({ page }) => {
+    const dir = mkdtempSync(join(tmpdir(), 'e2e-import-'));
+    writeFileSync(join(dir, 'other.json'), '{"hello":1}');
+    writeFileSync(join(dir, 'garbage.json'), 'not json');
+    await goto(page, '/settings');
+    for (const f of ['other.json', 'garbage.json']) {
+        await page.getByRole('button', { name: /Import secrets/ }).click();
+        await page.getByLabel('Secrets file').setInputFiles(join(dir, f));
+        await page.getByLabel('Passphrase', { exact: true }).fill('whatever-pass');
+        await page.getByRole('dialog').getByRole('button', { name: 'Import' }).click();
+        await expect(page.getByRole('dialog').getByRole('alert')).toContainText('not an Atlas secrets file');
+        await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
+    rmSync(dir, { recursive: true, force: true });
 });

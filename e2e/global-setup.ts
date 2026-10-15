@@ -1,6 +1,6 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'util';
-import { writeFileSync, mkdirSync, existsSync, createWriteStream } from 'node:fs';
+import { writeFileSync, mkdirSync, existsSync, createWriteStream, rmSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -29,6 +29,14 @@ const API_PORT = 6001;
 // navigation would otherwise fail before any spec runs.
 const WEB_PORT = 6010;
 const REPO_ROOT = resolve(__dirname, '..');
+// The API under test gets its own data dir and env file: Reset Workspace
+// deletes <dataDir>/team-config and the Environment tab rewrites the env
+// file, and neither may touch the developer's real ~/.config/Atlas or .env.
+// Specs import the same paths from helpers/api.ts.
+const E2E_DATA_DIR = join(REPO_ROOT, 'e2e-logs', 'data');
+const E2E_ENV_FILE = join(REPO_ROOT, 'e2e-logs', 'e2e.env');
+// settings-notifications.spec.ts runs a fake Telegram Bot API here.
+const FAKE_TELEGRAM_PORT = 6091;
 const LOG_DIR = join(REPO_ROOT, 'e2e-logs');
 const PID_FILE = join(LOG_DIR, 'pids.json');
 
@@ -160,6 +168,9 @@ function startApi(): ChildProcess {
                 ATLAS_REQUEST_LOG: 'false',
                 ATLAS_CLAUDE_BINARY: claudeBinary,
                 ATLAS_COPILOT_BINARY: copilotBinary,
+                ATLAS_DATA_DIR: E2E_DATA_DIR,
+                ATLAS_ENV_FILE: E2E_ENV_FILE,
+                ATLAS_TELEGRAM_API_BASE: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
             },
             shell: process.platform === 'win32',
             // POSIX: lead a process group so teardown can stop pnpm AND the
@@ -229,6 +240,10 @@ export default async function globalSetup(): Promise<void> {
         if (!existsSync(PID_FILE)) writeFileSync(PID_FILE, JSON.stringify({ skipped: true }));
         return;
     }
+
+    rmSync(E2E_DATA_DIR, { recursive: true, force: true });
+    mkdirSync(E2E_DATA_DIR, { recursive: true });
+    writeFileSync(E2E_ENV_FILE, 'ATLAS_LOG_LEVEL=error\n');
 
     // eslint-disable-next-line no-console
     console.log('[e2e] dropping + creating atlas_e2e...');

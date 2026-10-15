@@ -64,3 +64,39 @@ test.describe('Team config', () => {
         await expect(page.getByText(/managed by my team config/)).toHaveCount(0);
     });
 });
+
+test('team config: branch and interval validate, and Sync is refused while off', async ({ page, request }) => {
+    await request.put(`${API}/api/team-config`, { data: { role: 'subscriber', repo_url: 'https://github.com/acme/team.git', branch: 'main', interval_minutes: 60 } });
+    await goto(page, '/settings?tab=team', { allow: [/400 \(Bad Request\)/, /409/] });
+    type Tc = { branch: string; interval_minutes: number };
+    const tc = () => apiGet<Tc>(request, '/api/team-config');
+
+    const branch = page.locator('input[value="main"]').first();
+    const id = await branch.getAttribute('id');
+    const field = page.locator(`[id="${id}"]`);
+    await field.fill('bad branch!');
+    await field.blur();
+    await expect(page.getByText('Could not save')).toBeVisible();
+    await expect(field).toHaveValue('main');
+    await field.fill('');
+    await field.blur();
+    await expect(field).toHaveValue('main');
+    for (const b of ['qa/sync-1', 'qa/sync-2']) {
+        await field.fill(b);
+        await field.blur();
+        await expect.poll(async () => (await tc()).branch).toBe(b);
+    }
+
+    const interval = page.locator('input[type="number"]').first();
+    await interval.fill('4');
+    await interval.blur();
+    await expect(interval).toHaveValue('60');
+    await interval.fill('10');
+    await interval.blur();
+    await expect.poll(async () => (await tc()).interval_minutes).toBe(10);
+
+    await request.put(`${API}/api/team-config`, { data: { role: 'off' } });
+    expect((await request.post(`${API}/api/team-config/sync`)).status()).toBe(409);
+    await request.put(`${API}/api/team-config`, { data: { role: 'off', repo_url: null, branch: 'main', interval_minutes: 60 } });
+});
+

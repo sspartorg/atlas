@@ -281,6 +281,43 @@ test.describe('Jira bridge', () => {
         await expect(page.getByText('API token cleared')).toBeVisible();
     });
 
+    test('poll interval, extra fields and the Import switch save and validate', async ({ page, request }) => {
+        await request.put(`${API}/api/integrations/jira`, {
+            data: { site_url: siteUrl, email: 'owner@e2e.test', api_token: 'e2e-token', enabled: false, poll_interval_minutes: 60, extra_fields: [] },
+        });
+        await goto(page, '/settings?tab=jira');
+        type Cfg = { poll_interval_minutes: number; extra_fields: string[]; enabled: boolean };
+        const cfg = () => apiGet<Cfg>(request, '/api/integrations/jira');
+
+        const poll = page.locator('input[type="number"]').first();
+        await poll.fill('4');
+        await poll.blur();
+        await expect(poll).toHaveValue('60');
+        for (const v of [15, 30]) {
+            await poll.fill(String(v));
+            await poll.blur();
+            await expect.poll(async () => (await cfg()).poll_interval_minutes).toBe(v);
+        }
+
+        const extra = page.getByPlaceholder(/Acceptance Criteria/);
+        await extra.fill(' Story Points , , customfield_10016 ');
+        await extra.blur();
+        await expect.poll(async () => (await cfg()).extra_fields).toEqual(['Story Points', 'customfield_10016']);
+        await extra.fill('');
+        await extra.blur();
+        await expect.poll(async () => (await cfg()).extra_fields).toEqual([]);
+
+        const sync = page.getByRole('button', { name: 'Sync now' });
+        await expect(sync).toBeDisabled();
+        await page.getByLabel('Jira sync enabled').click();
+        await expect.poll(async () => (await cfg()).enabled).toBe(true);
+        await expect(sync).toBeEnabled();
+        await page.getByLabel('Jira sync enabled').click();
+        await expect.poll(async () => (await cfg()).enabled).toBe(false);
+        await expect(sync).toBeDisabled();
+        expect((await request.post(`${API}/api/integrations/jira/sync`)).status()).toBe(409);
+    });
+
     test('rejects a non-URL site and keeps the saved one', async ({ page }) => {
         await goto(page, '/settings?tab=jira', {
             allow: [/400 \(Bad Request\)/, /integrations\/jira/],
