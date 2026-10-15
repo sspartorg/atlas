@@ -241,6 +241,11 @@ export async function settingsRoutes(app: FastifyInstance) {
             await trx.deleteFrom('credentials').execute();
             await trx.deleteFrom('agent_checklists').execute();
             await trx.deleteFrom('agents').execute();
+            // Secrets and push devices go too: a reset that clears saved
+            // credentials but keeps shared secrets (or keeps pushing to old
+            // devices) is not the wipe the Owner confirmed.
+            await trx.deleteFrom('environment_secrets').execute();
+            await trx.deleteFrom('push_subscriptions').execute();
             await trx
                 .updateTable('settings')
                 .set({
@@ -257,6 +262,9 @@ export async function settingsRoutes(app: FastifyInstance) {
                     quiet_hours_from: null,
                     quiet_hours_to: null,
                     quiet_hours_timezone: null,
+                    // From/to are cleared above, so the switch must go off too.
+                    quiet_hours_enabled: 0,
+                    terminal_idle_notify_seconds: 300,
                     external_notification_last_test_ok: null,
                     external_notification_endpoint_label: null,
                 })

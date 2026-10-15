@@ -32,10 +32,9 @@ export const KNOWN_ENV_VARS: ReadonlyArray<Omit<IEnvVar, 'value'>> = [
         // mount, and PATCH updates process.env immediately — no restart.
         restart_required: false,
         description:
-            'Where the in-app "Report a bug" link points (sidenav footer + ' +
-            'Settings → Help & About). Default: ' +
-            'https://github.com/sspartorg/atlas/issues. Also accepts ' +
-            'mailto:you@example.com. Leave blank to hide the link.',
+            'Where the "Report a bug" button in Settings → Help & About ' +
+            'points. Also accepts mailto:you@example.com. Blank uses the ' +
+            'default: https://github.com/sspartorg/atlas/issues.',
     },
 ];
 

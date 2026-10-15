@@ -64,6 +64,11 @@ export function SecretsBundleDialog({ mode, onClose }: { mode: 'export' | 'impor
                 } catch {
                     throw new Error('That file is not an Atlas secrets file');
                 }
+                // Valid JSON that isn't a bundle got the server's raw schema
+                // error back; catch it here with the same plain message.
+                if (bundle?.['format'] !== 'atlas-secrets') {
+                    throw new Error('That file is not an Atlas secrets file');
+                }
                 const report = await api.secretsBundle.import(passphrase, bundle);
                 await qc.invalidateQueries();
                 toast.show({ message: 'Secrets imported', detail: summary(report) });

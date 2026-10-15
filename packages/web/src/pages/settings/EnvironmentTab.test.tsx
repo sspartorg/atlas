@@ -76,6 +76,13 @@ describe('EnvironmentTab', () => {
         await waitFor(() => expect(screen.getByText(/1 holds a secret/i)).toBeInTheDocument());
     });
 
+    it('shows the restart note only when a variable needs a restart', async () => {
+        mountEnv([FOO_VAR]);
+        renderWithProviders(<EnvironmentTab />);
+        await screen.findByText(/0 require a server restart/i);
+        expect(screen.queryByText(/only take effect after the API process restarts/)).not.toBeInTheDocument();
+    });
+
     it('shows the singular "1 requires" wording for one restart-required var', async () => {
         // Pluralisation: 1 → "requires", N>1 → "require" (component intentionally
         // flips the suffix on === 1).

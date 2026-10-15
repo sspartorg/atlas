@@ -17,7 +17,7 @@ const REPO_URL = 'https://github.com/sspartorg/atlas';
 const DOCS_URL = 'https://github.com/sspartorg/atlas/tree/main/docs';
 const APP_VERSION = '1.0.0';
 const RELEASE_TAG = 'v1.0';
-const RELEASE_URL = 'https://github.com/sspartorg/atlas/releases/tag/v1.0';
+const RELEASE_URL = 'https://github.com/sspartorg/atlas/releases/tag/v1.0.0';
 
 type FactRowProps = {
     label: string;
@@ -220,7 +220,7 @@ export function HelpAboutTab() {
 
             <SettingsSection
                 title="Report a bug"
-                subtitle="Found something broken? Open the tracker below. Behaviour of the sidenav footer link (when configured) matches this button."
+                subtitle="Found something broken? Open the tracker below."
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <Box>

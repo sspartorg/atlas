@@ -51,4 +51,25 @@ describe('SecretsBundleDialog', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent(/Wrong passphrase/);
         expect(onClose).not.toHaveBeenCalled();
     });
+
+    it('rejects valid JSON that is not a bundle without calling the API', async () => {
+        const importCall = vi.fn();
+        server.use(
+            http.post(`${BASE}/secrets-bundle/import`, () => {
+                importCall();
+                return HttpResponse.json({});
+            })
+        );
+        renderWithProviders(<SecretsBundleDialog mode="import" onClose={vi.fn()} />);
+        await userEvent.upload(
+            screen.getByLabelText('Secrets file'),
+            new File(['{"hello":1}'], 'other.json', { type: 'application/json' })
+        );
+        await userEvent.type(screen.getByLabelText('Passphrase'), 'whatever');
+        await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(
+            'That file is not an Atlas secrets file'
+        );
+        expect(importCall).not.toHaveBeenCalled();
+    });
 });

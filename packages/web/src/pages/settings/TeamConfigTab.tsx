@@ -50,7 +50,14 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
     function save(patch: TeamConfigUpdate, message = 'Team config saved') {
         update.mutate(patch, {
             onSuccess: () => toast.show({ message }),
-            onError: (err) => toast.show({ message: 'Could not save', detail: err.message }),
+            onError: (err) => {
+                // Put the fields back to what is saved, so a rejected value
+                // (http:// URL, bad branch name) doesn't look saved.
+                setRepoUrl(cfg.repo_url ?? '');
+                setBranch(cfg.branch);
+                setIntervalMinutes(String(cfg.interval_minutes));
+                toast.show({ message: 'Could not save', detail: err.message });
+            },
         });
     }
 

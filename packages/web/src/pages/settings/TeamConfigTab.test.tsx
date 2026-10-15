@@ -124,6 +124,8 @@ describe('TeamConfigTab', () => {
         await userEvent.tab();
         expect(await screen.findByText('Could not save')).toBeInTheDocument();
         expect(screen.getByText('Use an https:// git URL')).toBeInTheDocument();
+        // The refused value must not stay in the field looking saved.
+        expect(field).toHaveValue('https://github.com/acme/team.git');
     });
 
     it('saves the branch on blur and restores it when blanked', async () => {

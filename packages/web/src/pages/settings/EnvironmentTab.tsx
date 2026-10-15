@@ -146,39 +146,42 @@ export function EnvironmentTab() {
                 </Box>
             </SettingsSection>
 
-            <Alert
-                icon={<RestartAltRounded sx={{ color: ATLAS_PALETTE.warning }} />}
-                sx={{
-                    mt: 4,
-                    bgcolor: 'rgba(199,83,47,.06)',
-                    color: ATLAS_PALETTE.slate,
-                    border: `1px solid rgba(199,83,47,.18)`,
-                    '& .MuiAlert-message': { fontSize: 12, lineHeight: 1.6 },
-                }}
-            >
-                Variables marked{' '}
-                <Box
-                    component="span"
+            {/* Only when a variable actually needs a restart. */}
+            {data.vars.some((v) => v.restart_required) && (
+                <Alert
+                    icon={<RestartAltRounded sx={{ color: ATLAS_PALETTE.warning }} />}
                     sx={{
-                        fontFamily: MONO,
-                        fontSize: 10,
-                        fontWeight: 600,
-                        px: 0.75,
-                        py: 0.25,
-                        bgcolor: 'rgba(199,83,47,.10)',
-                        color: ATLAS_PALETTE.warning,
-                        borderRadius: '4px',
+                        mt: 4,
+                        bgcolor: 'rgba(199,83,47,.06)',
+                        color: ATLAS_PALETTE.slate,
+                        border: `1px solid rgba(199,83,47,.18)`,
+                        '& .MuiAlert-message': { fontSize: 12, lineHeight: 1.6 },
                     }}
                 >
-                    RESTART
-                </Box>{' '}
-                only take effect after the API process restarts. Stop the dev server (Ctrl + C in
-                the terminal running{' '}
-                <Box component="span" sx={{ fontFamily: MONO }}>
-                    pnpm dev
-                </Box>
-                ) and start it again to pick up the new value.
-            </Alert>
+                    Variables marked{' '}
+                    <Box
+                        component="span"
+                        sx={{
+                            fontFamily: MONO,
+                            fontSize: 10,
+                            fontWeight: 600,
+                            px: 0.75,
+                            py: 0.25,
+                            bgcolor: 'rgba(199,83,47,.10)',
+                            color: ATLAS_PALETTE.warning,
+                            borderRadius: '4px',
+                        }}
+                    >
+                        RESTART
+                    </Box>{' '}
+                    only take effect after the API process restarts. Stop the dev server (Ctrl + C
+                    in the terminal running{' '}
+                    <Box component="span" sx={{ fontFamily: MONO }}>
+                        pnpm dev
+                    </Box>
+                    ) and start it again to pick up the new value.
+                </Alert>
+            )}
         </Box>
     );
 }

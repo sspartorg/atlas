@@ -395,6 +395,34 @@ describe('POST /api/settings/reset — destructive isolation', () => {
         expect(settings?.onboarding_complete).toBe(0);
         expect(settings?.owner_name).toBe('Owner');
     });
+
+    it('also clears shared secrets, push devices and the quiet-hours switch', async () => {
+        await testDb
+            .insertInto('environment_secrets')
+            .values({ id: 'es-1', key: 'API_KEY', value_encrypted: 'x', updated_at: new Date().toISOString() } as never)
+            .execute();
+        await testDb
+            .insertInto('push_subscriptions')
+            .values({ endpoint: 'https://push.example/1', p256dh: 'p', auth: 'a' } as never)
+            .execute();
+        await testDb
+            .updateTable('settings')
+            .set({ quiet_hours_enabled: 1, terminal_idle_notify_seconds: 900 } as never)
+            .where('id', '=', 1)
+            .execute();
+
+        const res = await app.inject({ method: 'POST', url: '/api/settings/reset' });
+        expect(res.statusCode).toBe(200);
+
+        expect(await testDb.selectFrom('environment_secrets').selectAll().execute()).toHaveLength(0);
+        expect(await testDb.selectFrom('push_subscriptions').selectAll().execute()).toHaveLength(0);
+        const s = await testDb
+            .selectFrom('settings')
+            .select(['quiet_hours_enabled', 'terminal_idle_notify_seconds'])
+            .where('id', '=', 1)
+            .executeTakeFirst();
+        expect(s).toMatchObject({ quiet_hours_enabled: 0, terminal_idle_notify_seconds: 300 });
+    });
 });
 
 describe('POST /api/settings/onboard — Zod rejection', () => {
