@@ -193,6 +193,92 @@ describe('NotificationsTab', () => {
         await new Promise((r) => setTimeout(r, 100));
     });
 
+    it('a rejected test (HTTP 400) shows "Test failed" and flips the pill to Not connected', async () => {
+        let lastTestOk: number | null = null;
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(
+                    settings({
+                        external_notification_token_set: true,
+                        external_notification_chat_id: '42',
+                        external_notification_last_test_ok: lastTestOk,
+                    })
+                )
+            ),
+            http.post(`${BASE}/settings/external-notification/test`, () => {
+                lastTestOk = 0;
+                return HttpResponse.json(
+                    { ok: false, error: 'Telegram API error 401: Unauthorized' },
+                    { status: 400 }
+                );
+            }),
+            ...defaultHandlers
+        );
+        renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>
+        );
+        await screen.findByDisplayValue('42');
+        fireEvent.click(screen.getByRole('button', { name: /Send Test Message/i }));
+        expect(await screen.findByText('Test failed')).toBeInTheDocument();
+        expect(await screen.findByText(/Not connected/i)).toBeInTheDocument();
+    });
+
+    it('an invalid quiet-hours time snaps back and says why instead of looking saved', async () => {
+        const patch = vi.fn();
+        server.use(
+            http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),
+            http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
+                patch(await request.json());
+                return HttpResponse.json(settings());
+            }),
+            ...defaultHandlers
+        );
+        renderWithProviders(
+            <>
+                <NotificationsTab />
+                <Toast />
+            </>
+        );
+        const from = await screen.findByLabelText('Quiet hours from');
+        await waitFor(() => expect(from).toHaveValue('22:00'));
+        fireEvent.change(from, { target: { value: '25:99' } });
+        fireEvent.blur(from);
+        expect(await screen.findByText('Quiet hours not saved')).toBeInTheDocument();
+        expect(from).toHaveValue('22:00');
+        expect(patch).not.toHaveBeenCalled();
+    });
+
+    it('clicking the eye after typing a token does not blur-save it', async () => {
+        const patch = vi.fn();
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(settings({ external_notification_token_set: false }))
+            ),
+            http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
+                patch(await request.json());
+                return HttpResponse.json(settings());
+            }),
+            ...defaultHandlers
+        );
+        renderWithProviders(<NotificationsTab />);
+        await screen.findByDisplayValue('chat-1');
+        const input = screen.getAllByPlaceholderText(/123456789/i)[0] as HTMLInputElement;
+        input.focus();
+        fireEvent.change(input, { target: { value: '111:half-typed' } });
+        const eye = screen.getAllByRole('button', { name: 'Reveal token' })[0]!;
+        // A real click fires mousedown first; preventDefault keeps focus in the field.
+        const md = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+        eye.dispatchEvent(md);
+        expect(md.defaultPrevented).toBe(true);
+        fireEvent.click(eye);
+        expect(input).toHaveAttribute('type', 'text');
+        expect(input).toHaveValue('111:half-typed');
+        expect(patch).not.toHaveBeenCalled();
+    });
+
     it('toggles a per-event notification switch (setToggle branch)', async () => {
         server.use(
             http.get(`${BASE}/settings`, () => HttpResponse.json(settings())),

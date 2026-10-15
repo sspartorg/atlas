@@ -216,10 +216,6 @@ export function NotificationsTab() {
         setTesting(true);
         try {
             const r = await api.settings.testExternalNotification();
-            // The API already persisted external_notification_last_test_ok /
-            // external_notification_endpoint_label on the settings row.
-            // Invalidate the settings query so the pill picks up the new state.
-            await qc.invalidateQueries({ queryKey: ['settings'] });
             if (r.ok) {
                 toast.show({ message: 'Test message sent' });
             } else {
@@ -229,7 +225,16 @@ export function NotificationsTab() {
                         : { message: 'Test failed' }
                 );
             }
+        } catch (err) {
+            // A failed send comes back as HTTP 400, which the client throws.
+            toast.show({
+                message: 'Test failed',
+                detail: err instanceof Error ? err.message : String(err),
+            });
         } finally {
+            // The API persisted last_test_ok / endpoint_label either way;
+            // refetch so the pill shows Connected or Not connected.
+            await qc.invalidateQueries({ queryKey: ['settings'] });
             setTesting(false);
         }
     }
@@ -286,7 +291,22 @@ export function NotificationsTab() {
         if (!quietEnabled) return;
         const fromOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(quietFrom);
         const toOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(quietTo);
-        if (!fromOk || !toOk) return;
+        if (!fromOk || !toOk) {
+            // Don't leave an unsaved value looking saved: snap back and say why.
+            setQuietFrom(settings?.quiet_hours_from ?? '22:00');
+            setQuietTo(settings?.quiet_hours_to ?? '08:00');
+            toast.show({
+                message: 'Quiet hours not saved',
+                detail: 'Use 24-hour HH:MM, e.g. 22:00.',
+            });
+            return;
+        }
+        if (
+            quietFrom === settings?.quiet_hours_from &&
+            quietTo === settings?.quiet_hours_to
+        ) {
+            return;
+        }
         updateNotifications.mutate(
             {
                 quiet_hours_from: quietFrom,
@@ -356,7 +376,7 @@ export function NotificationsTab() {
                                     onBlur={commitConnection}
                                     placeholder={
                                         tokenIsStored && !token
-                                            ? '••••  Stored — click 🔍 to reveal, or type to replace'
+                                            ? '••••  Stored — use the eye to reveal, or type to replace'
                                             : '123456789:ABC-def…'
                                     }
                                     // Mono font for the visible token, system font when
@@ -385,6 +405,10 @@ export function NotificationsTab() {
                                                 <InputAdornment position="end">
                                                     <IconButton
                                                         size="small"
+                                                        // Keep focus in the field: a blur
+                                                        // saves, so clicking the eye to check
+                                                        // a typed value would commit it.
+                                                        onMouseDown={(e) => e.preventDefault()}
                                                         onClick={() => {
                                                             // Enterprise read model:
                                                             //   - Empty typed + stored value → fetch reveal
@@ -456,7 +480,7 @@ export function NotificationsTab() {
                                     onBlur={commitWebhookUrl}
                                     placeholder={
                                         webhookIsStored && !webhookUrl
-                                            ? '••••  Stored — click 🔍 to reveal, or type to replace'
+                                            ? '••••  Stored — use the eye to reveal, or type to replace'
                                             : 'https://…powerautomate.com/…/triggers/manual/paths/invoke?…sig=…'
                                     }
                                     inputProps={{
@@ -482,6 +506,10 @@ export function NotificationsTab() {
                                                 <InputAdornment position="end">
                                                     <IconButton
                                                         size="small"
+                                                        // Keep focus in the field: a blur
+                                                        // saves, so clicking the eye to check
+                                                        // a typed value would commit it.
+                                                        onMouseDown={(e) => e.preventDefault()}
                                                         onClick={() => {
                                                             if (webhookIsStored && !webhookUrl) {
                                                                 if (revealedWebhook !== null) {
@@ -681,6 +709,7 @@ export function NotificationsTab() {
                             placeholder="22:00"
                             disabled={!quietEnabled}
                             inputProps={{
+                                'aria-label': 'Quiet hours from',
                                 style: { fontFamily: MONO, fontSize: 13, maxWidth: 120 },
                             }}
                             sx={{ maxWidth: 160 }}
@@ -696,6 +725,7 @@ export function NotificationsTab() {
                             placeholder="08:00"
                             disabled={!quietEnabled}
                             inputProps={{
+                                'aria-label': 'Quiet hours to',
                                 style: { fontFamily: MONO, fontSize: 13, maxWidth: 120 },
                             }}
                             sx={{ maxWidth: 160 }}
