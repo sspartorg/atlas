@@ -318,6 +318,7 @@ export const api = {
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
         revealToken: () => post<{ value: string }>('/integrations/jira/reveal-token', {}),
+        disconnect: () => request<IJiraConfig>('/integrations/jira', { method: 'DELETE' }),
     },
     teamConfig: {
         get: () => get<ITeamConfig>('/team-config'),

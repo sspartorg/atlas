@@ -15,6 +15,14 @@ export function useUpdateJiraConfig() {
     });
 }
 
+export function useDisconnectJira() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.jira.disconnect(),
+        onSuccess: (cfg) => qc.setQueryData(KEY, cfg),
+    });
+}
+
 export function useRevealJiraToken() {
     return useMutation({ mutationFn: () => api.jira.revealToken() });
 }

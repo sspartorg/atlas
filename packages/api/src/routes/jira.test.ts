@@ -48,6 +48,34 @@ describe('/api/integrations/jira', () => {
         expect(get.body).not.toContain('tok-123');
     });
 
+    it('disconnect forgets site, email and token and switches import off', async () => {
+        await app.inject({
+            method: 'PUT',
+            url: '/api/integrations/jira',
+            payload: {
+                site_url: 'https://acme.atlassian.net',
+                email: 'me@acme.test',
+                api_token: 'tok-123',
+                enabled: true,
+                poll_interval_minutes: 30,
+            },
+        });
+        const del = await app.inject({ method: 'DELETE', url: '/api/integrations/jira' });
+        expect(del.statusCode).toBe(200);
+        expect(JSON.parse(del.body)).toMatchObject({
+            site_url: null,
+            email: null,
+            api_token_set: false,
+            enabled: false,
+            poll_interval_minutes: 30,
+        });
+        const reveal = await app.inject({
+            method: 'POST',
+            url: '/api/integrations/jira/reveal-token',
+        });
+        expect(reveal.statusCode).toBe(400);
+    });
+
     it('rejects a non-https site URL and a too-short poll interval', async () => {
         for (const payload of [
             { site_url: 'not a url' },

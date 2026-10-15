@@ -25,6 +25,10 @@ export async function jiraRoutes(app: FastifyInstance) {
         return reply.send(await jiraSync.saveConfig(body));
     });
 
+    app.delete('/api/integrations/jira', { preHandler: requireMcpToken }, async (_req, reply) => {
+        return reply.send(await jiraSync.disconnect());
+    });
+
     // Reveal the stored token. `credsOf` inside the service throws 400
     // `credentials_missing` when none is set, which is the honest answer.
     app.post(

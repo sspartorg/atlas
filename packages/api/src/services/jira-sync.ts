@@ -313,6 +313,23 @@ async function saveConfig(patch: ConfigPatch): Promise<IJiraConfig> {
     return getConfig();
 }
 
+// Disconnect: forget the site, account and token and switch the bridge off.
+// Poll interval, extra fields, sources and imported Tasks stay, so reconnecting
+// picks up where it left off.
+async function disconnect(): Promise<IJiraConfig> {
+    await db
+        .updateTable('jira_config')
+        .set({
+            site_url: null,
+            email: null,
+            api_token_encrypted: null,
+            enabled: false,
+            updated_at: new Date().toISOString(),
+        })
+        .execute();
+    return getConfig();
+}
+
 async function testConnection(
     overrides: z.infer<typeof TestJiraConnectionSchema>
 ): Promise<IJiraTestResult> {
@@ -1085,6 +1102,7 @@ async function tick(now: Date = new Date()): Promise<void> {
 export const jiraSync = {
     getConfig,
     saveConfig,
+    disconnect,
     testConnection,
     // G-014: the switch means the bridge is OFF, and a manual sync writes to a
     // live board exactly like the poller does. Without this gate a disabled

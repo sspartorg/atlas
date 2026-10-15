@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
 import InputAdornment from '@mui/material/InputAdornment';
 import Switch from '@mui/material/Switch';
@@ -13,6 +18,7 @@ import type { IJiraConfig } from '@atlas/shared';
 import type { JiraConfigUpdate } from '../../api/api.js';
 import { FormRow } from '../../components/FormSection.js';
 import {
+    useDisconnectJira,
     useJiraConfig,
     useRevealJiraToken,
     useSyncJira,
@@ -33,6 +39,8 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
     const update = useUpdateJiraConfig();
     const test = useTestJira();
     const sync = useSyncJira();
+    const disconnect = useDisconnectJira();
+    const [confirmDisconnect, setConfirmDisconnect] = useState(false);
     const toast = useToast();
     const [siteUrl, setSiteUrl] = useState(cfg.site_url ?? '');
     const [email, setEmail] = useState(cfg.email ?? '');
@@ -44,8 +52,17 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
     const [extra, setExtra] = useState(cfg.extra_fields.join(', '));
 
     function save(patch: JiraConfigUpdate, message = 'Jira settings saved') {
+        const hadToken = cfg.api_token_set;
         update.mutate(patch, {
-            onSuccess: () => toast.show({ message }),
+            onSuccess: (next) =>
+                // The API drops the token when the site or email moves without
+                // a new one; say so, or the bridge just stops working later.
+                hadToken && !next.api_token_set
+                    ? toast.show({
+                          message: 'API token cleared',
+                          detail: 'The site or email changed. Paste the API token for this account again.',
+                      })
+                    : toast.show({ message }),
             onError: (err) => toast.show({ message: 'Could not save', detail: err.message }),
         });
     }
@@ -109,6 +126,20 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
         });
     }
 
+    function runDisconnect() {
+        disconnect.mutate(undefined, {
+            onSuccess: () => {
+                setSiteUrl('');
+                setEmail('');
+                setToken('');
+                setRevealed(null);
+                setConfirmDisconnect(false);
+                toast.show({ message: 'Disconnected from Jira' });
+            },
+            onError: (err) => toast.show({ message: 'Could not disconnect', detail: err.message }),
+        });
+    }
+
     function runSync() {
         sync.mutate(undefined, {
             onSuccess: (r) =>
@@ -164,11 +195,16 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         }}
                         onBlur={commitToken}
                         slotProps={{
-                            htmlInput: { 'aria-label': 'Jira API token', readOnly: revealed !== null },
+                            htmlInput: {
+                                'aria-label': 'Jira API token',
+                                readOnly: revealed !== null,
+                            },
                             input: {
                                 endAdornment: (
                                     <InputAdornment position="end">
                                         <Tooltip
+                                            // Sits over Test connection; never swallow its click.
+                                            disableInteractive
                                             title={
                                                 revealed !== null
                                                     ? 'Hide token'
@@ -204,7 +240,17 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                         }}
                     />
                 </FormRow>
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, pt: 1 }}>
+                    {(cfg.api_token_set || cfg.site_url || cfg.email) && (
+                        <Button
+                            variant="text"
+                            size="small"
+                            color="error"
+                            onClick={() => setConfirmDisconnect(true)}
+                        >
+                            Disconnect
+                        </Button>
+                    )}
                     <Button
                         variant="outlined"
                         size="small"
@@ -310,6 +356,27 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                 </Box>
             </SettingsSection>
 
+            <Dialog open={confirmDisconnect} onClose={() => setConfirmDisconnect(false)}>
+                <DialogTitle>Disconnect Jira?</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Atlas forgets the site, email and API token and stops importing. Imported
+                        Tasks, project sources, the poll interval and extra fields stay, so you can
+                        reconnect later.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setConfirmDisconnect(false)}>Cancel</Button>
+                    <Button
+                        color="error"
+                        variant="contained"
+                        onClick={runDisconnect}
+                        disabled={disconnect.isPending}
+                    >
+                        Disconnect
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

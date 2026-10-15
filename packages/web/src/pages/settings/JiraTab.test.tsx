@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import type { IJiraConfig, IProjectRepo, IWorkflow } from '@atlas/shared';
@@ -95,6 +95,55 @@ describe('JiraTab', () => {
         expect(await screen.findByDisplayValue('https://acme.atlassian.net')).toBeInTheDocument();
         expect(screen.getByLabelText('Jira API token')).toHaveValue('');
         expect(screen.getByPlaceholderText('Stored. Type to replace.')).toBeInTheDocument();
+    });
+
+    it('says so when an email change clears the stored token', async () => {
+        mount();
+        server.use(
+            http.put(`${apiBase}/integrations/jira`, async ({ request }) => {
+                const body = (await request.json()) as Partial<IJiraConfig>;
+                return HttpResponse.json({ ...CONFIG, ...body, api_token_set: false });
+            })
+        );
+        const user = userEvent.setup();
+        const email = await screen.findByDisplayValue('me@acme.test');
+        await user.clear(email);
+        await user.type(email, 'other@acme.test');
+        await user.tab();
+        expect(await screen.findByText('API token cleared')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Paste your Jira API token')).toBeInTheDocument();
+    });
+
+    it('Disconnect asks first, then clears the connection fields', async () => {
+        let deleted = false;
+        mount();
+        server.use(
+            http.delete(`${apiBase}/integrations/jira`, () => {
+                deleted = true;
+                return HttpResponse.json({
+                    ...CONFIG,
+                    site_url: null,
+                    email: null,
+                    api_token_set: false,
+                    enabled: false,
+                });
+            })
+        );
+        const user = userEvent.setup();
+        await screen.findByDisplayValue('https://acme.atlassian.net');
+        await user.click(screen.getByRole('button', { name: 'Disconnect' }));
+        expect(screen.getByText('Disconnect Jira?')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(deleted).toBe(false);
+
+        await user.click(screen.getByRole('button', { name: 'Disconnect' }));
+        const dialog = await screen.findByRole('dialog');
+        await user.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+        await waitFor(() => expect(deleted).toBe(true));
+        expect(await screen.findByText('Disconnected from Jira')).toBeInTheDocument();
+        expect(screen.queryByDisplayValue('https://acme.atlassian.net')).not.toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Paste your Jira API token')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
     });
 
     // Sources moved to each project's Jira tab (migration 010); their tests
