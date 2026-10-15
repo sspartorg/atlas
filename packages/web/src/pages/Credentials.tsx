@@ -23,7 +23,7 @@ const CredentialModal = lazyNamed(
     () => import('./credentials/CredentialModal.js'),
     'CredentialModal'
 );
-import { useSetPageTitle } from '../components/shell/index.js';
+import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { PageHeader } from '../components/PageHeader.js';
 
 export function Credentials() {
@@ -92,6 +92,7 @@ export function Credentials() {
             <PageHeader
                 icon="key"
                 title="Git credentials"
+                hideActionsOnMobile
                 breadcrumbs={[{ label: 'Settings', to: '/settings' }, { label: 'Credentials' }]}
                 subtitle={
                     rows.length > 0 ? (
@@ -185,6 +186,9 @@ export function Credentials() {
                     </Button>
                 </DialogActions>
             </Dialog>
+
+            {/* Mobile: the add action is a FAB, like every other add page. */}
+            <PageFab onClick={openAdd} label="Add credential" />
         </Box>
     );
 }

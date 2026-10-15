@@ -21,7 +21,7 @@ import SendRounded from '@mui/icons-material/SendRounded';
 import type { IReminder, ReminderChannel, ReminderStatus } from '@atlas/shared';
 import { useReminders, useCancelReminder } from '../hooks/useReminders.js';
 import { useToast } from '../hooks/useToast.js';
-import { useSetPageTitle } from '../components/shell/index.js';
+import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { HeroEmptyState } from '../components/HeroEmptyState.js';
 import { RefreshButton } from '../components/index.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
@@ -118,7 +118,12 @@ export function Reminders() {
                             variant="contained"
                             startIcon={<AddRounded sx={{ fontSize: 16 }} />}
                             onClick={() => setNewOpen(true)}
-                            sx={{ textTransform: 'none', fontWeight: 500 }}
+                            // Mobile gets the FAB below; Refresh + Show history stay.
+                            sx={{
+                                textTransform: 'none',
+                                fontWeight: 500,
+                                display: { xs: 'none', md: 'inline-flex' },
+                            }}
                         >
                             New reminder
                         </Button>
@@ -165,6 +170,7 @@ export function Reminders() {
             )}
 
             <NewReminderModal open={newOpen} onClose={() => setNewOpen(false)} />
+            <PageFab onClick={() => setNewOpen(true)} label="New reminder" />
             <NewReminderModal
                 open={editing !== null}
                 onClose={() => setEditing(null)}

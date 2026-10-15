@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
@@ -6,6 +6,9 @@ import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Credentials } from './Credentials.js';
 import type { CredentialHost, ICredential } from '@atlas/shared';
+
+let isMobileValue = false;
+vi.mock('../hooks/useIsMobile.js', () => ({ useIsMobile: () => isMobileValue }));
 
 const BASE = 'http://localhost:3000/api';
 
@@ -36,6 +39,24 @@ describe('Credentials page', () => {
             initialEntries: ['/credentials'],
         });
         expect(container.firstChild).toBeInTheDocument();
+    });
+
+    it('on mobile, the Add credential FAB opens the add dialog', async () => {
+        isMobileValue = true;
+        try {
+            server.use(
+                ...defaultHandlers,
+                http.get(`${BASE}/credentials`, () => HttpResponse.json([makeCredential()]))
+            );
+            renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
+            await screen.findByText('GitHub PAT');
+            const fab = document.querySelector('.MuiFab-root') as HTMLElement;
+            expect(fab).toHaveAccessibleName('Add credential');
+            fireEvent.click(fab);
+            expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        } finally {
+            isMobileValue = false;
+        }
     });
 
     it('clicks "Add credential" header button (openAdd handler)', async () => {

@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Reminders, formatSchedule } from './Reminders.js';
 import type { IReminder } from '@atlas/shared';
+
+let isMobileValue = false;
+vi.mock('../hooks/useIsMobile.js', () => ({ useIsMobile: () => isMobileValue }));
 
 const BASE = 'http://localhost:3000/api';
 
@@ -52,6 +55,21 @@ describe('Reminders page', () => {
         await waitFor(() => {
             expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
         });
+    });
+
+    it('on mobile, the New reminder FAB opens the modal', async () => {
+        isMobileValue = true;
+        try {
+            server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([])));
+            renderWithProviders(<Reminders />);
+            await screen.findByText('No active reminders');
+            const fab = document.querySelector('.MuiFab-root') as HTMLElement;
+            expect(fab).toHaveAccessibleName('New reminder');
+            fireEvent.click(fab);
+            await waitFor(() => expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0));
+        } finally {
+            isMobileValue = false;
+        }
     });
 
     it('toggles the "Show history" switch and renders history rows', async () => {
