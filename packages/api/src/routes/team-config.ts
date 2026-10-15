@@ -9,8 +9,17 @@ export async function teamConfigRoutes(app: FastifyInstance) {
     app.get('/api/team-config', async (_req, reply) => reply.send(await teamConfig.getConfig()));
 
     app.put('/api/team-config', { preHandler: requireMcpToken }, async (req, reply) => {
-        const body = UpdateTeamConfigSchema.parse(req.body);
-        return reply.send(await teamConfig.saveConfig(body));
+        // Test hook: the e2e suite publishes to a local bare repo over file://,
+        // which the https-only schema refuses. Off unless the env var is set.
+        const raw = (req.body ?? {}) as { repo_url?: unknown };
+        const fileUrl =
+            process.env['ATLAS_TEAM_CONFIG_ALLOW_FILE_URLS'] === '1' &&
+            typeof raw.repo_url === 'string' &&
+            raw.repo_url.startsWith('file://')
+                ? raw.repo_url
+                : undefined;
+        const body = UpdateTeamConfigSchema.parse(fileUrl ? { ...raw, repo_url: undefined } : raw);
+        return reply.send(await teamConfig.saveConfig(fileUrl ? { ...body, repo_url: fileUrl } : body));
     });
 
     app.post('/api/team-config/sync', { preHandler: requireMcpToken }, async (_req, reply) => {

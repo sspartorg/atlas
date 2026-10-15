@@ -79,6 +79,21 @@ describe('/api/team-config', () => {
         expect(res.json().error).toMatch(message);
     });
 
+    it('refuses a file:// repo unless the e2e test hook is on', async () => {
+        const put = (repo_url: string) =>
+            app.inject({ method: 'PUT', url: '/api/team-config', payload: { repo_url } });
+        expect((await put('file:///tmp/team.git')).statusCode).toBe(400);
+        vi.stubEnv('ATLAS_TEAM_CONFIG_ALLOW_FILE_URLS', '1');
+        try {
+            const res = await put('file:///tmp/team.git');
+            expect(res.statusCode).toBe(200);
+            expect(JSON.parse(res.body).repo_url).toBe('file:///tmp/team.git');
+            expect((await put('http://github.com/acme/team.git')).statusCode).toBe(400);
+        } finally {
+            vi.unstubAllEnvs();
+        }
+    });
+
     it('rejects an unknown credential', async () => {
         const res = await put({ credential_id: 'missing' });
         expect(res.statusCode).toBe(400);
