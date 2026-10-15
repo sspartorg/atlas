@@ -580,3 +580,48 @@ describe('team config lifecycle', () => {
         rmSync(second, { recursive: true, force: true });
     });
 });
+
+describe('team config resilience', () => {
+    /** Clone the remote, let `edit` change files, commit and push — a publisher's change. */
+    function publishEdit(remote: string, edit: (work: string) => void): void {
+        const work = mkdtempSync(join(tmpdir(), 'atlas-pub-'));
+        execFileSync('git', ['clone', '-q', remote, work]);
+        edit(work);
+        execFileSync('git', ['-C', work, 'add', '-A']);
+        execFileSync('git', ['-C', work, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'edit']);
+        execFileSync('git', ['-C', work, 'push', '-q', 'origin', 'HEAD:main']);
+        rmSync(work, { recursive: true, force: true });
+    }
+
+    it('a project file that fails to import is reported, not treated as dropped', async () => {
+        const remote = bareRepo();
+        await publishThenBecomeSubscriber(remote);
+        await teamConfig.syncNow();
+        publishEdit(remote, (work) => writeFileSync(join(work, 'projects', 'ATL', 'project.json'), '{ not json'));
+
+        const msg = await teamConfig.syncNow();
+        expect(msg).toContain('project.json');
+        expect(msg).not.toContain('left the team config');
+        expect(await testDb.selectFrom('projects').select(['id', 'team_managed']).execute()).toEqual([{ id: 'p1', team_managed: true }]);
+        expect((await teamConfig.getConfig()).last_sync_ok).toBe(false);
+        rmSync(remote, { recursive: true, force: true });
+    });
+
+    it('a repo with no remote URL imports with its project, and says it cannot be cloned', async () => {
+        const remote = bareRepo();
+        await seedPublisher();
+        await testDb.updateTable('project_repos').set({ git_url: '' }).where('id', '=', 'r1').execute();
+        await connect('publisher', remote);
+        await teamConfig.syncNow();
+        await truncateAll();
+        rmSync(teamConfigDir(), { recursive: true, force: true });
+        await connect('subscriber', remote);
+        await testDb.updateTable('settings').set({ workspace_path: mkdtempSync(join(tmpdir(), 'atlas-ws-')) }).where('id', '=', 1).execute();
+
+        const msg = await teamConfig.syncNow();
+        expect(await testDb.selectFrom('projects').select(['id', 'team_managed']).execute()).toEqual([{ id: 'p1', team_managed: true }]);
+        expect(await testDb.selectFrom('project_repos').select(['id', 'git_url']).where('project_id', '=', 'p1').execute()).toEqual([{ id: 'r1', git_url: '' }]);
+        expect(msg).toMatch(/web: has no remote URL/);
+        rmSync(remote, { recursive: true, force: true });
+    });
+});

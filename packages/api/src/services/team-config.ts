@@ -63,7 +63,9 @@ const ProjectFileSchema = z.object({
         z.object({
             id: z.string().min(1),
             name: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/),
-            git_url: z.string().url(),
+            // '' = a repo with no remote on the publisher's machine: it is
+            // registered but can't be cloned here.
+            git_url: z.union([z.string().url(), z.literal('')]),
             default_branch: z.string().min(1),
             setup_sh_body: z.string(),
             setup_ps1_body: z.string(),
@@ -376,7 +378,13 @@ async function publishIfChanged(): Promise<void> {
 // ── Import (subscriber) ─────────────────────────────────────────────────────
 
 async function readJson<T>(path: string, schema: z.ZodType<T>): Promise<T> {
-    const raw = JSON.parse(await readFile(path, 'utf8')) as unknown;
+    let raw: unknown;
+    try {
+        raw = JSON.parse(await readFile(path, 'utf8'));
+    } catch (err) {
+        // Name the file: a bare JSON error doesn't say which one is broken.
+        throw new Error(`${path}: ${errMsg(err)}`);
+    }
     const res = schema.safeParse(raw);
     if (!res.success) throw new Error(`${path}: ${res.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
     return res.data;
@@ -415,6 +423,7 @@ const cloneStarted = new Map<string, number>();
 const CLONE_RETRY_MS = 10 * 60_000;
 
 async function cloneMissingRepo(cfg: ITeamConfig, project: ProjectFile, repo: { id: string; git_url: string; default_branch: string; git_path: string }): Promise<void> {
+    if (!repo.git_url) throw new Error('has no remote URL on the publisher, so it cannot be cloned here');
     if (!cfg.credential_id || Date.now() - (cloneStarted.get(repo.id) ?? 0) < CLONE_RETRY_MS) return;
     cloneStarted.set(repo.id, Date.now());
     await startClone(
@@ -563,8 +572,12 @@ async function importFromFiles(cfg: ITeamConfig): Promise<SyncReport> {
     for (const id of agentIds) await importAgent(id, report).catch((err) => report.problems.push(`Agent ${id}: ${errMsg(err)}`));
 
     const projectIds: string[] = [];
+    // Every project still in the repo, imported or not: one that failed to
+    // import is a problem to report, not a project the publisher dropped.
+    const presentPrefixes: string[] = [];
     for (const prefix of await listDirs(join(dir, 'projects'))) {
         if (!existsSync(join(dir, 'projects', prefix, 'project.json'))) continue;
+        presentPrefixes.push(prefix);
         try {
             projectIds.push((await importProject(cfg, prefix, report)).id);
         } catch (err) {
@@ -579,6 +592,7 @@ async function importFromFiles(cfg: ITeamConfig): Promise<SyncReport> {
         .select(['id', 'name'])
         .where('team_managed', '=', true)
         .$if(projectIds.length > 0, (q) => q.where('id', 'not in', projectIds))
+        .$if(presentPrefixes.length > 0, (q) => q.where('issue_key_prefix', 'not in', presentPrefixes))
         .execute();
     for (const p of dropped) {
         await db.updateTable('projects').set({ team_managed: false }).where('id', '=', p.id).execute();
