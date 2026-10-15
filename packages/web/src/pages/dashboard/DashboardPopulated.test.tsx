@@ -1,12 +1,9 @@
-import { StrictMode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
-import { makeAgent } from '../../test-utils/factories.js';
 import { DashboardPopulated } from './DashboardPopulated.js';
 
 const BASE = 'http://localhost:3000/api';
@@ -197,53 +194,36 @@ describe('DashboardPopulated', () => {
         expect(document.body).toBeTruthy();
     });
 
-    // Regression guard: the roster's scroll-into-view used to live in an
-    // effect, and the browser's StrictMode mount double-run fired it on every
-    // load, so a phone reload landed at the bottom of the page. jsdom mounts
-    // this tree once, so these pin the intent (scroll only on the click)
-    // rather than replaying that double run.
-    it('only scrolls to the roster when Show all / Show fewer is clicked', async () => {
-        // Specific handlers first: MSW takes the first match.
-        server.use(
-            http.get(`${BASE}/agents`, () =>
-                HttpResponse.json(
-                    Array.from({ length: 9 }, (_, i) =>
-                        makeAgent({ id: `a${i}`, name: `Agent ${i}`, category: 'software-dev' })
-                    )
-                )
-            ),
-            http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            ...defaultHandlers
-        );
-        const scroll = vi.fn();
-        Element.prototype.scrollIntoView = scroll;
-        vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
-            cb(0);
-            return 0;
-        });
+    it('hides Awaiting You and In Motion when both are empty', async () => {
+        server.use(...defaultHandlers);
         renderWithProviders(
-            <StrictMode>
-                <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
-            </StrictMode>
-        );
-        await userEvent.click(await screen.findByRole('button', { name: 'Show all 9' }));
-        expect(scroll).toHaveBeenCalledTimes(1);
-        vi.restoreAllMocks();
-    });
-
-    it('does not scroll on mount', async () => {
-        server.use(
-            http.get(`${BASE}/run`, () => HttpResponse.json([])),
-            ...defaultHandlers
-        );
-        const scroll = vi.fn();
-        Element.prototype.scrollIntoView = scroll;
-        renderWithProviders(
-            <StrictMode>
-                <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
-            </StrictMode>
+            <DashboardPopulated data={{ awaiting: [], queue: [], kpis: baseKpis }} />
         );
         await screen.findByText('Your agents');
-        expect(scroll).not.toHaveBeenCalled();
+        expect(screen.queryByText('Awaiting You')).not.toBeInTheDocument();
+        expect(screen.queryByText('In Motion')).not.toBeInTheDocument();
+    });
+
+    it('shows both worklists when either has rows', async () => {
+        server.use(...defaultHandlers);
+        renderWithProviders(
+            <DashboardPopulated
+                data={{
+                    awaiting: [
+                        {
+                            issue_type: 'task',
+                            id: 't-1',
+                            title: 'Approve plan',
+                            status: 'waiting_info',
+                            updated_at: '2026-06-25T00:00:00.000Z',
+                        },
+                    ],
+                    queue: [],
+                    kpis: baseKpis,
+                }}
+            />
+        );
+        expect(await screen.findByText('Awaiting You')).toBeInTheDocument();
+        expect(screen.getByText('In Motion')).toBeInTheDocument();
     });
 });
