@@ -64,10 +64,21 @@ export function ProfileTab() {
     }, [credentials]);
 
     function commitName() {
-        if (ownerName.trim() && ownerName.trim() !== settings?.owner_name) {
+        if (!ownerName.trim()) {
+            // A blank name is never saved; don't leave it looking saved.
+            setOwnerName(settings?.owner_name ?? '');
+            return;
+        }
+        if (ownerName.trim() !== settings?.owner_name) {
             updateProfile.mutate(
                 { owner_name: ownerName.trim() },
-                { onSuccess: () => toast.show({ message: 'Display name updated' }) }
+                {
+                    onSuccess: () => toast.show({ message: 'Display name updated' }),
+                    onError: (err) => {
+                        setOwnerName(settings?.owner_name ?? '');
+                        toast.show({ message: 'Could not save', detail: err.message });
+                    },
+                }
             );
         }
     }
@@ -83,10 +94,24 @@ export function ProfileTab() {
         if (next.trim() && next.trim() !== settings?.workspace_path) {
             updateProfile.mutate(
                 { workspace_path: next.trim() },
-                { onSuccess: () => toast.show({ message: 'Workspace folder updated' }) }
+                {
+                    onSuccess: () => toast.show({ message: 'Workspace folder updated' }),
+                    onError: (err) =>
+                        toast.show({ message: 'Could not save', detail: err.message }),
+                }
             );
         }
     }
+
+    // FolderPicker reports every keystroke. Saving each one raced: seven
+    // PATCHes for "/tmp/qa" landed out of order and stored "/tp/qa". Save
+    // once the value settles instead (typing pauses, or a Browse pick).
+    useEffect(() => {
+        const t = window.setTimeout(() => commitWorkspace(workspacePath), 600);
+        return () => window.clearTimeout(t);
+        // commitWorkspace reads the latest settings each render; only the
+        // typed value should re-arm the timer.
+    }, [workspacePath]);
 
     const projectsCount = projects.length;
 
@@ -114,7 +139,12 @@ export function ProfileTab() {
                                         // `Row label=` renders a sibling <Typography>,
                                         // not an associated <label> — without this the
                                         // input has no accessible name.
-                                        slotProps={{ htmlInput: { 'aria-label': 'Display Name' } }}
+                                        slotProps={{
+                                            htmlInput: {
+                                                'aria-label': 'Display Name',
+                                                maxLength: 100,
+                                            },
+                                        }}
                                         value={ownerName}
                                         onChange={(e) => setOwnerName(e.target.value)}
                                         onBlur={commitName}
@@ -150,10 +180,7 @@ export function ProfileTab() {
                                     <FolderPicker
                                         ariaLabel="Workspace Folder"
                                         value={workspacePath}
-                                        onChange={(next) => {
-                                            setWorkspacePath(next);
-                                            commitWorkspace(next);
-                                        }}
+                                        onChange={setWorkspacePath}
                                         placeholder="C:\Users\…\atlas-workspace"
                                         size="small"
                                     />
@@ -260,7 +287,7 @@ export function ProfileTab() {
 
                     <SettingsSection
                         title="Reset"
-                        subtitle="Wipes all projects, tasks, sub-tasks, agents, runs, notifications and saved credentials from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
+                        subtitle="Wipes all projects, tasks, sub-tasks, agents, runs, notifications, saved credentials and shared secrets from the local database, clears the external notification channel, and returns to onboarding. Git repositories on disk are not touched."
                     >
                         <Button
                             variant="outlined"
@@ -282,7 +309,9 @@ export function ProfileTab() {
                 </Box>
             </Box>
 
-            {bundleMode && <SecretsBundleDialog mode={bundleMode} onClose={() => setBundleMode(null)} />}
+            {bundleMode && (
+                <SecretsBundleDialog mode={bundleMode} onClose={() => setBundleMode(null)} />
+            )}
             {resetOpen && (
                 <Suspense fallback={null}>
                     <ResetWorkspaceModal open onClose={() => setResetOpen(false)} />

@@ -4,6 +4,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { server } from '../../test-setup.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
+import { Toast } from '../../components/Toast.js';
 import { ProfileTab } from './ProfileTab.js';
 import { makeProject } from '../../test-utils/factories.js';
 
@@ -204,8 +205,44 @@ describe('ProfileTab', () => {
         });
     });
 
-    it('commitWorkspace is called when FolderPicker onChange fires with a new path', async () => {
+    it('display name: blank reverts, a rejected save says so and reverts', async () => {
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json({
+                    id: 1,
+                    owner_name: 'Owner',
+                    onboarding_complete: 1,
+                    workspace_path: 'C:/work',
+                    accent_color: '#0A0A0A',
+                })
+            ),
+            http.get(`${BASE}/credentials`, () => HttpResponse.json([])),
+            http.get(`${BASE}/projects`, () => HttpResponse.json([])),
+            http.get(`${BASE}/fs/stat`, () => HttpResponse.json({ exists: true, is_directory: true })),
+            http.patch(`${BASE}/settings/profile`, () =>
+                HttpResponse.json({ error: 'owner_name too long' }, { status: 400 })
+            )
+        );
+        renderWithProviders(
+            <>
+                <ProfileTab />
+                <Toast />
+            </>
+        );
+        const name = await screen.findByDisplayValue('Owner');
+        expect(name).toHaveAttribute('maxlength', '100');
+        fireEvent.change(name, { target: { value: '   ' } });
+        fireEvent.blur(name);
+        expect(name).toHaveValue('Owner');
+        fireEvent.change(name, { target: { value: 'Someone else' } });
+        fireEvent.blur(name);
+        expect(await screen.findByText('Could not save')).toBeInTheDocument();
+        await waitFor(() => expect(name).toHaveValue('Owner'));
+    });
+
+    it('saves the workspace folder once, after typing settles', async () => {
         let patchedPath: string | null = null;
+        let patchCount = 0;
         server.use(
             http.get(`${BASE}/settings`, () =>
                 HttpResponse.json({
@@ -231,6 +268,7 @@ describe('ProfileTab', () => {
             ),
             http.patch(`${BASE}/settings/profile`, async ({ request }) => {
                 const body = (await request.json()) as Record<string, unknown>;
+                patchCount += 1;
                 patchedPath = body['workspace_path'] as string;
                 return HttpResponse.json({
                     id: 1,
@@ -242,14 +280,13 @@ describe('ProfileTab', () => {
             })
         );
         renderWithProviders(<ProfileTab />);
-        // Wait for settings to load
-        await waitFor(() => screen.getByText('Owner Profile'));
-        // Use the text input for workspace folder (second textbox after owner name)
-        const inputs = screen.getAllByRole('textbox');
-        const workspaceInput = inputs[1] as HTMLInputElement;
-        fireEvent.change(workspaceInput, { target: { value: 'C:/newpath' } });
-        fireEvent.blur(workspaceInput);
+        const workspaceInput = await screen.findByDisplayValue('C:/work');
+        // Typing reports every keystroke; only the settled value is saved, once.
+        for (const v of ['C:/n', 'C:/ne', 'C:/new', 'C:/newpath']) {
+            fireEvent.change(workspaceInput, { target: { value: v } });
+        }
         await waitFor(() => expect(patchedPath).toBe('C:/newpath'));
+        expect(patchCount).toBe(1);
     });
 
     it('shows credentials summary with +N more when more than 3 credentials exist', async () => {
