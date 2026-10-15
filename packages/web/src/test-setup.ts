@@ -18,7 +18,11 @@ configure({ asyncUtilTimeout: 10_000 });
 // test file that transitively imports the header. Mock the React wrapper so
 // the canvas path never runs in tests.
 vi.mock('lottie-react', () => ({
-    default: () => React.createElement('div', { 'data-testid': 'lottie-mock' }),
+    default: (props: { autoplay?: boolean }) =>
+        React.createElement('div', {
+            'data-testid': 'lottie-mock',
+            'data-autoplay': String(props.autoplay),
+        }),
 }));
 
 // MSW intercepts every `fetch` call from the components/hooks under test.
@@ -116,10 +120,14 @@ class MockEventSource {
 // JSON.stringify wrapper in pushToAll.
 (window as Window & { __pushSseRaw?: (raw: string) => void }).__pushSseRaw = (raw: string) => {
     const msgEvent = new MessageEvent('message', { data: raw });
-    const instances = (window.EventSource as unknown as { _instances: MockEventSource[] })._instances;
+    const instances = (window.EventSource as unknown as { _instances: MockEventSource[] })
+        ._instances;
     for (const inst of instances) {
         // Mirror MockEventSource.pushToAll: call both _listeners and onmessage.
-        const all = inst as unknown as { _listeners: Array<(ev: MessageEvent) => void>; onmessage: ((ev: MessageEvent) => void) | null };
+        const all = inst as unknown as {
+            _listeners: Array<(ev: MessageEvent) => void>;
+            onmessage: ((ev: MessageEvent) => void) | null;
+        };
         for (const fn of all._listeners) {
             fn(msgEvent);
         }

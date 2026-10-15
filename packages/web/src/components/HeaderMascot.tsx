@@ -255,9 +255,13 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
         };
     }, [variantUrls, isQuiet]);
 
-    const prefersReducedMotion = useMemo(() => {
+    // Stands still (first frame) under reduced motion, and on phones: the
+    // looping player asks for a new frame on every display refresh, on every
+    // page, which roughly doubled the main thread's load on old Android
+    // phones. The ring tint still shows idle vs working.
+    const stayStill = useMemo(() => {
         if (typeof window === 'undefined' || !window.matchMedia) return false;
-        return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        return window.matchMedia('(prefers-reduced-motion: reduce), (max-width: 599.95px)').matches;
     }, []);
 
     const rawAnimationData = hasActiveRuns ? workingData : idleData;
@@ -308,7 +312,7 @@ export function HeaderMascot({ size = 40 }: HeaderMascotProps) {
                         lottieRef={lottieRef}
                         animationData={animationData}
                         loop
-                        autoplay={!prefersReducedMotion}
+                        autoplay={!stayStill}
                         rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
                         style={{ width: size - 4, height: size - 4 }}
                     />

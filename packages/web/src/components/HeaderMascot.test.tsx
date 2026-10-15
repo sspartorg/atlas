@@ -299,6 +299,38 @@ describe('HeaderMascot', () => {
         Object.defineProperty(window, 'matchMedia', { writable: true, value: origMatchMedia });
     }, 30000);
 
+    it.each([
+        ['a phone', '(max-width: 599.95px)', 'false'],
+        ['a wider screen', '(none)', 'true'],
+    ])(
+        'on %s the mascot autoplays=%s',
+        async (_, matching, autoplay) => {
+            const origMatchMedia = window.matchMedia;
+            Object.defineProperty(window, 'matchMedia', {
+                writable: true,
+                value: (query: string) => ({
+                    matches: query.includes(matching),
+                    media: query,
+                    onchange: null,
+                    addListener: () => {},
+                    removeListener: () => {},
+                    addEventListener: () => {},
+                    removeEventListener: () => {},
+                    dispatchEvent: () => false,
+                }),
+            });
+            server.use(
+                http.get('http://localhost:3000/api/run', () => HttpResponse.json([])),
+                http.get('http://localhost:3000/lottie/:file', () => HttpResponse.json(WARM_LOTTIE))
+            );
+            renderWithProviders(<HeaderMascot />);
+            const lottie = await screen.findByTestId('lottie-mock', {}, { timeout: 10000 });
+            expect(lottie).toHaveAttribute('data-autoplay', autoplay);
+            Object.defineProperty(window, 'matchMedia', { writable: true, value: origMatchMedia });
+        },
+        30000
+    );
+
     it('exercises !window.matchMedia branch — prefersReducedMotion defaults false when matchMedia absent', async () => {
         // L195: `if (typeof window === 'undefined' || !window.matchMedia) return false`
         // Force !window.matchMedia by temporarily removing it.
