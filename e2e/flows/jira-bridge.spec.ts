@@ -242,6 +242,45 @@ test.describe('Jira bridge', () => {
         expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     });
 
+    test('disconnect forgets the connection; reconnect works; an email change says the token went', async ({
+        page,
+        request,
+    }) => {
+        await request.put(`${API}/api/integrations/jira`, {
+            data: { site_url: siteUrl, email: 'owner@e2e.test', api_token: 'e2e-token', enabled: false },
+        });
+        await goto(page, '/settings?tab=jira');
+        await page.getByRole('button', { name: 'Test connection' }).click();
+        await expect(page.getByText('Connected to Jira as Fake Owner')).toBeVisible();
+
+        await page.getByRole('button', { name: 'Disconnect' }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Disconnect' }).click();
+        await expect(page.getByText('Disconnected from Jira')).toBeVisible();
+        await expect(page.getByPlaceholder('https://your-site.atlassian.net')).toHaveValue('');
+        await expect(page.getByRole('button', { name: 'Test connection' })).toBeDisabled();
+        const cfg = await apiGet<{ site_url: string | null; api_token_set: boolean }>(request, '/api/integrations/jira');
+        expect(cfg).toMatchObject({ site_url: null, api_token_set: false });
+
+        // Reconnect from blank through the form.
+        const site = page.getByPlaceholder('https://your-site.atlassian.net');
+        await site.fill(siteUrl);
+        await site.blur();
+        const email = page.getByPlaceholder('you@example.com');
+        await email.fill('owner@e2e.test');
+        await email.blur();
+        const token = page.getByLabel('Jira API token');
+        await token.fill('e2e-token');
+        await token.blur();
+        await expect(page.getByRole('button', { name: 'Test connection' })).toBeEnabled();
+        await page.getByRole('button', { name: 'Test connection' }).click();
+        await expect(page.getByText('Connected to Jira as Fake Owner').last()).toBeVisible();
+
+        // Moving the email without a new token drops it — and the UI says so.
+        await email.fill('someone@e2e.test');
+        await email.blur();
+        await expect(page.getByText('API token cleared')).toBeVisible();
+    });
+
     test('rejects a non-URL site and keeps the saved one', async ({ page }) => {
         await goto(page, '/settings?tab=jira', {
             allow: [/400 \(Bad Request\)/, /integrations\/jira/],
