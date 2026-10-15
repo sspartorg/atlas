@@ -1,6 +1,11 @@
 import { settingsService } from '../settings.js';
 import type { ExternalNotificationTransport } from './types.js';
 
+// Test hook: the e2e suite points this at a local fake so Send Test runs offline.
+function telegramApiBase(): string {
+    return (process.env['ATLAS_TELEGRAM_API_BASE'] ?? 'https://api.telegram.org').replace(/\/$/, '');
+}
+
 // Transport adapter for the Telegram bot API. The orchestrator
 // (`services/external-notifications.ts`) handles quiet hours + per-event
 // toggles; this file does NOT gate — `send()` always attempts delivery
@@ -20,7 +25,7 @@ async function postMessage(
     config: { token: string; chatId: string },
     message: string,
 ): Promise<void> {
-    const url = `https://api.telegram.org/bot${config.token}/sendMessage`;
+    const url = `${telegramApiBase()}/bot${config.token}/sendMessage`;
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,7 +39,7 @@ async function postMessage(
 
 async function fetchBotUsername(token: string): Promise<string | null> {
     try {
-        const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+        const res = await fetch(`${telegramApiBase()}/bot${token}/getMe`);
         if (!res.ok) return null;
         const data = (await res.json()) as { ok?: boolean; result?: { username?: string } };
         const u = data?.result?.username;

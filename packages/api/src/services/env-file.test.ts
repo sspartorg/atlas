@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { parseEnv, rewriteEnv, envFileService, KNOWN_ENV_VARS } from './env-file.js';
 
 describe('rewriteEnv', () => {
@@ -237,5 +239,22 @@ describe('envFileService.write — fs-mocked write paths (A5)', () => {
         // Untouched row preserved.
         expect(String(body)).toContain('OTHER=keep');
         expect(renameSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('ATLAS_ENV_FILE redirects reads and writes to that file (e2e never touches the real .env)', () => {
+        vi.restoreAllMocks();
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'atlas-env-'));
+        const file = `${dir}/test.env`;
+        fs.writeFileSync(file, 'ATLAS_LOG_LEVEL=info\n');
+        vi.stubEnv('ATLAS_ENV_FILE', file);
+        try {
+            envFileService.write([{ key: 'ATLAS_FEEDBACK_URL', value: 'https://example.test/bugs' }]);
+            const body = fs.readFileSync(file, 'utf8');
+            expect(body).toContain('ATLAS_LOG_LEVEL=info');
+            expect(body).toContain('ATLAS_FEEDBACK_URL=https://example.test/bugs');
+        } finally {
+            vi.unstubAllEnvs();
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
     });
 });

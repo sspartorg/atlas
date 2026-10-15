@@ -52,6 +52,10 @@ function repoRoot(): string {
 }
 
 function envFilePath(): string {
+    // Test hook: the e2e suite points this at a scratch file so saving on the
+    // Environment tab never touches the developer's real .env.
+    const override = process.env['ATLAS_ENV_FILE'];
+    if (override) return path.resolve(override);
     const file = process.env['ATLAS_ENV']?.toLowerCase() === 'prod' ? '.env.prod' : '.env';
     return path.join(repoRoot(), file);
 }
@@ -60,6 +64,8 @@ function envFilePath(): string {
 // if __dirname is somehow misresolved during a future refactor.
 function assertSafePath(p: string): void {
     const root = repoRoot();
+    const override = process.env['ATLAS_ENV_FILE'];
+    if (override && p === path.resolve(override)) return;
     if (p !== path.join(root, '.env') && p !== path.join(root, '.env.prod')) {
         throw new Error(`env file path is not a root env file: ${p}`);
     }
