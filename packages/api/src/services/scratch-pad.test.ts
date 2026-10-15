@@ -4,6 +4,8 @@ vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
 import { scratchPadService, inferTitle } from './scratch-pad.js';
 import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { sql } from 'kysely';
+import { db } from '../db/kysely-client.js';
 
 // T5 — Service-level coverage for the inferred-title backstop. Routes
 // already have CRUD coverage in `routes/scratchPad.test.ts`; this file
@@ -144,6 +146,22 @@ describe('scratchPadService CRUD', () => {
         expect(got?.title).toBe('hi');
 
         expect(await scratchPadService.get('does-not-exist')).toBeUndefined();
+    });
+
+    it('list purges blank tiles older than a day and keeps everything else', async () => {
+        const stale = { title: '', body_md: '  \n ' };
+        await scratchPadService.create({ id: 'old-blank', ...stale });
+        await scratchPadService.create({ id: 'old-untitled', title: 'Untitled', body_md: '' });
+        await scratchPadService.create({ id: 'old-titled', title: 'Keep me', body_md: '' });
+        await scratchPadService.create({ id: 'fresh-blank', ...stale });
+        await db
+            .updateTable('scratch_pad')
+            .set({ updated_at: sql<string>`now() - interval '2 days'` })
+            .where('id', 'in', ['old-blank', 'old-untitled', 'old-titled'])
+            .execute();
+
+        const ids = (await scratchPadService.list()).map((t) => t.id).sort();
+        expect(ids).toEqual(['fresh-blank', 'old-titled']);
     });
 
     it('list returns rows ordered by updated_at desc', async () => {

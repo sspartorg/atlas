@@ -125,43 +125,35 @@ describe('ScratchPadEditor — plain Google-Keep surface', () => {
         expect(onClose).toHaveBeenCalled();
     }, 15_000);
 
-    it('infers "Untitled" when both title and body are blank on close', async () => {
+    it('deletes the tile instead of saving when title and body are blank on close', async () => {
         const user = userEvent.setup({ delay: null });
         const onClose = vi.fn();
-        const patches: Array<{ title?: string; body_md?: string }> = [];
-
-        // Seed local state with content, then clear it, so the close
-        // diff detects a real change (otherwise the flush short-circuits
-        // and skips the PATCH).
-        const tile = makeTile({ id: 'tile-8', title: 'previous', body_md: 'previous' });
+        let patched = false;
+        let deletedId: string | undefined;
 
         server.use(
-            http.patch(`${BASE}/scratch-pad/:id`, async ({ request }) => {
-                const body = (await request.json()) as { title?: string; body_md?: string };
-                patches.push(body);
-                return HttpResponse.json(
-                    makeTile({
-                        id: 'tile-8',
-                        title: body.title ?? '',
-                        body_md: body.body_md ?? '',
-                    })
-                );
+            http.patch(`${BASE}/scratch-pad/:id`, () => {
+                patched = true;
+                return HttpResponse.json(makeTile({ id: 'tile-8' }));
+            }),
+            http.delete(`${BASE}/scratch-pad/:id`, ({ params }) => {
+                deletedId = params['id'] as string;
+                return new HttpResponse(null, { status: 204 });
             })
         );
 
+        const tile = makeTile({ id: 'tile-8', title: 'previous', body_md: 'previous' });
         renderWithProviders(<ScratchPadEditor open onClose={onClose} tile={tile} />);
 
-        const title = screen.getByPlaceholderText(/Title \(auto from first 3 words/);
-        const bodyArea = screen.getByPlaceholderText('Take a note...');
-        await user.clear(title);
-        await user.clear(bodyArea);
+        await user.clear(screen.getByPlaceholderText(/Title \(auto from first 3 words/));
+        await user.clear(screen.getByPlaceholderText('Take a note...'));
+        await user.type(screen.getByPlaceholderText('Take a note...'), '   ');
 
         await user.click(screen.getByRole('button', { name: /Close/i }));
 
-        await waitFor(() => expect(patches.length).toBeGreaterThan(0));
-        const last = patches[patches.length - 1]!;
-        expect(last.title).toBe('Untitled');
-        expect(last.body_md).toBe('');
+        await waitFor(() => expect(deletedId).toBe('tile-8'));
+        expect(patched).toBe(false);
+        expect(onClose).toHaveBeenCalled();
     }, 15_000);
 
     it('opens ConfirmDeleteModal when delete is clicked (matches sibling delete convention)', async () => {

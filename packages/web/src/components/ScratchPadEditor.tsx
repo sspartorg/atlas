@@ -20,6 +20,7 @@ import { ConfirmDeleteModal } from './ConfirmDeleteModal.js';
 //     don't churn the API + bump updated_at on every keypress.
 //   • Closing flushes pending changes synchronously via a final PATCH so
 //     the tile re-appears in the grid with the latest content.
+//   • Closing a tile whose title and body are both blank deletes it.
 //   • Empty-title-on-close auto-fills from the first 3 words of the body
 //     (or "Untitled" if both blank) — the server enforces the same rule.
 //   • Delete shows ConfirmDeleteModal, matching every other deletable in
@@ -127,7 +128,11 @@ export function ScratchPadEditor({ open, onClose, tile }: ScratchPadEditorProps)
     }, [open]);
 
     function flushAndClose() {
-        if (tile) {
+        // A tile left blank (or whitespace-only) isn't worth keeping — drop
+        // it instead of saving an "Untitled" husk to the grid.
+        if (tile && !title.trim() && !body.trim()) {
+            deleteTile.mutate(tile.id);
+        } else if (tile) {
             const last = savedRef.current;
             const inferred = inferTitle(title, body);
             if (inferred !== last.title || body !== last.body) {

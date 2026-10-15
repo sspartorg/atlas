@@ -51,6 +51,17 @@ function rowToScratchPad(row: Record<string, unknown>): IScratchPad {
 
 export const scratchPadService = {
     async list(): Promise<IScratchPad[]> {
+        // Sweep tiles left blank (no body, title blank or the inferred
+        // "Untitled") — the web editor deletes these on close, this catches
+        // ones abandoned by navigating away. The age gate keeps a freshly
+        // created tile alive while its editor is still open.
+        // ponytail: runs on every list call, move to a scheduled job if the table grows large.
+        await db
+            .deleteFrom('scratch_pad')
+            .where(sql<boolean>`body_md !~ '\\S'`)
+            .where(sql<boolean>`(title !~ '\\S' OR title = 'Untitled')`)
+            .where('updated_at', '<', sql<string>`now() - interval '1 day'`)
+            .execute();
         const rows = await db
             .selectFrom('scratch_pad')
             .selectAll()
