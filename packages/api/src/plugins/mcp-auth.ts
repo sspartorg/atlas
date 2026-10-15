@@ -33,6 +33,18 @@ export function tokensMatch(provided: string, expected: string): boolean {
     return timingSafeEqual(p, e);
 }
 
+function isTrustedPageOrigin(origin: string, referer: unknown): boolean {
+    let pageOrigin = origin;
+    if (!pageOrigin && typeof referer === 'string') {
+        try {
+            pageOrigin = new URL(referer).origin;
+        } catch {
+            return false;
+        }
+    }
+    return !!pageOrigin && getTrustedBrowserOrigins().has(pageOrigin);
+}
+
 /**
  * Fastify preHandler — attach to routes that must not be reachable from
  * arbitrary local HTTP clients (writes; sensitive GETs like /api/fs/*).
@@ -97,6 +109,14 @@ export async function requireMcpToken(
     if (secFetchSite === 'same-origin') {
         if (!origin || getTrustedBrowserOrigins().has(origin)) return;
     }
+    // Browsers only send Sec-Fetch-* to secure contexts, so the web UI opened
+    // over plain http on a LAN IP (a phone) arrives without it. Fall back to
+    // the page's own origin: Origin on writes, Referer on same-origin GETs
+    // (which omit Origin). A cross-origin page can't forge either, and a
+    // local process could already forge Sec-Fetch-Site, so this is the same
+    // strength as the branch above (see G-023). A header that IS present but
+    // says cross-site/none never reaches this fallback.
+    if (!secFetchSite && isTrustedPageOrigin(origin, req.headers['referer'])) return;
 
     const provided = (req.headers['x-atlas-token'] as string | undefined) ?? '';
     if (tokensMatch(provided, expected)) return;

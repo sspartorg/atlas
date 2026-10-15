@@ -115,22 +115,42 @@ describe('requireMcpToken — token required mode', () => {
         expect(reply.status).toHaveBeenCalledWith(401);
     });
 
-    it('rejects when Origin is trusted but Sec-Fetch-Site is missing (spoofed origin)', async () => {
-        const { getTrustedBrowserOrigins } = await import('../utils/lan-origins.js');
-        vi.mocked(getTrustedBrowserOrigins).mockReturnValue(
-            new Set(['http://localhost:4000']),
-        );
+    describe('Sec-Fetch-Site absent (insecure context, e.g. phone on http://<lan-ip>)', () => {
+        const TRUSTED = 'http://192.168.1.5:4000';
+        async function run(headers: Record<string, string>) {
+            const { getTrustedBrowserOrigins } = await import('../utils/lan-origins.js');
+            vi.mocked(getTrustedBrowserOrigins).mockReturnValue(new Set([TRUSTED]));
+            const { requireMcpToken } = await import('./mcp-auth.js');
+            const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() } as any;
+            await requireMcpToken({ headers } as any, reply);
+            return reply.status;
+        }
 
-        const { requireMcpToken } = await import('./mcp-auth.js');
-        const req = { headers: { origin: 'http://localhost:4000' } } as any;
-        const reply = { status: vi.fn().mockReturnThis(), send: vi.fn() } as any;
+        it('allows a write whose Origin is trusted', async () => {
+            expect(await run({ origin: TRUSTED })).not.toHaveBeenCalled();
+        });
 
-        await requireMcpToken(req, reply);
+        it('allows a GET (no Origin) whose Referer is on a trusted origin', async () => {
+            expect(await run({ referer: `${TRUSTED}/projects/new` })).not.toHaveBeenCalled();
+        });
 
-        // Origin without Sec-Fetch-Site same-origin → treat as untrusted
-        // (a real browser would always send Sec-Fetch-Site on same-origin
-        // fetch/XHR/WS; only non-browser clients omit it).
-        expect(reply.status).toHaveBeenCalledWith(401);
+        it('rejects an untrusted Referer, a malformed Referer, and no headers at all', async () => {
+            expect(await run({ referer: 'http://evil.example.com/x' })).toHaveBeenCalledWith(401);
+            expect(await run({ referer: 'not a url' })).toHaveBeenCalledWith(401);
+            expect(await run({})).toHaveBeenCalledWith(401);
+        });
+
+        it('does not let a trusted Referer override an untrusted Origin', async () => {
+            expect(
+                await run({ origin: 'http://evil.example.com', referer: `${TRUSTED}/` }),
+            ).toHaveBeenCalledWith(401);
+        });
+
+        it('does not apply when Sec-Fetch-Site is present but cross-site', async () => {
+            expect(
+                await run({ origin: TRUSTED, 'sec-fetch-site': 'cross-site' }),
+            ).toHaveBeenCalledWith(401);
+        });
     });
 
     it('does NOT allow when origin is present but not in trusted set', async () => {
