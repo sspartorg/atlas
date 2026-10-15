@@ -69,6 +69,7 @@ export interface CredentialUpdateInput {
     scope?: string | undefined;
     expires_at?: string | null | undefined;
     app_installation_owner?: string | undefined;
+    bot_info_path?: string | undefined;
     // Migration 025 — nullable to allow clearing; omitted keeps existing.
     human_name?: string | null | undefined;
     human_email?: string | null | undefined;
@@ -128,6 +129,12 @@ export function stripSecretsForApi(cred: ICredential): ICredential {
 // checks (buildGitAuth, openPullRequest) can key off a single `!name` test.
 function nullIfBlank(v: string | null | undefined): string | null {
     return v == null ? null : v.trim() || null;
+}
+
+// Permanent configuration failures (401 bad PEM, 403 App unauthorised, 404
+// owner / installation not found) vs transient ones (network, 5xx, 429).
+function isPermanentMintError(err: unknown): boolean {
+    return err instanceof GhApiError && err.status >= 400 && err.status < 500 && err.status !== 429;
 }
 
 /**
@@ -393,12 +400,7 @@ export const credentialsService = {
         } catch (err) {
             const rawMsg = err instanceof Error ? err.message : String(err);
             const safeMsg = rawMsg.split(/:\s+/)[0] ?? rawMsg;
-            const isPermanent =
-                err instanceof GhApiError &&
-                err.status >= 400 &&
-                err.status < 500 &&
-                err.status !== 429;
-            if (isPermanent) {
+            if (isPermanentMintError(err)) {
                 await db.deleteFrom('credentials').where('id', '=', id).execute();
                 throw new CredentialValidationError(
                     `GitHub App token mint failed (${safeMsg}). Verify the bot info folder points at the correct App and the App is installed on '${input.app_installation_owner}'.`
@@ -433,6 +435,7 @@ export const credentialsService = {
             if (patch.human_gh_login !== undefined) badFields.push('human_gh_login');
             if (patch.app_installation_owner !== undefined)
                 badFields.push('app_installation_owner');
+            if (patch.bot_info_path !== undefined) badFields.push('bot_info_path');
             if (badFields.length > 0) {
                 throw new CredentialValidationError(
                     `Fields not valid for PAT credentials: ${badFields.join(', ')}`
@@ -479,6 +482,39 @@ export const credentialsService = {
             scope: 'scope' in patch && patch.scope !== undefined ? patch.scope : existing.scope,
             expires_at: 'expires_at' in patch ? (patch.expires_at ?? null) : existing.expires_at,
         };
+        // Re-read before writing anything so a bad folder fails the whole PATCH.
+        const botInfo =
+            existing.kind === 'github_app' && patch.bot_info_path !== undefined
+                ? readBotInfoFolder(patch.bot_info_path)
+                : null;
+        // Snapshot the App columns so a key GitHub rejects can be rolled back
+        // instead of leaving a working credential broken.
+        const previousApp = botInfo
+            ? await db
+                  .selectFrom('credentials')
+                  .select([
+                      'app_id',
+                      'app_private_key_encrypted',
+                      'app_slug',
+                      'app_installation_id',
+                      'token_encrypted',
+                      'token_fingerprint',
+                      'expires_at',
+                  ])
+                  .where('id', '=', id)
+                  .executeTakeFirstOrThrow()
+            : null;
+        if (botInfo) {
+            next['app_id'] = String(botInfo.app_id);
+            next['app_private_key_encrypted'] = encrypt(botInfo.pem);
+            next['app_slug'] = botInfo.app_slug;
+            // A new key invalidates the cached installation id and token,
+            // same as an owner change below.
+            next['app_installation_id'] = null;
+            next['token_encrypted'] = null;
+            next['token_fingerprint'] = null;
+            next['expires_at'] = null;
+        }
         if (existing.kind === 'github_app' && patch.app_installation_owner !== undefined) {
             next['app_installation_owner'] = patch.app_installation_owner;
             // Owner change invalidates the cached installation id AND the
@@ -513,6 +549,28 @@ export const credentialsService = {
             .set(next as never)
             .where('id', '=', id)
             .execute();
+        if (previousApp) {
+            try {
+                await refreshCredential(id);
+            } catch (err) {
+                const rawMsg = err instanceof Error ? err.message : String(err);
+                const safeMsg = rawMsg.split(/:\s+/)[0] ?? rawMsg;
+                if (isPermanentMintError(err)) {
+                    await db
+                        .updateTable('credentials')
+                        .set(previousApp as never)
+                        .where('id', '=', id)
+                        .execute();
+                    throw new CredentialValidationError(
+                        `GitHub App token mint failed (${safeMsg}). Verify the bot info folder points at the correct App. The previous key was kept.`
+                    );
+                }
+                // eslint-disable-next-line no-console
+                console.warn(
+                    `[credentials] mint after key change for ${id} failed transiently (will retry lazily): ${safeMsg}`
+                );
+            }
+        }
         // reason: update() only reached after the initial `this.get(id)`
         // succeeded; the row still exists after the update.
         return (await this.get(id))!;

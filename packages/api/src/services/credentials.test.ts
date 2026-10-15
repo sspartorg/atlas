@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { credentialsService } from './credentials.js';
 import type * as GithubAppTokens from './github-app-tokens.js';
+import * as GithubAppTokensMock from './github-app-tokens.js';
 import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
 
 beforeEach(async () => {
@@ -373,6 +374,86 @@ describe('credentialsService — github_app kind', () => {
         await expect(
             credentialsService.update(pat.id, { human_gh_login: 'bob' }),
         ).rejects.toThrow(/human_gh_login/);
+    });
+
+    describe('update() with bot_info_path (key rotation)', () => {
+        async function createApp() {
+            writeGoodFolder();
+            return credentialsService.create({
+                label: 'app',
+                host: 'github',
+                kind: 'github_app',
+                bot_info_path: botDir,
+                app_installation_owner: 'sspartorg',
+                scope: '',
+            });
+        }
+
+        function writeOtherFolder(id: number): string {
+            const dir = mkdtempSync(join(tmpdir(), 'atlas-bot-test-'));
+            writeFileSync(join(dir, 'app-config.json'), JSON.stringify({ id, slug: 'other-bot' }));
+            writeFileSync(
+                join(dir, 'other.private-key.pem'),
+                '-----BEGIN RSA PRIVATE KEY-----\nother-key\n-----END RSA PRIVATE KEY-----\n',
+            );
+            return dir;
+        }
+
+        it('replaces app_id, slug and key from the new folder', async () => {
+            const app = await createApp();
+            const updated = await credentialsService.update(app.id, {
+                bot_info_path: writeOtherFolder(999),
+            });
+            expect(Number(updated.app_id)).toBe(999);
+            expect(updated.app_slug).toBe('other-bot');
+        });
+
+        it('rolls back to the previous key when GitHub rejects the new one', async () => {
+            const app = await createApp();
+            vi.mocked(GithubAppTokensMock.refreshCredential).mockRejectedValueOnce(
+                new GithubAppTokensMock.GhApiError('POST', '/app/installations', 401),
+            );
+            await expect(
+                credentialsService.update(app.id, { bot_info_path: writeOtherFolder(999) }),
+            ).rejects.toThrow(/previous key was kept/);
+            const after = await credentialsService.get(app.id);
+            expect(Number(after!.app_id)).toBe(12345678);
+            expect(after!.app_slug).toBe('test-bot');
+        });
+
+        it('keeps the new key when the mint fails transiently', async () => {
+            const app = await createApp();
+            vi.mocked(GithubAppTokensMock.refreshCredential).mockRejectedValueOnce(
+                new GithubAppTokensMock.GhApiError('POST', '/app/installations', 502),
+            );
+            const updated = await credentialsService.update(app.id, {
+                bot_info_path: writeOtherFolder(999),
+            });
+            expect(Number(updated.app_id)).toBe(999);
+        });
+
+        it('rejects a missing folder without touching the row', async () => {
+            const app = await createApp();
+            await expect(
+                credentialsService.update(app.id, { bot_info_path: join(botDir, 'nope') }),
+            ).rejects.toThrow(/not found/);
+            expect(Number((await credentialsService.get(app.id))!.app_id)).toBe(12345678);
+        });
+
+        it('rejects bot_info_path on a PAT credential', async () => {
+            const pat = await credentialsService.create({
+                label: 'PAT',
+                host: 'github',
+                kind: 'pat',
+                username: 'x-access-token',
+                token: 'ghp_zzzzzzzzzzzzzzzzzzzz',
+                scope: '',
+                expires_at: null,
+            });
+            await expect(
+                credentialsService.update(pat.id, { bot_info_path: botDir }),
+            ).rejects.toThrow(/bot_info_path/);
+        });
     });
 
     it('update() rejects token on a github_app credential', async () => {

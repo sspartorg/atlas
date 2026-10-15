@@ -228,6 +228,8 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                 // row's value; server-side we normalize '' → null via
                 // `.trim() || null`).
                 patch['human_gh_login'] = humanGhLogin.trim() || null;
+                // Blank keeps the stored key; a folder re-reads it (rotation).
+                if (botInfoPath.trim()) patch['bot_info_path'] = botInfoPath.trim();
             }
             return api.credentials.update(mode.credential.id, patch);
         },
@@ -602,37 +604,41 @@ export function CredentialModal({ open, mode, onClose }: Props) {
 
                         {chosenKind === 'app' && (
                             <>
-                                {mode.kind !== 'edit' && (
-                                    <Box sx={{ mb: 3 }}>
-                                        <Typography
-                                            variant="caption"
-                                            sx={{
-                                                display: 'block',
-                                                color: ATLAS_PALETTE.slate60,
-                                                mb: 1,
-                                            }}
-                                        >
-                                            Bot info folder *
-                                        </Typography>
-                                        <FolderPicker
-                                            ariaLabel="Bot info folder"
-                                            value={botInfoPath}
-                                            onChange={setBotInfoPath}
-                                            placeholder="C:\Users\you\AIPrograms\atlas\bots-info\atlas-bot"
-                                            size="small"
-                                        />
-                                        <Typography
-                                            sx={{
-                                                fontSize: 12,
-                                                color: ATLAS_PALETTE.slate60,
-                                                mt: 1,
-                                            }}
-                                        >
-                                            Folder holding app-config.json and one .pem file. Atlas
-                                            reads and encrypts them — the files stay put.
-                                        </Typography>
-                                    </Box>
-                                )}
+                                <Box sx={{ mb: 3 }}>
+                                    <Typography
+                                        variant="caption"
+                                        sx={{
+                                            display: 'block',
+                                            color: ATLAS_PALETTE.slate60,
+                                            mb: 1,
+                                        }}
+                                    >
+                                        Bot info folder{mode.kind === 'edit' ? '' : ' *'}
+                                    </Typography>
+                                    <FolderPicker
+                                        ariaLabel="Bot info folder"
+                                        value={botInfoPath}
+                                        onChange={setBotInfoPath}
+                                        placeholder={
+                                            mode.kind === 'edit'
+                                                ? 'Leave blank to keep the current App key'
+                                                : 'C:\\Users\\you\\AIPrograms\\atlas\\bots-info\\atlas-bot'
+                                        }
+                                        size="small"
+                                    />
+                                    <Typography
+                                        sx={{
+                                            fontSize: 12,
+                                            color: ATLAS_PALETTE.slate60,
+                                            mt: 1,
+                                        }}
+                                    >
+                                        Folder holding app-config.json and one .pem file. Atlas
+                                        reads and encrypts them — the files stay put.
+                                        {mode.kind === 'edit' &&
+                                            ' Atlas stores the key, not the path, so pick a folder only to replace the App key.'}
+                                    </Typography>
+                                </Box>
                                 <TextField
                                     fullWidth
                                     size="small"

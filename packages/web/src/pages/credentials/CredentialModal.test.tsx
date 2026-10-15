@@ -681,3 +681,39 @@ describe('CredentialModal — attribution fields reach the API', () => {
         expect(body).not.toHaveProperty('human_gh_login');
     });
 });
+
+describe('CredentialModal — Bot info folder in edit mode', () => {
+    const appCred: ICredential = {
+        ...existingCred,
+        kind: 'github_app',
+        app_id: 12345678,
+        has_app_private_key: true,
+        app_installation_owner: 'sspartorg',
+    };
+
+    async function saveEdit(folder: string) {
+        let body: Record<string, unknown> | null = null;
+        server.use(
+            http.patch(`${BASE}/credentials/cred-1`, async ({ request }) => {
+                body = (await request.json()) as Record<string, unknown>;
+                return HttpResponse.json(appCred);
+            })
+        );
+        renderWithProviders(
+            <CredentialModal open mode={{ kind: 'edit', credential: appCred }} onClose={vi.fn()} />
+        );
+        const field = await screen.findByLabelText(/Bot info folder/i);
+        if (folder) await userEvent.type(field, folder);
+        await userEvent.click(screen.getByRole('button', { name: /Save changes/i }));
+        await waitFor(() => expect(body).not.toBeNull());
+        return body as unknown as Record<string, unknown>;
+    }
+
+    it('blank keeps the current key (no bot_info_path sent)', { timeout: 30_000 }, async () => {
+        expect(await saveEdit('')).not.toHaveProperty('bot_info_path');
+    });
+
+    it('a picked folder is sent to replace the key', { timeout: 30_000 }, async () => {
+        expect(await saveEdit('/bots/new')).toMatchObject({ bot_info_path: '/bots/new' });
+    });
+});

@@ -507,6 +507,9 @@ export const UpdateCredentialSchema = z.object({
     scope: z.string().optional(),
     expires_at: z.string().nullable().optional(),
     app_installation_owner: z.string().min(1).max(120).optional(),
+    // github_app only: re-read the bot info folder and replace the stored
+    // App id + private key + slug (key rotation / pointing at another App).
+    bot_info_path: z.string().min(1).max(1024).optional(),
     // Migration 025 — human-attribution fields (github_app only).
     // `null` clears the value; omitting keeps existing. Same character-set
     // rules as create: no control chars, GitHub-login grammar for gh_login.
