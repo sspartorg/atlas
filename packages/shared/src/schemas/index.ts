@@ -928,11 +928,19 @@ export const UpdateReminderSchema = z
         body: z.string().optional(),
         schedule: ReminderScheduleSchema.optional(),
         channel: ReminderChannelSchema.optional(),
+        // Pause / resume. Resume recomputes next_fire_at from now.
+        status: z.enum(['active', 'paused']).optional(),
     })
     .refine((v) => Object.keys(v).length > 0, {
         message: 'At least one field must be provided',
     });
 export type UpdateReminderInput = z.infer<typeof UpdateReminderSchema>;
+
+// Snooze: fire again `minutes` from now (max 30 days), then back to the schedule.
+export const SnoozeReminderSchema = z.object({
+    minutes: z.number().int().min(1).max(43_200),
+});
+export type SnoozeReminderInput = z.infer<typeof SnoozeReminderSchema>;
 
 // P12 — Scratch Pad schemas. Free-form markdown tiles for the Owner. Title
 // and body are both optional on create (a brand-new tile starts blank); the

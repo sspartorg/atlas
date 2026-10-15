@@ -294,12 +294,11 @@ describe('remindersService.create — weekly schedule_value with no weekdays seg
             VALUES ('RMS-weekly-no-weekdays', 'x', 'weekly', '09:00', 'notification', ${new Date(0).toISOString()}, 'active')
         `.execute(testDb);
 
-        // With an empty weekdays set, computeNextFire's weekly loop never
-        // finds a valid slot within 14 days and throws — fireOne doesn't
-        // catch this, so fireDueReminders rejects. This still exercises the
-        // `weekdaysStr ?? ''` fallback in parseSchedule before the throw.
+        // With an empty weekdays set the equivalent cron has no day-of-week
+        // field, croner rejects it, and fireDueReminders rejects. This still
+        // exercises the `weekdaysStr ?? ''` fallback in parseSchedule first.
         await expect(remindersService.fireDueReminders(new Date())).rejects.toThrow(
-            /no future slot found/,
+            /CronPattern/,
         );
     });
 });

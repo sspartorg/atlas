@@ -25,6 +25,8 @@ interface CreateInput {
     /** Optional deep-link target — overrides the issue_type/issue_id-derived
      *  URL when set. Used by terminal idle notifications etc. */
     link_url?: string | null;
+    /** Set by reminder fires — the fire log (`GET /api/reminders/:id/fires`). */
+    reminder_id?: number | null;
 }
 
 interface ListFilter {
@@ -60,6 +62,7 @@ function rowToNotification(row: Record<string, unknown>): INotification {
         read_at: (row['read_at'] as string | null) ?? null,
         link_url: (row['link_url'] as string | null) ?? null,
         external_deferred_at: (row['external_deferred_at'] as string | null) ?? null,
+        reminder_id: row['reminder_id'] == null ? null : Number(row['reminder_id']),
         created_at: row['created_at'] as string,
     };
 }
@@ -135,6 +138,7 @@ function selectNotificationsWithItemType() {
             'n.read_at as read_at',
             'n.link_url as link_url',
             'n.external_deferred_at as external_deferred_at',
+            'n.reminder_id as reminder_id',
             'n.created_at as created_at',
             'i.type as item_type',
         ]);
@@ -187,6 +191,7 @@ export const notificationsService = {
                 external_status: data.external_status ?? 'none',
                 failure_reason: data.failure_reason ?? null,
                 link_url: linkUrl,
+                reminder_id: data.reminder_id ?? null,
             })
             .returning('id')
             .executeTakeFirstOrThrow();

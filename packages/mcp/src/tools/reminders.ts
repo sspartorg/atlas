@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { IApiClient } from '../api-client.js';
-import { ReminderScheduleSchema, ReminderChannelSchema } from '@atlas/shared';
+import { ReminderScheduleSchema, ReminderChannelSchema, SnoozeReminderSchema } from '@atlas/shared';
 import type { ToolRegistration } from '../registrations.js';
 
 function toToolResult(payload: unknown): CallToolResult {
@@ -13,26 +13,32 @@ function toToolResult(payload: unknown): CallToolResult {
 
 // Tool consolidation 2026-07: the 4-tool reminders surface (setReminder /
 // updateReminder / cancelReminder / listReminders) collapsed into TWO:
-//   * crud_reminder  — op: create | update | cancel
+//   * crud_reminder  — op: create | update | cancel | pause | resume | snooze
 //   * search_reminder — list with optional filter args (status, channel, since)
 
 export const REMINDER_TOOLS: ToolRegistration[] = [
     {
         name: 'crud_reminder',
-        title: 'Create, update, or cancel a reminder',
+        title: 'Create, update, pause, resume, snooze, or cancel a reminder',
         description: [
             'Single entry point for reminder mutations. The `agent-schedule-registry` tick fires due rows as external notifications + in-app + SSE.',
             '',
             'Branches on `op`:',
             "- `op: 'create'` → insert a new reminder. Required: `label`, `schedule`. Optional: `body`, `channel` (default `'notification'`), `created_by_agent_id`. Schedule shapes: { kind:'once', at:<ISO datetime> } | { kind:'daily', time_of_day:'HH:MM' } | { kind:'weekly', weekdays:[1..7], time_of_day:'HH:MM' } | { kind:'cron', expr:'<cron expr>' }. Channel: 'notification' (in-app + SSE), 'external' (delivered via the configured external-notification provider), or 'both'. Returns the reminder row including `id` and `next_fire_at`.",
             "- `op: 'update'` → patch an existing reminder's label / body / schedule / channel. Required: `id`. At least one of `label` / `body` / `schedule` / `channel` must be supplied. Only active or paused reminders are editable; cancelled / completed rows are frozen. Schedule changes recompute `next_fire_at`.",
+            "- `op: 'pause'` → stop firing without cancelling. Required: `id`. Only active or paused reminders.",
+            "- `op: 'resume'` → start a paused reminder again. Required: `id`. `next_fire_at` is recomputed from now, so slots missed while paused are not replayed.",
+            "- `op: 'snooze'` → fire again `minutes` from now (1–43200), then return to the normal schedule. Required: `id`, `minutes`. Makes a paused reminder active and revives a completed one-shot; a cancelled reminder can't be snoozed.",
             "- `op: 'cancel'` → flip status to 'cancelled' so the scheduler stops firing. Required: `id`. The row stays in the table for audit.",
+            '',
+            "Daily, weekly and cron schedules run in the Owner's time zone (Settings → Notifications), not the server's.",
         ].join('\n'),
         group_name: 'REMINDERS',
         sort_order: 60,
         inputSchema: {
-            op: z.enum(['create', 'update', 'cancel']),
+            op: z.enum(['create', 'update', 'cancel', 'pause', 'resume', 'snooze']),
             id: z.number().int().positive().optional(),
+            minutes: SnoozeReminderSchema.shape.minutes.optional(),
             label: z.string().min(1).max(200).optional(),
             body: z.string().optional(),
             schedule: ReminderScheduleSchema.optional(),
@@ -41,8 +47,9 @@ export const REMINDER_TOOLS: ToolRegistration[] = [
         },
         handler: async (args, { client }) => {
             const a = args as {
-                op: 'create' | 'update' | 'cancel';
+                op: 'create' | 'update' | 'cancel' | 'pause' | 'resume' | 'snooze';
                 id?: number;
+                minutes?: number;
                 label?: string;
                 body?: string;
                 schedule?: Parameters<IApiClient['setReminder']>[0]['schedule'];
@@ -79,6 +86,23 @@ export const REMINDER_TOOLS: ToolRegistration[] = [
                     if (a.id === undefined)
                         throw new Error("crud_reminder: `id` is required for op='cancel'");
                     return toToolResult(await client.cancelReminder(a.id));
+                }
+                case 'pause':
+                case 'resume': {
+                    if (a.id === undefined)
+                        throw new Error(`crud_reminder: \`id\` is required for op='${a.op}'`);
+                    return toToolResult(
+                        await client.updateReminder(a.id, {
+                            status: a.op === 'pause' ? 'paused' : 'active',
+                        }),
+                    );
+                }
+                case 'snooze': {
+                    if (a.id === undefined || a.minutes === undefined)
+                        throw new Error(
+                            "crud_reminder: `id` + `minutes` are required for op='snooze'",
+                        );
+                    return toToolResult(await client.snoozeReminder(a.id, a.minutes));
                 }
             }
         },

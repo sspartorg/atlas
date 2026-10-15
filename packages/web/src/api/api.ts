@@ -53,6 +53,8 @@ import type {
     NotificationKind,
     NotificationDeliveryStatus,
     IReminder,
+    IReminderFire,
+    ReminderStatus,
     SetReminderInput,
     UpdateReminderInput,
     IScratchPad,
@@ -884,11 +886,23 @@ export const api = {
     },
 
     reminders: {
-        list: () => get<IReminder[]>('/reminders'),
+        list: (q: { status?: ReminderStatus[]; limit?: number; offset?: number } = {}) => {
+            const params = new URLSearchParams();
+            if (q.status?.length) params.set('status', q.status.join(','));
+            if (q.limit !== undefined) params.set('limit', String(q.limit));
+            if (q.offset !== undefined) params.set('offset', String(q.offset));
+            const qs = params.toString();
+            return get<IReminder[]>(`/reminders${qs ? `?${qs}` : ''}`);
+        },
         create: (input: SetReminderInput) => post<IReminder>('/reminders', input),
         update: (id: number, input: UpdateReminderInput) =>
             patch<IReminder>(`/reminders/${id}`, input),
         cancel: (id: number) => request<IReminder>(`/reminders/${id}`, { method: 'DELETE' }),
+        hardDelete: (id: number) => request<void>(`/reminders/${id}?hard=1`, { method: 'DELETE' }),
+        snooze: (id: number, minutes: number) =>
+            post<IReminder>(`/reminders/${id}/snooze`, { minutes }),
+        fires: (id: number, limit = 20) =>
+            get<IReminderFire[]>(`/reminders/${id}/fires?limit=${limit}`),
     },
 
     scratchPad: {

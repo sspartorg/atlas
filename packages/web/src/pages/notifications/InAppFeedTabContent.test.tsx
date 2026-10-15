@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { useLocation } from 'react-router-dom';
 import { server } from '../../test-setup.js';
@@ -356,5 +356,103 @@ describe('InAppFeedTabContent', () => {
         renderWithProviders(<InAppFeedTabContent allRows={[makeNotification()]} agents={[]} />);
         const group = screen.getByRole('group', { name: 'Filter notifications' });
         expect(group).toHaveStyle({ flexWrap: 'nowrap', overflowX: 'auto' });
+    });
+
+    describe('snooze from a reminder card', () => {
+        const reminderRow = (over: Parameters<typeof makeNotification>[0] = {}) =>
+            makeNotification({
+                id: 400,
+                event_type: 'reminder',
+                kind: 'system',
+                issue_type: null,
+                issue_id: null,
+                project_id: null,
+                link_url: '/reminders',
+                message: 'Drink water',
+                reminder_id: 12,
+                read_at: null,
+                ...over,
+            });
+
+        it('snoozes the reminder that fired, marks the card read, and keeps the way to Reminders', async () => {
+            const snoozed: unknown[] = [];
+            const read: string[] = [];
+            server.use(
+                http.get(`${BASE}/settings`, () => HttpResponse.json({ quiet_hours_timezone: 'UTC' })),
+                http.post(`${BASE}/reminders/12/snooze`, async ({ request }) => {
+                    snoozed.push(await request.json());
+                    return HttpResponse.json({ id: 12, next_fire_at: new Date(Date.now() + 3_600_000).toISOString() });
+                }),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(
+                <>
+                    <InAppFeedTabContent allRows={[reminderRow()]} agents={[]} />
+                    <LocationDisplay />
+                </>
+            );
+            // The card is not a button (it holds one); the snooze button is the action.
+            expect(screen.queryByRole('button', { name: /Drink water/ })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            const menu = await screen.findByRole('menu');
+            expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+                'Snooze 10 minutes',
+                'Snooze 1 hour',
+                'Snooze until tomorrow 9:00',
+                'Open Reminders',
+            ]);
+            fireEvent.click(within(menu).getByRole('menuitem', { name: 'Snooze 1 hour' }));
+            await waitFor(() => expect(snoozed).toEqual([{ minutes: 60 }]));
+            await waitFor(() => expect(read).toEqual(['400']));
+
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Open Reminders' }));
+            expect(screen.getByTestId('location').textContent).toBe('/reminders');
+        });
+
+        it('a failed snooze leaves the card unread', async () => {
+            const read: string[] = [];
+            server.use(
+                http.post(`${BASE}/reminders/12/snooze`, () => HttpResponse.json({ error: 'cancelled' }, { status: 409 })),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(<InAppFeedTabContent allRows={[reminderRow()]} agents={[]} />);
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Snooze 10 minutes' }));
+            await new Promise((r) => setTimeout(r, 50));
+            expect(read).toEqual([]);
+        });
+
+        it('an already-read reminder card snoozes without marking read again', async () => {
+            const read: string[] = [];
+            server.use(
+                http.post(`${BASE}/reminders/12/snooze`, () =>
+                    HttpResponse.json({ id: 12, next_fire_at: new Date().toISOString() }),
+                ),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(
+                <InAppFeedTabContent allRows={[reminderRow({ read_at: '2026-10-16T00:00:00Z' })]} agents={[]} />
+            );
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Snooze 10 minutes' }));
+            await new Promise((r) => setTimeout(r, 50));
+            expect(read).toEqual([]);
+        });
+
+        it('a reminder fire from before the fire log (no reminder_id) stays a plain link card', () => {
+            renderWithProviders(<InAppFeedTabContent allRows={[reminderRow({ reminder_id: null })]} agents={[]} />);
+            expect(screen.queryByRole('button', { name: 'Snooze reminder' })).toBeNull();
+            expect(screen.getByRole('button', { name: /Drink water/ })).toBeInTheDocument();
+        });
     });
 });

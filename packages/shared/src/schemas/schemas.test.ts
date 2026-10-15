@@ -59,6 +59,7 @@ import {
     UpdateSubTaskSchema,
     UpdateTaskSchema,
     UpdateReminderSchema,
+    SnoozeReminderSchema,
     UpdateScratchPadSchema,
     ReplyToItemSchema,
 } from './index.js';
@@ -891,6 +892,21 @@ describe('refine-callback coverage', () => {
 
     it('UpdateReminderSchema rejects an empty patch', () => {
         expect(UpdateReminderSchema.safeParse({}).success).toBe(false);
+    });
+
+    it('UpdateReminderSchema takes pause/resume but not the terminal statuses', () => {
+        expect(UpdateReminderSchema.safeParse({ status: 'paused' }).success).toBe(true);
+        expect(UpdateReminderSchema.safeParse({ status: 'active' }).success).toBe(true);
+        expect(UpdateReminderSchema.safeParse({ status: 'cancelled' }).success).toBe(false);
+        expect(UpdateReminderSchema.safeParse({ status: 'completed' }).success).toBe(false);
+    });
+
+    it('SnoozeReminderSchema takes 1 minute to 30 days, whole minutes only', () => {
+        expect(SnoozeReminderSchema.safeParse({ minutes: 10 }).success).toBe(true);
+        expect(SnoozeReminderSchema.safeParse({ minutes: 43_200 }).success).toBe(true);
+        expect(SnoozeReminderSchema.safeParse({ minutes: 0 }).success).toBe(false);
+        expect(SnoozeReminderSchema.safeParse({ minutes: 43_201 }).success).toBe(false);
+        expect(SnoozeReminderSchema.safeParse({ minutes: 1.5 }).success).toBe(false);
     });
 
     it('UpdateScratchPadSchema rejects an empty patch', () => {

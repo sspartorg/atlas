@@ -163,6 +163,59 @@ describe('registerReminderTools', () => {
         });
     });
 
+    describe('crud_reminder pause / resume / snooze', () => {
+        it("op='pause' and op='resume' PATCH the status", async () => {
+            const { server, tools } = captureServer();
+            const updateReminder = vi.fn().mockResolvedValue({ id: 3, status: 'paused' });
+            registerReminderTools(server, makeFakeApiClient({ updateReminder }));
+            const result = await tools.get('crud_reminder')!.handler({ op: 'pause', id: 3 });
+            expect(updateReminder).toHaveBeenCalledWith(3, { status: 'paused' });
+            expect(parseToolResult<{ status: string }>(result).status).toBe('paused');
+            await tools.get('crud_reminder')!.handler({ op: 'resume', id: 3 });
+            expect(updateReminder).toHaveBeenLastCalledWith(3, { status: 'active' });
+        });
+
+        it("op='pause' / 'resume' throw without an id", async () => {
+            const { server, tools } = captureServer();
+            registerReminderTools(server, makeFakeApiClient());
+            await expect(tools.get('crud_reminder')!.handler({ op: 'pause' })).rejects.toThrow(
+                /`id` is required for op='pause'/,
+            );
+            await expect(tools.get('crud_reminder')!.handler({ op: 'resume' })).rejects.toThrow(
+                /`id` is required for op='resume'/,
+            );
+        });
+
+        it("op='snooze' forwards id + minutes", async () => {
+            const { server, tools } = captureServer();
+            const snoozeReminder = vi.fn().mockResolvedValue({ id: 4, status: 'active' });
+            registerReminderTools(server, makeFakeApiClient({ snoozeReminder }));
+            const result = await tools.get('crud_reminder')!.handler({ op: 'snooze', id: 4, minutes: 60 });
+            expect(snoozeReminder).toHaveBeenCalledWith(4, 60);
+            expect(parseToolResult<{ id: number }>(result).id).toBe(4);
+        });
+
+        it("op='snooze' throws without id or minutes", async () => {
+            const { server, tools } = captureServer();
+            registerReminderTools(server, makeFakeApiClient());
+            await expect(tools.get('crud_reminder')!.handler({ op: 'snooze', id: 4 })).rejects.toThrow(
+                /`id` \+ `minutes` are required for op='snooze'/,
+            );
+            await expect(tools.get('crud_reminder')!.handler({ op: 'snooze', minutes: 5 })).rejects.toThrow(
+                /`id` \+ `minutes` are required/,
+            );
+        });
+
+        it('the input schema offers the new ops and bounds minutes', () => {
+            const { server, tools } = captureServer();
+            registerReminderTools(server, makeFakeApiClient());
+            const schema = tools.get('crud_reminder')!.config.inputSchema as Record<string, { safeParse: (v: unknown) => { success: boolean } }>;
+            for (const op of ['pause', 'resume', 'snooze']) expect(schema['op']!.safeParse(op).success).toBe(true);
+            expect(schema['minutes']!.safeParse(10).success).toBe(true);
+            expect(schema['minutes']!.safeParse(0).success).toBe(false);
+        });
+    });
+
     describe('search_reminder', () => {
         it('returns the full row set when no filter is supplied', async () => {
             const { server, tools } = captureServer();

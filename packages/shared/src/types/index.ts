@@ -1087,6 +1087,9 @@ export interface INotification {
      *  is `external_status='pending'` until the window ends and the minute
      *  tick delivers it. Null otherwise. */
     external_deferred_at: string | null;
+    /** The reminder whose fire produced this row; null for every other
+     *  producer, and for reminder fires from before the fire log. */
+    reminder_id: number | null;
     created_at: string;
 }
 
@@ -1413,10 +1416,21 @@ export interface IReminder {
     channel: ReminderChannel;
     next_fire_at: string;
     last_fired_at: string | null;
+    /** Fires logged in `notifications.reminder_id` (fires before the log existed don't count). */
+    fire_count: number;
     created_by_agent_id: string | null;
     status: ReminderStatus;
     created_at: string;
     updated_at: string;
+}
+
+/** One fire of a reminder: the notification row it produced and how it was delivered. */
+export interface IReminderFire {
+    notification_id: number;
+    fired_at: string;
+    push_status: PushDeliveryStatus;
+    external_status: NotificationDeliveryStatus;
+    failure_reason: string | null;
 }
 
 // P12 — Scratch Pad. A free-form markdown-tile workspace for the Owner;

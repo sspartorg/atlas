@@ -159,6 +159,7 @@ export function makeNotification(overrides: Partial<INotification> = {}): INotif
         read_at: null,
         link_url: null,
         external_deferred_at: null,
+        reminder_id: null,
         created_at: ISO,
         ...overrides,
     };

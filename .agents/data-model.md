@@ -323,11 +323,12 @@ Fields: `id, project_id, title, body_md, applies_to, icon, enabled, sort_order, 
 
 Delivery queue for external notification + in-app notifications.
 
-Fields: `id, kind, issue_type, issue_id, project_id, message, event_type, agent_id, external_status, failure_reason, push_status, push_failure_reason, read_at, link_url, external_deferred_at, created_at`
+Fields: `id, kind, issue_type, issue_id, project_id, message, event_type, agent_id, external_status, failure_reason, push_status, push_failure_reason, read_at, link_url, external_deferred_at, reminder_id, created_at`
 
 - `kind` âˆˆ `needs_you | update | system`
 - `external_status` âˆˆ `none | pending | sent | failed`. `pending` + non-null `external_deferred_at` = held by quiet hours until the window ends (migration 010).
 - `link_url` — where a click opens; stamped at create time (`notificationLinkUrl` in @atlas/shared).
+- `reminder_id` — the reminder whose fire produced the row (FK `ON DELETE SET NULL`, migration 011); null for every other producer and for fires before the log. It is the reminder fire log and lets the feed snooze from the card.
 - `event_type` âˆˆ external notification event keys (see below)
 
 ### IAgentRun
@@ -546,6 +547,19 @@ Its structured output reuses the `atlas-outcome` block the whole product already
 ### IPublishedWorkflow (migration 041)
 A workflow the Owner published to the Marketplace (builder **Publish**). Table `published_workflows`: `id, name, description, source_workflow_id (UNIQUE, FK → workflows, SET NULL), bundle (bytea — the export zip), version (migration 007, bumped on every republish so a consumer can tell the entry moved — republishing overwrites the bundle in place), published_at, updated_at`. One entry per source workflow; publishing again replaces it. The API reads `input_kind, trigger, push_code, raises_pr, push_to_default, agent_ids` from the bundle; `IPublishedWorkflowDetail` adds `graph` + `sub_workflows {ref, name}`. Not tied to a project — "Use in a project" imports the bundle into one.
 
+### IReminder
+**Why this entity exists**: Owner-set (or Claude-set) future nudges fired by the minute tick; future-pointing intents, so they live apart from the notifications they produce.
+
+Fields: `id, label, body, schedule_kind, schedule_value, channel, next_fire_at, last_fired_at, fire_count, created_by_agent_id, status, created_at, updated_at`
+
+- `schedule_kind` ∈ `once | daily | weekly | cron`; `schedule_value` encodes it (`ISO` / `HH:MM` / `HH:MM|1,3,5` ISO weekdays / cron). Daily and weekly become an equivalent cron and, with cron, run in the Owner's zone (`settings.quiet_hours_timezone`); no zone → server time.
+- `channel` ∈ `notification | external | both`.
+- `fire_count` — computed: notifications with this `reminder_id` (not a column).
+- Status: `active ⇄ paused` (PATCH `status`; resume recomputes `next_fire_at` from now) · `active | paused → cancelled` (DELETE) · `active → completed` (a once-reminder after it fires) · `completed | paused → active` (snooze). Cancelled is terminal; cancelled / completed rows can be hard-deleted (`?hard=1`). Only `active` rows fire.
+
+### IReminderFire (view, not a table)
+One logged fire: `notification_id, fired_at, push_status, external_status, failure_reason`, read from `notifications` by `reminder_id` (`GET /api/reminders/:id/fires`).
+
 ### IProjectSchedule
 **Why this entity exists**: Different repos have different staleness tolerances (a documentation repo can fetch daily; a hot product repo wants every 15 minutes). Modeling schedules per-project rather than globally lets each repo carry its own cadence. The dirty / idle / agents guards live here because skipping a fetch is more situational than skipping a project â€” the policy needs to read the repo's live state at fire time.
 
@@ -586,6 +600,7 @@ Agent 1 --- n AgentChecklist / AgentPromptVersion; 1 --- 1 AgentMemory
 
 Comments       polymorphic by (issue_type, issue_id)
 Notifications  polymorphic by (issue_type, issue_id)
+Notification.reminder_id ----------> Reminder   (fire log; ON DELETE SET NULL — migration 011)
 Guardrails (global) workspace-wide, not project-linked
 ```
 

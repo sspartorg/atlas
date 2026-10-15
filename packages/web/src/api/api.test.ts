@@ -673,6 +673,33 @@ describe('api.reminders', () => {
         server.use(http.delete('http://localhost:3000/api/reminders/1', () => HttpResponse.json({})));
         await api.reminders.cancel(1);
     });
+
+    it('list sends the status list and paging; snooze / fires / hardDelete hit their routes', async () => {
+        const seen: string[] = [];
+        server.use(
+            http.get('http://localhost:3000/api/reminders', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return HttpResponse.json([]);
+            }),
+            http.post('http://localhost:3000/api/reminders/1/snooze', async ({ request }) =>
+                HttpResponse.json(await request.json()),
+            ),
+            http.get('http://localhost:3000/api/reminders/1/fires', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return HttpResponse.json([]);
+            }),
+            http.delete('http://localhost:3000/api/reminders/1', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return new HttpResponse(null, { status: 204 });
+            }),
+        );
+        await api.reminders.list({ status: ['active', 'paused'] });
+        await api.reminders.list({ status: ['cancelled'], limit: 50, offset: 50 });
+        expect(await api.reminders.snooze(1, 10)).toEqual({ minutes: 10 });
+        await api.reminders.fires(1);
+        await api.reminders.hardDelete(1);
+        expect(seen).toEqual(['?status=active%2Cpaused', '?status=cancelled&limit=50&offset=50', '?limit=20', '?hard=1']);
+    });
 });
 
 describe('api.scratchPad', () => {

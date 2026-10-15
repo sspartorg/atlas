@@ -12,6 +12,7 @@ import { FilterPill } from '../../components/filterPrimitives.js';
 import { EventTypeIcon, getEventMeta } from './EventTypeIcon.js';
 import { NotificationCard, PillRow } from './NotificationCard.js';
 import { relativeShort } from './timeFormat.js';
+import { ReminderSnoozeButton } from '../reminders/ReminderSnoozeButton.js';
 import type { AgentSummary } from '../../api/types.js';
 
 type Filter = 'all' | NotificationKind;
@@ -125,6 +126,9 @@ export function InAppFeedTabContent({ allRows, agents }: Props) {
                             row={row}
                             agent={row.agent_id ? agentById.get(row.agent_id) : undefined}
                             onOpen={() => openNotification(row)}
+                            onSnoozed={() => {
+                                if (!row.read_at) markRead.mutate(row.id);
+                            }}
                         />
                     ))}
                 </Box>
@@ -137,12 +141,15 @@ function FeedItem({
     row,
     agent,
     onOpen,
+    onSnoozed,
 }: {
     row: INotification;
     agent: AgentSummary | undefined;
     onOpen: () => void;
+    onSnoozed: () => void;
 }) {
     const unread = !row.read_at;
+    const snoozable = row.event_type === 'reminder' && typeof row.reminder_id === 'number';
     const meta = getEventMeta(row.event_type);
     const agentName = row.agent_id ? (agent?.name ?? 'Unknown agent') : null;
     const typeText = row.issue_type ? (TYPE_LABEL[row.issue_type] ?? row.issue_type) : null;
@@ -175,17 +182,26 @@ function FeedItem({
                 </>
             }
             action={
-                <Box
-                    component="span"
-                    className="material-symbols-rounded"
-                    aria-hidden="true"
-                    sx={{ fontSize: 20, color: ATLAS_PALETTE.slate40, mt: 1 }}
-                >
-                    chevron_right
-                </Box>
+                snoozable ? (
+                    <ReminderSnoozeButton
+                        reminderId={row.reminder_id as number}
+                        onSnoozed={onSnoozed}
+                        onOpenReminders={onOpen}
+                    />
+                ) : (
+                    <Box
+                        component="span"
+                        className="material-symbols-rounded"
+                        aria-hidden="true"
+                        sx={{ fontSize: 20, color: ATLAS_PALETTE.slate40, mt: 1 }}
+                    >
+                        chevron_right
+                    </Box>
+                )
             }
             tone={unread ? 'unread' : 'default'}
-            onOpen={onOpen}
+            // A reminder card holds the snooze button, so the card itself is not a button.
+            {...(snoozable ? {} : { onOpen })}
             aria-label={`${unread ? 'Unread: ' : ''}${meta.label}: ${row.message}`}
         />
     );

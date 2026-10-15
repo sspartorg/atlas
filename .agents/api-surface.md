@@ -329,7 +329,7 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 - `sendExternalForNotification(id, message, eventKey?, now?)`: an off event toggle leaves the row `none`; inside quiet hours (and with a channel configured) the row is **held** — `external_status='pending'` + `external_deferred_at=now` (migration 010) — instead of dropped; otherwise it is delivered now. `flushDeferredExternal(now)` runs on the minute tick (`agent-schedule-registry.ts`, right after reminders): once the window is closed it claims every held row with one CAS `UPDATE … WHERE external_deferred_at IS NOT NULL AND external_status='pending' RETURNING`, sends oldest first with the prefix `Held during quiet hours · HH:MM` (the row's created time in the quiet-hours zone), and marks each `sent`/`none`/`failed`. Web push is unaffected (always immediate).
 - `isInQuietHours`: `from == to` is an empty window (off). A stored zone the formatter rejects falls back to server-local time instead of throwing; `UpdateNotificationsSchema` now rejects unknown zones (checked with `Intl.DateTimeFormat`, not `Intl.supportedValuesOf`, which omits `UTC` and `Asia/Kolkata` on Node 24).
 - New event keys, default ON: `jira.sync_failed` (a new Jira sync failure, `recordSync`) and `workflow.failed` (a workflow run parked because something broke — worktree, setup script, step error, gate failure with no fail edge, delivery, lost step, agent missing — via `parkFailed`, and a dispatch failure, `reportDispatchFailure`). Questions and reviews keep `item.status_changed:waiting_for_info` / `agent.run_finished_no_item`.
-- Reminders and auto-fetch now send through the row they created (tracked in the log, held by quiet hours). A reminder fire creates exactly one row and one `notification_created` (the duplicate SSE is gone).
+- Reminders and auto-fetch now send through the row they created (tracked in the log, held by quiet hours). A reminder fire creates exactly one row and one `notification_created` (the duplicate SSE is gone); the row carries `reminder_id` (migration 011). `fireDueReminders` skips paused rows, and its CAS claim also requires `status='active'` so a pause that lands mid-tick wins.
 - `notificationsService.create` stamps `link_url` at create time with `notificationLinkUrl` (@atlas/shared): explicit link → `/tasks/:id` · `/sub-tasks/:id` → `/reminders` → `/settings?tab=jira` → `/projects/:id`. Producers pass the links that can't be derived: workflow runs `/workflows/:id/runs/:runId`, dispatch failures `/workflows/:id`, standalone agent runs `/agents/:id/runs/:runId`, terminal `/terminal/:id`. Web push's click URL and the In-App Feed use the same helper, falling back to `/notifications`.
 
 **2026-09-14 — stale `needs_you`.** The list endpoint and the unread count (`notificationsService.list` / `countUnread`) hide `kind='needs_you'` + `event_type='agent_completed'` rows whose linked item is no longer `waiting_for_info` / `in_review`. Rows with no item, and other `needs_you` sources (`agent_error`, terminal idle, auto-fetch), are never hidden — they aren't derived from item status.
@@ -360,9 +360,14 @@ Registered Croner jobs live in `services/schedule-registry.ts` (boot on startup,
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/reminders` | List active + completed reminders |
-| POST | `/api/reminders` | Create a reminder (body: `{ subject, next_fire_at, frequency?, payload? }`) |
-| DELETE | `/api/reminders/:id` | Cancel a reminder (status â†’ 'cancelled', does not delete the row) |
+| GET | `/api/reminders` | List reminders with `fire_count`. Query: `status` (comma list, e.g. `active,paused`; 400 on an unknown one), `channel`, `since`, `limit` (1–500), `offset`. A history-only filter (`cancelled`/`completed`) orders by `updated_at DESC`; otherwise by `next_fire_at`. The Reminders page calls `?status=active,paused` always and `?status=cancelled,completed&limit=50&offset=N` only while history is shown |
+| GET | `/api/reminders/:id` | One reminder (with `fire_count`); 404 when missing |
+| POST | `/api/reminders` | Create (`SetReminderSchema`: `label`, `body`, `schedule`, `channel`). Daily / weekly / cron schedules run in the Owner's zone (`settings.quiet_hours_timezone`, the browser zone the web auto-saves), falling back to server time when unset or unknown (`computeNextFire` → croner `timezone`) |
+| PATCH | `/api/reminders/:id` | Edit label / body / schedule / channel, or pause / resume with `status: 'paused' \| 'active'`. Resume recomputes `next_fire_at` from now (missed slots aren't replayed). 409 on a cancelled / completed row |
+| POST | `/api/reminders/:id/snooze` | `{ minutes }` (1–43200, `SnoozeReminderSchema`) → `next_fire_at = now + minutes`, `status = 'active'`. Revives a completed once-reminder; a recurring one returns to its schedule after the snoozed fire (the claim recomputes from the fire time). 409 (`conflict`) on a cancelled row, 404 when missing |
+| GET | `/api/reminders/:id/fires` | Fire log, newest first: `IReminderFire[]` (`notification_id, fired_at, push_status, external_status, failure_reason`) from `notifications.reminder_id`. `?limit` 1–100, default 20. 404 when missing |
+| DELETE | `/api/reminders/:id` | Cancel (status → `cancelled`, row kept as history) |
+| DELETE | `/api/reminders/:id?hard=1` | Delete a cancelled / completed reminder for good (204); its notifications stay with `reminder_id` set null. 409 while it is active / paused, 404 when missing |
 
 ### `routes/analytics.ts` â€” Analytics
 **Why this group exists**: Cost rollup + token usage + run-frequency reports aggregated server-side because computing them client-side requires the full `agent_runs` table.
@@ -655,7 +660,7 @@ REST endpoints as before; only the MCP-side dispatch changed.
 | Items | `delete_item` | `issue_type + id` | DELETE /api/{tasks,sub-tasks}/:id — deleting a Task drops its sub-tasks. Returns `{deleted: true, issue_type, id}`. |
 | Projects | `listProjects` | â€” | GET /api/projects |
 | Projects | `getProject` | â€” | GET /api/projects/:id |
-| Reminders | `crud_reminder` | `op: 'create' \| 'update' \| 'cancel'` | POST / PATCH / DELETE /api/reminders[/:id] |
+| Reminders | `crud_reminder` | `op: 'create' \| 'update' \| 'cancel' \| 'pause' \| 'resume' \| 'snooze'` | POST / PATCH / DELETE /api/reminders[/:id]; pause / resume PATCH `status`; snooze POST /api/reminders/:id/snooze (`minutes`) |
 | Reminders | `search_reminder` | optional `status` / `channel` / `since` filters | GET /api/reminders[?â€¦] |
 | Notifications | `sendExternalNotification` | â€” | POST /api/notifications/send-external (A09; one-shot Owner-bound notification via the configured external channel) |
 
@@ -770,6 +775,7 @@ The intentionally **unexposed** surfaces:
 | `004_team_config.ts` | `team_config` singleton (role, repo URL, credential, branch, interval, `last_sync_*`, `last_commit`) and `team_managed boolean` on `projects`, `agents`, `workflows` (`services/team-config.ts`). |
 | `005_claude_5_5_models.ts` | Adds `claude-opus-5-5`, `claude-opus-5-5[1m]`, `claude-sonnet-5-5`, `claude-haiku-5-5` to `cli_models`; moves agents off and deletes the seed rows `claude-opus-4-7`, `claude-opus-4-7[1m]`, `claude-opus-4-6`, `claude-sonnet-4-6`, `haiku`; re-sorts the claude list (Opus 5.5 first). |
 | `010_notification_delivery.ts` | `notifications.external_deferred_at timestamptz` (set while quiet hours hold an outward send) + partial index `notifications_external_deferred_idx … WHERE external_deferred_at IS NOT NULL` for the minute flush; backfills `link_url` on old rows where derivable (item route, `/reminders`, `/settings?tab=jira`, `/projects/:id`). `down()` drops the column + index; the backfill stays. |
+| `011_reminder_fires.ts` | `notifications.reminder_id bigint REFERENCES reminders(id) ON DELETE SET NULL` — set by `fireOne`, the reminder fire log — + partial index `notifications_reminder_id_idx (reminder_id, created_at DESC) WHERE reminder_id IS NOT NULL` (fire log + list `fire_count`); `reminders_status_next_fire_idx (status, next_fire_at)` for the status-filtered list. `down()` drops both indexes and the column. |
 | `001_baseline.sql` | Full schema - 46 tables, 59 foreign keys, plus indexes, triggers, the `items_live` view, enums and functions - followed by 48 reference-data rows: `cli_models` (23), `guardrail_rules` (14), `roles` (10) and the `settings` singleton (defaults only, no Owner PII, every secret column null). |
 
 **Regenerating the baseline.** Not needed when a new numbered migration lands - knex tracks each independently in `_knex_migrations`. Only on a deliberate re-squash. Apply every migration to a clean DB, then:
