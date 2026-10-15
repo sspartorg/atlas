@@ -1,3 +1,4 @@
+import { createReadStream, existsSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import {
     CreateJiraSourceSchema,
@@ -6,6 +7,7 @@ import {
     UpdateJiraSourceSchema,
 } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { db } from '../db/kysely-client.js';
 import { JiraSyncDisabledError, jiraSync } from '../services/jira-sync.js';
 import { projectsService } from '../services/projects.js';
 
@@ -23,6 +25,25 @@ export async function jiraRoutes(app: FastifyInstance) {
     app.put('/api/integrations/jira', { preHandler: requireMcpToken }, async (req, reply) => {
         const body = UpdateJiraConfigSchema.parse(req.body);
         return reply.send(await jiraSync.saveConfig(body));
+    });
+
+    // A file Atlas copied from a linked Jira issue. Plain images display in
+    // place; anything else (HTML, SVG, PDFs, archives…) downloads, so a file
+    // from Jira can never run as a page on Atlas's origin.
+    app.get('/api/jira-attachments/:id', async (req, reply) => {
+        const { id } = req.params as { id: string };
+        const row = await db.selectFrom('jira_attachments').selectAll().where('id', '=', id).executeTakeFirst();
+        if (!row?.path || !existsSync(row.path)) {
+            return reply.status(404).send({ error: 'Attachment not found', kind: 'not_found' });
+        }
+        const inline = /^image\/(png|jpe?g|gif|webp|bmp)$/i.test(row.mime_type);
+        const name = encodeURIComponent(row.filename);
+        return reply
+            .header('Content-Type', inline ? row.mime_type : 'application/octet-stream')
+            .header('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${name}`)
+            .header('X-Content-Type-Options', 'nosniff')
+            .header('Cache-Control', 'private, max-age=3600')
+            .send(createReadStream(row.path));
     });
 
     app.delete('/api/integrations/jira', { preHandler: requireMcpToken }, async (_req, reply) => {

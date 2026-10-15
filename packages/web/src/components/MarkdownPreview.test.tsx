@@ -48,6 +48,21 @@ describe('MarkdownPreview', () => {
         expect(external).toHaveAttribute('rel', 'noopener noreferrer');
     });
 
+    it('renders Atlas Jira-attachment images inline and refuses any other image URL', () => {
+        const { container } = renderWithProviders(
+            <MarkdownPreview
+                source={
+                    '![shot.png](/api/jira-attachments/10)\n\n![x](https://evil.example/t.png)\n\n![y](/api/other/1)'
+                }
+            />
+        );
+        const imgs = container.querySelectorAll('img');
+        expect(imgs).toHaveLength(1);
+        expect(imgs[0]).toHaveAttribute('src', '/api/jira-attachments/10');
+        expect(imgs[0]).toHaveAttribute('alt', 'shot.png');
+        expect(imgs[0]!.closest('a')).toHaveAttribute('href', '/api/jira-attachments/10');
+    });
+
     it('h2 as first block (idx=0) does not add top margin', () => {
         // When h2 is the very first block, idx === 0 so mt = 0
         renderWithProviders(<MarkdownPreview source="## Section title" />);

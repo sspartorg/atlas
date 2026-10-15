@@ -284,6 +284,8 @@ export interface ProjectsTable {
     default_workflow_id: StrN;
     // Migration 002 — the one project agent tests default to (`test-project.ts`).
     is_test_sandbox: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+    // Migration 009 — Jira status names per Atlas status; null = unmapped.
+    jira_status_map: ColumnType<Record<string, string[]> | null, string | null | undefined, string | null>;
     created_at: CreatedAt;
     updated_at: UpdatedAt;
 }
@@ -532,6 +534,19 @@ export interface JiraIssuesTable {
     // Migration 008 — what the bridge last wrote into the Task.
     synced_title: StrN;
     synced_description: StrN;
+    created_at: CreatedAt;
+}
+
+// Migration 009 — a file downloaded from a linked Jira issue.
+export interface JiraAttachmentsTable {
+    id: string;
+    jira_key: string;
+    item_id: StrN;
+    filename: string;
+    mime_type: ColumnType<string, string | undefined, string>;
+    size: ColumnType<string, number | undefined, number>;
+    path: StrN;
+    skipped_reason: StrN;
     created_at: CreatedAt;
 }
 
@@ -970,6 +985,7 @@ export interface DB {
     team_config: TeamConfigTable;
     jira_sources: JiraSourcesTable;
     jira_issues: JiraIssuesTable;
+    jira_attachments: JiraAttachmentsTable;
     agent_runs: AgentRunsTable;
     comments: CommentsTable;
     notifications: NotificationsTable;

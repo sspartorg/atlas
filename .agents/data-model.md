@@ -159,6 +159,10 @@ Fields: `id, name, issue_key_prefix, description, status, guardrails_md, default
 
 - `is_test_sandbox` (migration 002, DB only; unique partial index — at most one): the **Tests** project agent tests run in by default (`services/test-project.ts`). Created on first use with prefix `TST` (next free `TSX`/`TSY`/`TSZ`/`TXT` if the Owner already uses it) and one local sample repo `atlas-test-sample` under the workspace root — no remote, no credential, `verify_command` `npm test` — so nothing a test agent does can be pushed.
 
+- `jira_status_map` (jsonb, migration 009) — `IJiraStatusMap` `{ draft?, ready, in_progress?, waiting_for_info?, in_review?, done? }`, each a list of Jira status names, matched case-insensitively.
+  - `ready` is required. No name may appear in two groups (`JiraStatusMapSchema`).
+  - NULL = Jira status ignored (pre-v2 behaviour).
+  - Exported with team config.
 - `default_workflow_id` (FK → `workflows`, SET NULL; migration 022) — the Task workflow `/tasks/new` preselects for this project. Must be `input_kind='item'` and global or this project's. **Read only by the create form** — the server never applies it, so a Jira import or any create without `workflow_id` stays an unqueued draft (ADR 0016).
 
 - `guardrails_md` is free-form markdown (project guardrails are a separate table â€” see below)
@@ -274,7 +278,13 @@ source already owns.
 - `imported_comment_ids`: Atlas comments that came from Jira.
 - `pushed_comment_id`: the digest watermark over `comments.id`.
 - `pushed_status`: the last status announced to Jira.
-- `done_synced_at`: set once the final comment is posted.
+- `done_synced_at`: set once the final comment is posted. A linked Task that leaves `done` while this is set is a **reopen**: the push posts "reopened, …", clears it and transitions Jira again.
+- `synced_title` / `synced_description` (migration 008): what the bridge last wrote, so an Atlas edit is kept. Only the part above the managed sections counts.
+
+`jira_attachments` (migration 009), one row per Jira attachment Atlas has seen:
+- `id` (Jira attachment id) PK, `jira_key`, `item_id`, `filename`, `mime_type`, `size`.
+- `path`: the local copy under `<dataDir>/jira-attachments/`. It is NULL when not copied, and `skipped_reason` says why (`over 25 MB`).
+- A failed download writes no row, so the next sync retries it. A file removed in Jira drops its row. Settings → Reset deletes the rows and the folder.
 
 ### IIssueEvent (audit log)
 **Why this entity exists**: Status and assignment changes need an audit trail the UI can render alongside comments â€” otherwise the Owner sees "this is in_dev" but can't tell who moved it there or when. Structured fields (event_type, field, from_value, to_value) make events queryable and machine-renderable in a way that free-text comments can't be. Kept distinct from IComment so the activity feed can render status pills differently from quoted text.

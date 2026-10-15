@@ -438,6 +438,22 @@ describe('POST /api/settings/reset — destructive isolation', () => {
         expect(settings?.owner_name).toBe('Owner');
     });
 
+    it('also clears copied Jira attachments and their files', async () => {
+        const { mkdirSync, writeFileSync, existsSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const { jiraAttachmentsDir } = await import('../services/jira-sync.js');
+        const dir = join(jiraAttachmentsDir(), 'K-1');
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, 'f'), 'x');
+        await testDb
+            .insertInto('jira_attachments')
+            .values({ id: 'a1', jira_key: 'K-1', filename: 'f', mime_type: 'text/plain', size: 1, path: join(dir, 'f') } as never)
+            .execute();
+        expect((await app.inject({ method: 'POST', url: '/api/settings/reset' })).statusCode).toBe(200);
+        expect(await testDb.selectFrom('jira_attachments').selectAll().execute()).toHaveLength(0);
+        expect(existsSync(jiraAttachmentsDir())).toBe(false);
+    });
+
     it('also clears shared secrets, push devices and the quiet-hours switch', async () => {
         await testDb
             .insertInto('environment_secrets')

@@ -236,6 +236,25 @@ describe('PATCH /api/projects/:id', () => {
         expect(JSON.parse(res.body)).toMatchObject({ name: 'Updated Name' });
     });
 
+    it('saves, returns and clears a Jira status mapping; refuses an invalid one', async () => {
+        await insertProject('p1', 'ATL');
+        const map = { draft: ['Backlog'], ready: ['Selected'], in_progress: ['Dev'], waiting_for_info: [], in_review: [], done: ['Done'] };
+        const put = (jira_status_map: unknown) =>
+            app.inject({ method: 'PATCH', url: '/api/projects/p1', payload: { jira_status_map } });
+        const ok = await put(map);
+        expect(ok.statusCode).toBe(200);
+        expect(JSON.parse(ok.body).jira_status_map).toEqual(map);
+        expect(JSON.parse((await app.inject({ method: 'GET', url: '/api/projects/p1' })).body).jira_status_map).toEqual(map);
+
+        expect((await put({ ...map, ready: [] })).statusCode).toBe(400);
+        expect((await put({ ...map, draft: [] })).statusCode).toBe(200);
+        expect((await put({ ...map, done: ['backlog'] })).statusCode).toBe(400);
+        expect((await put({ ...map, extra: [] })).statusCode).toBe(400);
+
+        const cleared = await put(null);
+        expect(JSON.parse(cleared.body).jira_status_map).toBeNull();
+    });
+
     it('returns 404 for missing project', async () => {
         const res = await app.inject({
             method: 'PATCH',

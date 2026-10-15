@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../routes/events.js', () => ({
     eventsRoutes: async () => undefined,
@@ -74,6 +77,32 @@ describe('/api/integrations/jira', () => {
             url: '/api/integrations/jira/reveal-token',
         });
         expect(reveal.statusCode).toBe(400);
+    });
+
+    it('serves a copied Jira file: plain images inline, anything else as a download, 404 when missing', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'atlas-att-route-'));
+        writeFileSync(join(dir, 'a'), 'img');
+        writeFileSync(join(dir, 'b'), '<script>alert(1)</script>');
+        await testDb
+            .insertInto('jira_attachments')
+            .values([
+                { id: 'img', jira_key: 'K-1', filename: 'shot.png', mime_type: 'image/png', size: 3, path: join(dir, 'a') },
+                { id: 'svg', jira_key: 'K-1', filename: 'x.svg', mime_type: 'image/svg+xml', size: 3, path: join(dir, 'b') },
+                { id: 'gone', jira_key: 'K-1', filename: 'g.txt', mime_type: 'text/plain', size: 1, path: join(dir, 'missing') },
+            ] as never)
+            .execute();
+        const img = await app.inject({ method: 'GET', url: '/api/jira-attachments/img' });
+        expect(img.statusCode).toBe(200);
+        expect(img.headers['content-type']).toBe('image/png');
+        expect(img.headers['content-disposition']).toMatch(/^inline/);
+        expect(img.body).toBe('img');
+        const svg = await app.inject({ method: 'GET', url: '/api/jira-attachments/svg' });
+        expect(svg.headers['content-type']).toBe('application/octet-stream');
+        expect(svg.headers['content-disposition']).toMatch(/^attachment/);
+        expect(svg.headers['x-content-type-options']).toBe('nosniff');
+        expect((await app.inject({ method: 'GET', url: '/api/jira-attachments/gone' })).statusCode).toBe(404);
+        expect((await app.inject({ method: 'GET', url: '/api/jira-attachments/none' })).statusCode).toBe(404);
+        rmSync(dir, { recursive: true, force: true });
     });
 
     it('rejects a non-https site URL and a too-short poll interval', async () => {

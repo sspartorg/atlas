@@ -27,6 +27,7 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         guardrails_md: r['guardrails_md'] as string,
         default_workflow_id: r['default_workflow_id'] as string | null,
         team_managed: Boolean(r['team_managed']),
+        jira_status_map: (r['jira_status_map'] as IProject['jira_status_map']) ?? null,
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at: r['updated_at'] as string,

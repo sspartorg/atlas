@@ -35,3 +35,12 @@ for (const mode of ['light', 'dark'] as const) {
         }
     });
 }
+
+test('the project Jira tab (sources + status mapping) has no WCAG A/AA violations', async ({ page, request }) => {
+    const projects = (await (await request.get('http://127.0.0.1:6001/api/projects')).json()) as { id: string }[];
+    await goto(page, `/projects/${projects[0]!.id}?tab=jira`);
+    await page.waitForTimeout(500);
+    const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    const summary = violations.map((v) => `${v.id} (${v.impact}) ×${v.nodes.length}: ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
+    expect(summary, summary.join('\n')).toEqual([]);
+});

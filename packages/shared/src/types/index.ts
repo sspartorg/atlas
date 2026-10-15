@@ -318,7 +318,15 @@ export interface IProject {
      * subscriber: it arrived from there, and the next sync overwrites local edits.
      */
     team_managed: boolean;
+    /**
+     * Jira bridge: which Jira status names mean each Atlas status, e.g.
+     * `ready: ['Selected for Development']`. Null = unmapped (Jira status ignored).
+     */
+    jira_status_map: IJiraStatusMap | null;
 }
+
+/** Jira status names (case-insensitive) per Atlas status. */
+export type IJiraStatusMap = Record<IssueStatus, string[]>;
 
 /**
  * ADR 0018 — a git repo of a Project. Every repo is an ordinary

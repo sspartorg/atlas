@@ -10,10 +10,14 @@ import type {
     TestJiraConnectionSchema,
     UpdateJiraConfigSchema,
 } from '@atlas/shared';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ISSUE_STATUSES } from '@atlas/shared';
+import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
 import { commentsService } from './comments.js';
-import { decrypt, encrypt } from './crypto.js';
+import { dataDir, decrypt, encrypt } from './crypto.js';
 import { externalLinks } from './external-links.js';
 import { notificationsService } from './notifications.js';
 import { projectReposService } from './project-repos.js';
@@ -52,6 +56,118 @@ interface JiraComment {
     author?: { displayName?: string };
     body?: string;
     created?: string;
+    updated?: string;
+    // Jira Cloud threaded replies carry the comment they answer.
+    parentId?: string | number;
+}
+
+/** A Jira attachment as Atlas holds it: a local URL, or null when not copied. */
+export interface LocalAttachment {
+    id: string;
+    filename: string;
+    url: string | null;
+    image: boolean;
+    /** Why there is no local copy (too large, download failed). */
+    note?: string | null;
+    /** Jira's own download URL, the fallback link. */
+    content?: string;
+}
+
+/** Headings of the bridge-managed sections at the end of a description. */
+export const JIRA_FILES_HEADING = '## Attachments from Jira';
+export const JIRA_COMMENTS_HEADING = '## Comments from Jira';
+
+/** [the Owner's / imported part, the managed sections ('' if none)]. */
+export function splitManaged(description: string): [string, string] {
+    const at = [JIRA_FILES_HEADING, JIRA_COMMENTS_HEADING]
+        .map((h) => description.lastIndexOf(`\n${h}`))
+        .filter((i) => i !== -1);
+    if (at.length === 0) return [description, ''];
+    const i = Math.min(...at);
+    return [description.slice(0, i).replace(/\n+$/, ''), description.slice(i).replace(/^\n+/, '')];
+}
+
+/**
+ * Point Jira wiki file references at Atlas's copies: `!shot.png!`,
+ * `!shot.png|thumbnail!` become images, `[^spec.pdf]` a link. A reference to
+ * a file Atlas doesn't hold is left as written.
+ */
+function linkFiles(body: string, files: readonly LocalAttachment[]): string {
+    if (files.length === 0) return body;
+    const byName = new Map(files.map((f) => [f.filename.toLowerCase(), f]));
+    return body
+        .replace(/!([^!\n|]+?)(\|[^!\n]*)?!/g, (m, name: string) => {
+            const f = byName.get(name.trim().toLowerCase());
+            return f?.url ? `![${f.filename}](${f.url})` : m;
+        })
+        .replace(/\[\^([^\]\n]+)\]/g, (m, name: string) => {
+            const f = byName.get(name.trim().toLowerCase());
+            return f?.url ? `[${f.filename}](${f.url})` : m;
+        });
+}
+
+/**
+ * The managed "Comments from Jira" section: every comment Jira holds except the
+ * ones Atlas posted, oldest first, replies under the comment they answer,
+ * edits marked. Rebuilt on every sync, whatever the Task's status.
+ */
+export function composeCommentsSection(
+    issue: JiraIssue,
+    excludeCommentIds: ReadonlySet<string> = new Set(),
+    files: readonly LocalAttachment[] = []
+): string {
+    const all = commentsOf(issue).filter((c) => !excludeCommentIds.has(c.id));
+    if (all.length === 0) return '';
+    const ids = new Set(all.map((c) => c.id));
+    const replies = new Map<string, JiraComment[]>();
+    const roots: JiraComment[] = [];
+    for (const c of all) {
+        const parent = c.parentId != null ? String(c.parentId) : null;
+        if (parent && ids.has(parent)) replies.set(parent, [...(replies.get(parent) ?? []), c]);
+        else roots.push(c);
+    }
+    const day = (d?: string) => (d ?? '').slice(0, 10);
+    const render = (c: JiraComment, replyTo: JiraComment | null): string[] => {
+        const edited = c.updated && c.created && c.updated > c.created ? ` (edited ${day(c.updated)})` : '';
+        const who = c.author?.displayName ?? 'Someone';
+        const head = replyTo
+            ? `↳ **${who}** replied to **${replyTo.author?.displayName ?? 'Someone'}** · ${day(c.created)}${edited}`
+            : `**${who}** · ${day(c.created)}${edited}`;
+        const out = [head, '', quoteJira(linkFiles((c.body ?? '').trim(), files))];
+        for (const r of replies.get(c.id) ?? []) out.push('', ...render(r, c));
+        return out;
+    };
+    const blocks = roots.map((c) => render(c, null).join('\n'));
+    // Blank lines between comments: each starts with its bold author line, and
+    // the description renderer shows "---" literally rather than as a rule.
+    return `${JIRA_COMMENTS_HEADING}\n\n${blocks.join('\n\n')}`;
+}
+
+/**
+ * The managed attachments section: Atlas's copies (images inline, the rest as
+ * links), or Jira's links before anything is copied. Managed so it stays
+ * current even after the Owner edits the description.
+ */
+export function composeFilesSection(issue: JiraIssue, files: readonly LocalAttachment[] = []): string {
+    // Not quoted — these lines are Atlas's, not Jira text.
+    const lines =
+        files.length > 0
+            ? files.map((a) =>
+                  a.url
+                      ? a.image
+                          ? `- ![${a.filename}](${a.url})`
+                          : `- [${a.filename}](${a.url})`
+                      : `- ${a.filename}: not copied${a.note ? ` (${a.note})` : ''} — open in Jira: ${a.content ?? ''}`
+              )
+            : ((issue.fields['attachment'] as { filename?: string; content?: string }[] | undefined) ?? []).map(
+                  (a) => `- ${a.filename ?? 'file'}: ${a.content ?? ''}`
+              );
+    return lines.length > 0 ? `${JIRA_FILES_HEADING}\n\n${lines.join('\n')}` : '';
+}
+
+/** The Owner-facing description: imported part, then the managed sections. */
+function withComments(owner: string, ...sections: string[]): string {
+    return [owner, ...sections.filter(Boolean)].join('\n\n');
 }
 
 interface JiraIssue {
@@ -452,8 +568,9 @@ export function composeTaskDescription(
     issue: JiraIssue,
     siteUrl: string,
     extraFields: { id: string; name: string }[] = [],
-    excludeCommentIds: ReadonlySet<string> = new Set(),
-    repoNames: string[] = []
+    _excludeCommentIds: ReadonlySet<string> = new Set(),
+    repoNames: string[] = [],
+    files: readonly LocalAttachment[] = []
 ): string {
     const f = issue.fields;
     const meta = [
@@ -479,8 +596,8 @@ export function composeTaskDescription(
     const section = (title: string, body: string) => {
         if (body.trim()) out.push('', `## ${title}`, '', quoteJira(body.trim()));
     };
-    section('Description', text(f['description']));
-    for (const x of extraFields) section(x.name, text(f[x.id]));
+    section('Description', linkFiles(text(f['description']), files));
+    for (const x of extraFields) section(x.name, linkFiles(text(f[x.id]), files));
     const subtasks =
         (f['subtasks'] as { key: string; fields?: Record<string, unknown> }[] | undefined) ?? [];
     section('Sub-tasks', subtasks.map((s) => `- ${summaryOf(s)}`).join('\n'));
@@ -502,22 +619,6 @@ export function composeTaskDescription(
             )
             .filter(Boolean)
             .join('\n')
-    );
-    const attachments =
-        (f['attachment'] as { filename?: string; content?: string }[] | undefined) ?? [];
-    section(
-        'Attachments',
-        attachments.map((a) => `- ${a.filename ?? 'file'}: ${a.content ?? ''}`).join('\n')
-    );
-    section(
-        'Comments',
-        commentsOf(issue)
-            .filter((c) => !excludeCommentIds.has(c.id))
-            .map(
-                (c) =>
-                    `**${c.author?.displayName ?? 'Someone'}** · ${(c.created ?? '').slice(0, 10)}\n\n${c.body ?? ''}`
-            )
-            .join('\n\n---\n\n')
     );
     return out.join('\n');
 }
@@ -549,13 +650,211 @@ function distinctRepos(matches: Match[], keep: (m: Match) => boolean): IProjectR
     return [...new Map(kept.map((r) => [r.id, r])).values()];
 }
 
+// ── Attachments: Jira → Atlas copies ────────────────────────────────────────
+
+/** Files larger than this are listed with a link to Jira instead of copied. */
+export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+
+export function jiraAttachmentsDir(): string {
+    return join(dataDir(), 'jira-attachments');
+}
+
+const safeName = (name: string) => name.replace(/[^\w.\- ]+/g, '_').slice(0, 150) || 'file';
+
+/**
+ * Copy each file on the issue that Atlas doesn't hold yet (once per Jira
+ * attachment id). Over the size cap → recorded as not copied. A failed
+ * download is left unrecorded so the next sync retries it; returns notes.
+ */
+async function syncAttachments(c: Creds, issue: JiraIssue): Promise<string[]> {
+    type JiraFile = { id?: string | number; filename?: string; mimeType?: string; size?: number; content?: string };
+    const onIssue = ((issue.fields['attachment'] as JiraFile[] | undefined) ?? []).filter((a) => a.id != null && a.content);
+    if (onIssue.length === 0) return [];
+    const have = new Set(
+        (
+            await db
+                .selectFrom('jira_attachments')
+                .select('id')
+                .where('id', 'in', onIssue.map((a) => String(a.id)))
+                .execute()
+        ).map((r) => r.id)
+    );
+    const notes: string[] = [];
+    for (const a of onIssue) {
+        const id = String(a.id);
+        if (have.has(id)) continue;
+        const filename = a.filename ?? 'file';
+        const row = {
+            id,
+            jira_key: issue.key,
+            filename,
+            mime_type: a.mimeType ?? 'application/octet-stream',
+            size: a.size ?? 0,
+        };
+        if ((a.size ?? 0) > MAX_ATTACHMENT_BYTES) {
+            await db.insertInto('jira_attachments').values({ ...row, path: null, skipped_reason: 'over 25 MB' }).execute();
+            continue;
+        }
+        try {
+            const bytes = await jiraDownload(c, a.content!);
+            if (!bytes) {
+                await db.insertInto('jira_attachments').values({ ...row, path: null, skipped_reason: 'over 25 MB' }).execute();
+                continue;
+            }
+            const dir = join(jiraAttachmentsDir(), safeName(issue.key));
+            mkdirSync(dir, { recursive: true });
+            const path = join(dir, `${safeName(id)}-${safeName(filename)}`);
+            writeFileSync(path, bytes);
+            await db.insertInto('jira_attachments').values({ ...row, size: bytes.byteLength, path, skipped_reason: null }).execute();
+        } catch (err) {
+            notes.push(`${issue.key}: attachment ${filename} not copied (${errMsg(err)}); retrying next sync.`);
+        }
+    }
+    return notes;
+}
+
+/** Download a Jira attachment's bytes (Basic auth); null when over the size cap. */
+async function jiraDownload(c: Creds, url: string): Promise<Uint8Array | null> {
+    let res: Response;
+    try {
+        res = await fetch(url, {
+            headers: { Authorization: `Basic ${Buffer.from(`${c.email}:${c.token}`).toString('base64')}` },
+            signal: AbortSignal.timeout(60_000),
+        });
+    } catch (err) {
+        throw new ApiError('upstream_unavailable', `Could not reach Jira: ${errMsg(err)}`, 502);
+    }
+    if (res.status === 401 || res.status === 403) {
+        throw new ApiError('credentials_invalid', `Jira rejected the credentials (${res.status}) for an attachment`, 400);
+    }
+    if (!res.ok) throw new ApiError('upstream_unavailable', `Jira answered ${res.status} for an attachment`, 502);
+    if (Number(res.headers.get('content-length') ?? 0) > MAX_ATTACHMENT_BYTES) {
+        await res.body?.cancel();
+        return null;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return bytes.byteLength > MAX_ATTACHMENT_BYTES ? null : bytes;
+}
+
+/** Atlas's copies of the files still on the issue, oldest first. */
+async function localAttachments(issue: JiraIssue): Promise<LocalAttachment[]> {
+    const onIssue = new Map(
+        ((issue.fields['attachment'] as { id?: string | number; content?: string }[] | undefined) ?? []).map((a) => [
+            String(a.id),
+            a.content,
+        ])
+    );
+    if (onIssue.size === 0) return [];
+    const rows = await db
+        .selectFrom('jira_attachments')
+        .selectAll()
+        .where('jira_key', '=', issue.key)
+        .orderBy('created_at')
+        .orderBy('id')
+        .execute();
+    return rows
+        .filter((r) => onIssue.has(r.id))
+        .map((r) => ({
+            id: r.id,
+            filename: r.filename,
+            url: r.path ? `/api/jira-attachments/${encodeURIComponent(r.id)}` : null,
+            image: r.mime_type.startsWith('image/'),
+            note: r.skipped_reason,
+            ...(onIssue.get(r.id) ? { content: onIssue.get(r.id)! } : {}),
+        }));
+}
+
+// ── Status mapping (per project) ────────────────────────────────────────────
+
+type StatusMap = Partial<Record<IssueStatus, string[]>>;
+
+/** The Atlas status a Jira status name is mapped to in this project, or null. */
+function statusGroup(map: StatusMap | null, jiraStatus: string): IssueStatus | null {
+    if (!map || !jiraStatus) return null;
+    const k = jiraStatus.toLowerCase();
+    for (const s of ISSUE_STATUSES) {
+        if ((map[s] ?? []).some((n) => n.toLowerCase() === k)) return s;
+    }
+    return null;
+}
+
+const jiraStatusOf = (issue: { fields?: Record<string, unknown> } | null | undefined): string =>
+    text(issue?.fields?.['status']);
+
+async function statusMaps(): Promise<Map<string, StatusMap | null>> {
+    const rows = await db.selectFrom('projects').select(['id', 'jira_status_map']).execute();
+    return new Map(rows.map((r) => [r.id, (r.jira_status_map as StatusMap | null) ?? null]));
+}
+
+/**
+ * Follow a Jira status CHANGE on a linked Task. Only a change since the last
+ * sync counts — never a status that merely stayed put — so a Task the Owner
+ * just moved in Atlas isn't dragged back before the push catches Jira up.
+ * Only Draft and Ready (and reopening a Done Task) follow Jira; while Atlas is
+ * working (in progress / waiting / review) the Task is Atlas's.
+ */
+async function followJiraStatus(
+    row: IssueRow,
+    issue: JiraIssue,
+    maps: Map<string, StatusMap | null>,
+    first: Match
+): Promise<void> {
+    const task = row.item_id ? await tasksService.get(row.item_id) : undefined;
+    if (!task) return;
+    const map = maps.get(task.project_id) ?? null;
+    if (!map) return;
+    const now = jiraStatusOf(issue);
+    const before = jiraStatusOf(row.raw as JiraIssue);
+    if (!now || now.toLowerCase() === before.toLowerCase()) return;
+    const target = statusGroup(map, now);
+    if (target !== 'draft' && target !== 'ready') return;
+    if (task.status === target) return;
+    if (task.status !== 'draft' && task.status !== 'ready' && task.status !== 'done') return;
+
+    // A Done Task coming back is a reopen; push() sees the Task left Done,
+    // posts "reopened" and clears done_synced_at so the issue is live again.
+    const reopened = task.status === 'done';
+    const why = `Jira: ${now}`;
+    let queued = false;
+    if (target === 'ready') {
+        if (task.workflow_id) {
+            await tasksService.transition(task.id, 'ready', true, null, why);
+            queued = true;
+        } else if (first.source.workflow_id) {
+            if (task.status !== 'draft') await tasksService.transition(task.id, 'draft', true, null, why);
+            queued = await workflowsService
+                .setItemWorkflow(task.id, first.source.workflow_id)
+                .then(() => true)
+                .catch(() => false);
+        } else if (task.status !== 'draft') {
+            await tasksService.transition(task.id, 'draft', true, null, why);
+        }
+    } else {
+        await tasksService.transition(task.id, 'draft', true, null, why);
+    }
+    await notificationsService.create({
+        event_type: 'jira_sync',
+        message:
+            `${issue.key} moved to "${now}" in Jira: ${task.id} ` +
+            (reopened ? 'reopened' : 'moved') +
+            (target === 'ready' ? (queued ? ' and queued' : ' (pick a workflow to queue it)') : ' to Draft'),
+        kind: target === 'ready' && !queued ? 'needs_you' : 'update',
+        issue_type: 'task',
+        issue_id: task.id,
+        project_id: task.project_id,
+        agent_id: null,
+    });
+}
+
 async function importIssue(
     siteUrl: string,
     issue: JiraIssue,
     first: Match,
     matches: Match[],
     extra: { id: string; name: string }[],
-    result: IJiraSyncResult
+    result: IJiraSyncResult,
+    // false: the issue sits in a status mapped to Draft — import it, don't queue.
+    queue = true
 ) {
     const labels = ((issue.fields['labels'] as string[] | undefined) ?? []).filter(
         (l) => l.length <= 40
@@ -568,17 +867,19 @@ async function importIssue(
     const workflowId = first.source.workflow_id;
     const url = `${siteUrl}/browse/${issue.key}`;
     const title = taskTitle(issue);
+    const files = await localAttachments(issue);
     const description = composeTaskDescription(
         issue,
         siteUrl,
         extra,
         new Set(),
-        repos.map((r) => r.name)
+        repos.map((r) => r.name),
+        files
     );
     const task = await tasksService.create({
         project_id: projectId,
         title,
-        description,
+        description: withComments(description, composeFilesSection(issue, files), composeCommentsSection(issue, new Set(), files)),
         priority: PRIORITIES[text(issue.fields['priority']).toLowerCase()] ?? 'normal',
         labels: labels.slice(0, 20),
         repo_ids: repos.map((r) => r.id),
@@ -607,7 +908,7 @@ async function importIssue(
     result.imported++;
 
     let queuedOn: string | null = null;
-    if (workflowId) {
+    if (workflowId && queue) {
         try {
             await workflowsService.setItemWorkflow(task.id, workflowId);
             queuedOn = (await workflowsService.get(workflowId))?.name ?? workflowId;
@@ -616,7 +917,7 @@ async function importIssue(
         }
     }
     if (queuedOn) result.queued++;
-    else result.needs_workflow++;
+    else if (queue) result.needs_workflow++;
     // A Task lives in one project: matches elsewhere are named so the Owner can split the work.
     const elsewhereNames = await Promise.all(
         distinctRepos(matches, (m) => m.source.project_id !== projectId).map(
@@ -629,11 +930,13 @@ async function importIssue(
         message:
             (queuedOn
                 ? `${issue.key} imported as ${task.id} and queued on ${queuedOn}`
-                : `${issue.key} imported as ${task.id}: pick a workflow for it`) +
+                : !queue
+                  ? `${issue.key} imported as ${task.id} (Draft: "${jiraStatusOf(issue)}" in Jira); it queues when Jira moves it to Ready`
+                  : `${issue.key} imported as ${task.id}: pick a workflow for it`) +
             (elsewhereNames.length > 0
                 ? `. It also matches ${elsewhereNames.join(', ')} in another project.`
                 : ''),
-        kind: queuedOn ? 'update' : 'needs_you',
+        kind: queuedOn || !queue ? 'update' : 'needs_you',
         issue_type: 'task',
         issue_id: task.id,
         project_id: projectId,
@@ -671,53 +974,53 @@ async function refreshIssue(
         const posted = new Set(row.posted_comment_ids);
         const seen = new Set(row.seen_comment_ids);
         const fresh = commentsOf(issue).filter((c) => !seen.has(c.id) && !posted.has(c.id));
-        // New Jira comments either fold into the description (not started, and
-        // the description still follows Jira) or arrive as Task comments.
-        let asComments = !(task.status === 'draft' || task.status === 'ready');
-        if (!asComments) {
-            // Not started yet: the description is still the whole prompt, so refresh it
-            // in place, and the repos follow the sources that match now (the Task
+        const started = !(task.status === 'draft' || task.status === 'ready');
+        const files = await localAttachments(issue);
+        const [taskOwner] = splitManaged(task.description);
+        let title = task.title;
+        let owner = taskOwner;
+        let repoIds = task.repo_ids;
+        if (!started) {
+            // Not started yet: the imported part follows Jira (unless edited in
+            // Atlas), and the repos follow the sources that match now (the Task
             // keeps its repos when none of them are in its project any more).
             const matched = distinctRepos(matches, (m) => m.source.project_id === task.project_id);
-            const repoIds = matched.length > 0 ? matched.map((r) => r.id) : task.repo_ids;
-            const title = taskTitle(issue);
-            const description = composeTaskDescription(
-                issue,
-                siteUrl,
-                extra,
-                posted,
-                matched.map((r) => r.name)
-            );
-            const reposChanged = repoIds.join('\n') !== task.repo_ids.join('\n');
+            if (matched.length > 0) repoIds = matched.map((r) => r.id);
+            const jiraTitle = taskTitle(issue);
+            const jiraOwner = composeTaskDescription(issue, siteUrl, extra, posted, matched.map((r) => r.name), files);
             // What the bridge wrote last time. A field that no longer matches it
             // was edited in Atlas: keep the Owner's text, follow Jira otherwise.
-            // Rows linked before migration 008 rebuild it from the previous
-            // issue; if that doesn't match exactly, the field counts as edited
-            // and is kept, so the upgrade can never overwrite an edit.
+            // Only the part above the comments section counts. Rows linked
+            // before migration 008 rebuild it from the previous issue; if that
+            // doesn't match exactly the field counts as edited and is kept, so
+            // an upgrade can never overwrite an edit.
             const previous = row.raw as JiraIssue;
             const syncedTitle = row.synced_title ?? taskTitle(previous);
-            const syncedDescription =
-                row.synced_description ??
-                composeTaskDescription(previous, siteUrl, extra, posted, matched.map((r) => r.name));
-            const nextTitle = task.title === syncedTitle ? title : task.title;
-            const nextDescription = task.description === syncedDescription ? description : task.description;
-            if (nextTitle !== task.title || nextDescription !== task.description || reposChanged) {
-                await tasksService.update(task.id, {
-                    title: nextTitle,
-                    description: nextDescription,
-                    ...(reposChanged ? { repo_ids: repoIds } : {}),
-                });
-                result.updated++;
-            }
-            patch.synced_title = title;
-            patch.synced_description = description;
-            // An edited description no longer carries Jira's comments, so bring
-            // them in as comments rather than marking them seen and losing them.
-            if (nextDescription !== description) asComments = true;
+            const syncedOwner =
+                row.synced_description != null
+                    ? splitManaged(row.synced_description)[0]
+                    : composeTaskDescription(previous, siteUrl, extra, posted, matched.map((r) => r.name), files);
+            if (task.title === syncedTitle) title = jiraTitle;
+            if (taskOwner === syncedOwner) owner = jiraOwner;
+            patch.synced_title = jiraTitle;
+            patch.synced_description = jiraOwner;
         }
+        // The comments section is the bridge's: refreshed whatever the status,
+        // and whether or not the Owner edited the part above it.
+        const description = withComments(owner, composeFilesSection(issue, files), composeCommentsSection(issue, posted, files));
+        const reposChanged = repoIds.join('\n') !== task.repo_ids.join('\n');
+        if (title !== task.title || description !== task.description || reposChanged) {
+            await tasksService.update(task.id, {
+                title,
+                description,
+                ...(reposChanged ? { repo_ids: repoIds } : {}),
+            });
+            result.updated++;
+        }
+        const asComments = started;
         if (asComments) {
-            // Work has started (or the description is the Owner's): new Jira
-            // comments arrive as read-only context. `system` keeps them from
+            // Work has started: new Jira comments also arrive as Task comments, so
+            // a running agent notices them. `system` keeps them from
             // being attributed to the running agent, and they never resume a
             // parked run (only Owner comments do).
             const imported = [...row.imported_comment_ids];
@@ -775,11 +1078,22 @@ async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Prom
         }
     }
     const extra = await resolveExtraFields(creds, cfg.extra_fields);
+    const maps = await statusMaps();
     for (const { issue, first, matches } of found.values()) {
-        await fillComments(creds, issue);
         const existing = await loadIssueRow(issue.key);
-        if (existing) await refreshIssue(existing, issue, creds.site_url, extra, matches, result);
-        else await importIssue(creds.site_url, issue, first, matches, extra, result);
+        const map = maps.get(first.source.project_id) ?? null;
+        const group = statusGroup(map, jiraStatusOf(issue));
+        // With a mapping, only work that is waiting to start enters Atlas:
+        // an issue someone already has in progress (or unmapped) is left alone.
+        if (!existing && map && group !== 'draft' && group !== 'ready') continue;
+        await fillComments(creds, issue);
+        notes.push(...(await syncAttachments(creds, issue)));
+        if (existing) {
+            await followJiraStatus(existing, issue, maps, first);
+            await refreshIssue(existing, issue, creds.site_url, extra, matches, result);
+        } else {
+            await importIssue(creds.site_url, issue, first, matches, extra, result, !map || group === 'ready');
+        }
     }
     return notes;
 }
@@ -925,14 +1239,52 @@ async function headline(
     }
 }
 
-async function transitionToDone(c: Creds, key: string): Promise<void> {
+/**
+ * Move the issue to the first of `names` it can reach, unless it is already in
+ * one of them (so "QA in progress", mapped to In Progress, stays put).
+ */
+async function transitionTo(c: Creds, key: string, names: string[]): Promise<string> {
+    const want = names.map((n) => n.toLowerCase());
+    const issuePath = `/rest/api/2/issue/${encodeURIComponent(key)}`;
+    const current = (await jiraFetch<{ fields?: { status?: { name?: string } } }>(c, `${issuePath}?fields=status`))
+        ?.fields?.status?.name ?? '';
+    if (want.includes(current.toLowerCase())) return current;
+    const { transitions } = await jiraFetch<{ transitions?: { id: string; to?: { name?: string } }[] }>(
+        c,
+        `${issuePath}/transitions`
+    );
+    for (const n of want) {
+        const t = transitions?.find((x) => x.to?.name?.toLowerCase() === n);
+        if (t) {
+            await jiraFetch(c, `${issuePath}/transitions`, { method: 'POST', body: { transition: { id: t.id } } });
+            return t.to?.name ?? n;
+        }
+    }
+    throw new Error(`${key}: Jira offers no transition from "${current}" to ${names.map((n) => `"${n}"`).join(' / ')}`);
+}
+
+async function transitionToDone(c: Creds, key: string): Promise<string> {
     const path = `/rest/api/2/issue/${encodeURIComponent(key)}/transitions`;
     const { transitions } = await jiraFetch<{
-        transitions?: { id: string; to?: { statusCategory?: { key?: string } } }[];
+        transitions?: { id: string; to?: { name?: string; statusCategory?: { key?: string } } }[];
     }>(c, path);
     const done = transitions?.find((t) => t.to?.statusCategory?.key === 'done');
     if (!done) throw new Error(`${key}: Jira offers no transition to a Done status`);
     await jiraFetch(c, path, { method: 'POST', body: { transition: { id: done.id } } });
+    return done.to?.name ?? '';
+}
+
+/**
+ * Remember the status Atlas just moved the issue to, so the next pull compares
+ * Jira against it: a reopen made before that pull is a change, not "unchanged".
+ */
+async function rememberJiraStatus(key: string, status: string): Promise<void> {
+    if (!status) return;
+    await db
+        .updateTable('jira_issues')
+        .set({ raw: sql`jsonb_set(raw, '{fields,status}', jsonb_build_object('name', ${status}::text), true)` } as never)
+        .where('jira_key', '=', key)
+        .execute();
 }
 
 /**
@@ -957,8 +1309,11 @@ async function push(
             'i.status',
             'i.pr_url',
             'i.workflow_id',
+            'i.project_id',
+            'j.done_synced_at',
         ])
-        .where('j.done_synced_at', 'is', null)
+        // Finished issues stay quiet — unless their Task was reopened in Atlas.
+        .where((eb) => eb.or([eb('j.done_synced_at', 'is', null), eb('i.status', '!=', 'done')]))
         // Between polls only a status change posts, so the minute tick reads
         // just those rows instead of building a digest for every linked Task.
         .$if(!flushDigests, (q) =>
@@ -967,8 +1322,27 @@ async function push(
         .execute();
     let posted = 0;
     const errors: string[] = [];
+    const maps = await statusMaps();
     for (const r of rows) {
         const status = r.status as IssueStatus;
+        const map = maps.get(r.project_id) ?? null;
+        const reopened = r.done_synced_at !== null && status !== 'done';
+        // Draft never posts (G-013), but with a mapping Jira's status still
+        // follows: back to the Backlog group, silently.
+        if (status === 'draft' && status !== r.pushed_status && map?.draft?.length) {
+            try {
+                await rememberJiraStatus(r.jira_key, await transitionTo(creds, r.jira_key, map.draft));
+                await db
+                    .updateTable('jira_issues')
+                    .set({ pushed_status: 'draft', done_synced_at: null })
+                    .where('jira_key', '=', r.jira_key)
+                    .execute();
+            } catch (err) {
+                errors.push(`${r.jira_key}: ${errMsg(err)}`);
+                if (err instanceof ApiError && err.kind === 'credentials_invalid') break;
+            }
+            continue;
+        }
         // G-013 — Atlas writes to Jira when it ACTS, not when it merely looks.
         // An imported Task starts `draft` with `pushed_status` null, so this
         // used to count as a milestone and posted "imported. No workflow is
@@ -998,12 +1372,12 @@ async function push(
             }
             continue;
         }
-        const body = adfDoc(
-            milestone
-                ? await headline(r.task_id, status, r.workflow_id, r.pr_url)
-                : [strong(`Atlas ${r.task_id}`), plain(': progress update.')],
-            digest.items
-        );
+        const head = milestone
+            ? await headline(r.task_id, status, r.workflow_id, r.pr_url)
+            : [strong(`Atlas ${r.task_id}`), plain(': progress update.')];
+        // "Atlas X: reopened, queued on …" — the issue had been closed out.
+        if (reopened && milestone && head[1]) head[1] = plain(`: reopened${head[1].text.replace(/^:/, ',')}`);
+        const body = adfDoc(head, digest.items);
         try {
             const created = await jiraFetch<{ id: string }>(
                 creds,
@@ -1020,13 +1394,17 @@ async function push(
                     posted_comment_ids: JSON.stringify([...r.posted_comment_ids, created.id]),
                     pushed_comment_id: digest.maxId,
                     pushed_status: status,
-                    ...(status === 'done' ? { done_synced_at: new Date().toISOString() } : {}),
+                    done_synced_at: status === 'done' ? new Date().toISOString() : null,
                 })
                 .where('jira_key', '=', r.jira_key)
                 .execute();
             // done_synced_at is already set, so a failed transition is reported, not retried
             // (retrying would re-post the final comment every tick).
-            if (status === 'done') await transitionToDone(creds, r.jira_key);
+            if (milestone && map?.[status]?.length) {
+                await rememberJiraStatus(r.jira_key, await transitionTo(creds, r.jira_key, map[status]!));
+            } else if (status === 'done') {
+                await rememberJiraStatus(r.jira_key, await transitionToDone(creds, r.jira_key));
+            }
         } catch (err) {
             errors.push(`${r.jira_key}: ${errMsg(err)}`);
             if (err instanceof ApiError && err.kind === 'credentials_invalid') break;

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { writeCurrentTask } from './current-task-writer.js';
 import { commentsService } from './comments.js';
 import { itemLinks } from './item-links.js';
-import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 import { insertProject, insertAgent, insertItem } from '../../tests/_items.js';
 
 let worktreePath: string;
@@ -287,3 +287,61 @@ describe('writeCurrentTask', () => {
         expect(body).not.toContain('## Description');
     });
 });
+
+describe('writeCurrentTask — Jira attachments', () => {
+    it('stages the Task\'s copied Jira files into .atlas/attachments and lists them', async () => {
+        const taskId = await insertItem({ type: 'task', project_id: 'p1', title: 'T' });
+        const store = mkdtempSync(join(tmpdir(), 'atlas-att-'));
+        cleanupDirs.push(store);
+        writeFileSync(join(store, 'shot'), 'png-bytes');
+        await testDb.insertInto('jira_issues').values({ jira_key: 'JIR-1', item_id: taskId, jira_id: '1', url: 'u', raw: '{}' } as never).execute();
+        await testDb
+            .insertInto('jira_attachments')
+            .values([
+                { id: '10', jira_key: 'JIR-1', filename: 'shot.png', mime_type: 'image/png', size: 9, path: join(store, 'shot') },
+                { id: '11', jira_key: 'JIR-1', filename: 'huge.mov', mime_type: 'video/quicktime', size: 1, path: null, skipped_reason: 'over 25 MB' },
+            ] as never)
+            .execute();
+
+        // A sub-task sees its parent Task's files too.
+        const subId = await insertItem({ type: 'sub_task', project_id: 'p1', title: 'S', parent_id: taskId, parent_type: 'task' } as never);
+        for (const [type, id] of [['task', taskId], ['sub_task', subId]] as const) {
+            const wt = makeWorktree();
+            const { currentTaskPath } = await writeCurrentTask({ worktreePath: wt, issueType: type, issueId: id });
+            const body = readFileSync(currentTaskPath, 'utf8');
+            expect(body).toContain('## Attachment files');
+            expect(body).toContain('- `.atlas/attachments/shot.png`');
+            expect(body).not.toContain('huge.mov');
+            expect(readFileSync(join(wt, '.atlas', 'attachments', 'shot.png'), 'utf8')).toBe('png-bytes');
+        }
+    });
+
+    it('two files with the same name both reach the agent', async () => {
+        const taskId = await insertItem({ type: 'task', project_id: 'p1', title: 'T' });
+        const store = mkdtempSync(join(tmpdir(), 'atlas-att-'));
+        cleanupDirs.push(store);
+        writeFileSync(join(store, 'one'), 'first');
+        writeFileSync(join(store, 'two'), 'second');
+        await testDb.insertInto('jira_issues').values({ jira_key: 'JIR-2', item_id: taskId, jira_id: '2', url: 'u', raw: '{}' } as never).execute();
+        await testDb
+            .insertInto('jira_attachments')
+            .values([
+                { id: '20', jira_key: 'JIR-2', filename: 'log.txt', mime_type: 'text/plain', size: 5, path: join(store, 'one') },
+                { id: '21', jira_key: 'JIR-2', filename: 'log.txt', mime_type: 'text/plain', size: 6, path: join(store, 'two') },
+            ] as never)
+            .execute();
+        const { currentTaskPath } = await writeCurrentTask({ worktreePath, issueType: 'task', issueId: taskId });
+        const body = readFileSync(currentTaskPath, 'utf8');
+        expect(body).toContain('- `.atlas/attachments/log.txt`');
+        expect(body).toContain('- `.atlas/attachments/21-log.txt`');
+        expect(readFileSync(join(worktreePath, '.atlas', 'attachments', '21-log.txt'), 'utf8')).toBe('second');
+    });
+
+    it('writes no attachments section for a Task without Jira files', async () => {
+        const taskId = await insertItem({ type: 'task', project_id: 'p1', title: 'T' });
+        const { currentTaskPath } = await writeCurrentTask({ worktreePath, issueType: 'task', issueId: taskId });
+        expect(readFileSync(currentTaskPath, 'utf8')).not.toContain('## Attachment files');
+        expect(existsSync(join(worktreePath, '.atlas', 'attachments'))).toBe(false);
+    });
+});
+

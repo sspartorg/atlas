@@ -191,6 +191,36 @@ export const CreateProjectSchema = z
     })
     .strict();
 
+// Jira bridge: Jira status names per Atlas status. A Jira status may belong to
+// only one Atlas status. Ready needs at least one (it decides what imports and
+// queues); Draft is optional — a To Do / In Progress / Done board has no
+// separate backlog column, so its issues import straight to Ready.
+const JiraStatusNames = z.array(z.string().trim().min(1).max(100)).max(30);
+export const JiraStatusMapSchema = z
+    .object({
+        draft: JiraStatusNames,
+        ready: JiraStatusNames,
+        in_progress: JiraStatusNames,
+        waiting_for_info: JiraStatusNames,
+        in_review: JiraStatusNames,
+        done: JiraStatusNames,
+    })
+    .strict()
+    .superRefine((m, ctx) => {
+        if (m.ready.length === 0) ctx.addIssue({ code: 'custom', path: ['ready'], message: 'Map at least one Jira status to Ready' });
+        const seen = new Map<string, string>();
+        for (const [atlas, names] of Object.entries(m)) {
+            for (const n of names) {
+                const k = n.toLowerCase();
+                const other = seen.get(k);
+                if (other && other !== atlas) {
+                    ctx.addIssue({ code: 'custom', path: [atlas], message: `"${n}" is already mapped to ${other}` });
+                }
+                seen.set(k, atlas);
+            }
+        }
+    });
+
 export const UpdateProjectSchema = z
     .object({
         name: z.string().min(1).max(200).optional(),
@@ -201,6 +231,8 @@ export const UpdateProjectSchema = z
         default_workflow_id: z.string().min(1).nullable().optional(),
         // Publisher only: include this project in the team config repo.
         team_managed: z.boolean().optional(),
+        // null clears it (back to "Jira status ignored").
+        jira_status_map: JiraStatusMapSchema.nullable().optional(),
     })
     .strict();
 

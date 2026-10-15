@@ -25,6 +25,7 @@ import { GuardrailsTab } from './project/GuardrailsTab.js';
 import { HistoryTab } from './project/HistoryTab.js';
 import { SetupTab } from './project/SetupTab.js';
 import { DefaultWorkflowCard } from './project/DefaultWorkflowCard.js';
+import { JiraStatusMapCard } from './project/JiraStatusMapCard.js';
 import { ProjectJiraCard } from './project/ProjectJiraCard.js';
 import { ProjectReposCard } from './project/ProjectReposCard.js';
 import { ProjectTeamCard } from './project/ProjectTeamCard.js';
@@ -347,7 +348,12 @@ export function ProjectDetail() {
                     {currentTab === 'repos' && (
                         <ProjectReposCard project={project} displayId={displayId} />
                     )}
-                    {currentTab === 'jira' && <ProjectJiraCard project={project} />}
+                    {currentTab === 'jira' && (
+                        <>
+                            <ProjectJiraCard project={project} />
+                            <JiraStatusMapCard key={project.id} project={project} />
+                        </>
+                    )}
                     {currentTab === 'setup' && (
                         <>
                             <DefaultWorkflowCard project={project} />

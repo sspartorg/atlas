@@ -1,3 +1,5 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -27,6 +29,11 @@ export default defineConfig({
             // the suite reproducible on any developer machine; production is
             // unaffected and still uses the real local zone.
             TZ: 'UTC',
+            // Every on-disk side effect (team-config clone, Jira attachment
+            // copies, the encryption key) goes to a scratch dir, never the
+            // developer's ~/.config/Atlas — Reset Workspace's test deletes
+            // <dataDir>/team-config and <dataDir>/jira-attachments for real.
+            ATLAS_DATA_DIR: join(tmpdir(), 'atlas-api-test-data'),
         },
         globalSetup: ['./tests/_global-setup.ts'],
         // Run test files serially so they share one PG connection pool

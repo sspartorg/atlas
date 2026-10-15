@@ -14,9 +14,10 @@
 // `mkdirSync({ recursive: true })` for the `.atlas/` parent, then
 // `writeFileSync` overwrites any stale file from a prior run.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IssueType } from '@atlas/shared';
+import { db } from '../db/kysely-client.js';
 import {
     buildLinkedItemsSection,
     getIssueContext,
@@ -81,6 +82,18 @@ export async function writeCurrentTask(
         }
     }
 
+    if (hasItem) {
+        const staged = await stageJiraAttachments(input.worktreePath, input.issueId!);
+        if (staged.length > 0) {
+            contextLines.push(
+                '',
+                '## Attachment files',
+                'Local copies of the Jira attachments (the /api/jira-attachments links above are for the Atlas UI) — open these with your Read tool:',
+                ...staged.map((f) => `- \`${f}\``)
+            );
+        }
+    }
+
     if (hasPrompt) {
         contextLines.push('', `## User's initial prompt`, input.userPrompt!.trim());
     }
@@ -94,3 +107,36 @@ export async function writeCurrentTask(
 
     return { currentTaskPath };
 }
+
+/**
+ * Copy the item's Jira attachments (a sub-task gets its parent Task's) into
+ * `<worktree>/.atlas/attachments/`, which is gitignored, and return their
+ * worktree-relative paths. Files Atlas didn't copy (over the cap) are skipped.
+ */
+async function stageJiraAttachments(worktreePath: string, issueId: string): Promise<string[]> {
+    const item = await db.selectFrom('items').select(['id', 'parent_id']).where('id', '=', issueId).executeTakeFirst();
+    const ids = [issueId, ...(item?.parent_id ? [item.parent_id] : [])];
+    const files = await db
+        .selectFrom('jira_attachments as a')
+        .innerJoin('jira_issues as j', 'j.jira_key', 'a.jira_key')
+        .select(['a.id', 'a.filename', 'a.path'])
+        .where('j.item_id', 'in', ids)
+        .where('a.path', 'is not', null)
+        .orderBy('a.created_at')
+        .execute();
+    const out: string[] = [];
+    if (files.length === 0) return out;
+    const dir = join(worktreePath, '.atlas', 'attachments');
+    mkdirSync(dir, { recursive: true });
+    const used = new Set<string>();
+    for (const f of files) {
+        if (!f.path || !existsSync(f.path)) continue;
+        let name = f.filename.replace(/[\\/]/g, '_');
+        if (used.has(name.toLowerCase())) name = `${f.id}-${name}`;
+        used.add(name.toLowerCase());
+        copyFileSync(f.path, join(dir, name));
+        out.push(`.atlas/attachments/${name}`);
+    }
+    return out;
+}
+

@@ -20,7 +20,7 @@ Full view of one Task (ADR 0015): its brief (description, acceptance criteria), 
 - **`AddRelatedMenu`** (`+`): **Add relates-to**, **Add blocked-by** → `LinkPickerDialog` (candidates: every Task and sub-task).
 
 **Body cards** (in order)
-- **Description** and **Acceptance criteria** — `EditableMarkdownCard`s → `PATCH /api/tasks/:id`.
+- **Description** and **Acceptance criteria** — `EditableMarkdownCard`s → `PATCH /api/tasks/:id`. A Jira-imported description ends with the bridge-managed `## Attachments from Jira` / `## Comments from Jira` sections; `MarkdownPreview` renders `![…](/api/jira-attachments/<id>)` as an inline image (no other image URL is rendered).
 - **Spec** — read-only `MarkdownPreview` of `spec_md`; only when non-empty (the Architect step writes it).
 - **Pull request** — link to `pr_url`; only when set (the workflow run's End writes it).
 - **Sub-tasks** — `WorkItemTable` of `sub_tasks` (id, title, status, labels, assignee, reporter, updated); row → `/sub-tasks/:id`. Rows come in run order (hand-set order, then oldest first). Header **Reorder** (2+ sub-tasks) opens `ReorderSubTasksDialog` (`pages/tasks/`): up / down per row ("Move ATL-3 up"), **Save order** → `PUT /api/tasks/:id/sub-tasks/order`. Header **Add sub-task** opens the inline `AddSubTaskForm` (Title required, Description, Acceptance criteria, Labels with project suggestions) → `POST /api/tasks/:id/sub-tasks`; typed text arms `useDraftGuard`.

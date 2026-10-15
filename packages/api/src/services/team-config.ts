@@ -59,6 +59,8 @@ const ProjectFileSchema = z.object({
     status: z.string().min(1),
     guardrails_md: z.string(),
     default_workflow_id: z.string().nullable(),
+    // Optional: files from before the Jira status mapping import as unmapped.
+    jira_status_map: z.record(z.string(), z.array(z.string())).nullable().optional(),
     repos: z.array(
         z.object({
             id: z.string().min(1),
@@ -262,6 +264,7 @@ async function exportProject(p: { id: string }): Promise<{ file: ProjectFile; wo
         status: project.status,
         guardrails_md: project.guardrails_md,
         default_workflow_id: project.default_workflow_id,
+        jira_status_map: project.jira_status_map,
         repos: repos.map((r) => ({
             id: r.id,
             name: r.name,
@@ -459,7 +462,16 @@ async function importProject(cfg: ITeamConfig, prefix: string, report: SyncRepor
         .executeTakeFirst();
     if (clash) throw new Error(`${file.issue_key_prefix}: your local project "${clash.name}" already uses this key`);
 
-    const fields = { name: file.name, description: file.description, status: file.status, guardrails_md: file.guardrails_md };
+    const fields = {
+        name: file.name,
+        description: file.description,
+        status: file.status,
+        guardrails_md: file.guardrails_md,
+        // The team's Jira ↔ Atlas status mapping travels with the project.
+        ...(file.jira_status_map !== undefined
+            ? { jira_status_map: file.jira_status_map === null ? null : JSON.stringify(file.jira_status_map) }
+            : {}),
+    };
     const exists = await db.selectFrom('projects').select('id').where('id', '=', file.id).executeTakeFirst();
     if (exists) {
         await db.updateTable('projects').set({ ...fields, team_managed: true }).where('id', '=', file.id).execute();

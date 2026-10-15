@@ -12,6 +12,7 @@ import {
 import { rm } from 'node:fs/promises';
 import { db } from '../db/kysely-client.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { jiraAttachmentsDir } from '../services/jira-sync.js';
 import { teamConfigDir } from '../services/team-config.js';
 import { isValidLogLevel } from '../server.js';
 
@@ -233,6 +234,7 @@ export async function settingsRoutes(app: FastifyInstance) {
             // Jira sync state and the Jira token go with the items and credentials;
             // left behind, item-less rows would block those issues from re-importing.
             await trx.deleteFrom('jira_issues').execute();
+            await trx.deleteFrom('jira_attachments').execute();
             await trx.deleteFrom('jira_config').execute();
             // Left behind, the next tick would pull the team's projects straight back in.
             await trx.deleteFrom('team_config').execute();
@@ -272,6 +274,7 @@ export async function settingsRoutes(app: FastifyInstance) {
                 .execute();
         });
         await rm(teamConfigDir(), { recursive: true, force: true });
+        await rm(jiraAttachmentsDir(), { recursive: true, force: true });
         return reply.status(200).send({ ok: true });
     });
 }

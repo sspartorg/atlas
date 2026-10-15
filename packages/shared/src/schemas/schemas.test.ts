@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     CreateJiraSourceSchema,
+    JiraStatusMapSchema,
     UpdateExternalNotificationSchema,
     UpdateJiraConfigSchema,
     UpdateJiraSourceSchema,
@@ -1059,3 +1060,26 @@ describe('CreateProjectRepoSchema — repo_url host pinning', () => {
         ).toBe(false);
     });
 });
+
+describe('JiraStatusMapSchema', () => {
+    const base = { draft: ['Backlog'], ready: ['Selected'], in_progress: [], waiting_for_info: [], in_review: [], done: [] };
+    it('accepts a minimal mapping and trims names', () => {
+        expect(JiraStatusMapSchema.parse({ ...base, in_progress: ['  Dev  '] }).in_progress).toEqual(['Dev']);
+    });
+    it('needs Ready; Draft is optional (a To Do / In Progress / Done board)', () => {
+        expect(JiraStatusMapSchema.safeParse({ ...base, draft: [] }).success).toBe(true);
+        expect(JiraStatusMapSchema.safeParse({ ...base, ready: [] }).success).toBe(false);
+    });
+    it('refuses one Jira status in two groups, whatever the case', () => {
+        const r = JiraStatusMapSchema.safeParse({ ...base, done: ['SELECTED'] });
+        expect(r.success).toBe(false);
+        expect(JSON.stringify(r.error?.issues)).toMatch(/already mapped/);
+    });
+    it('refuses unknown keys, empty names and missing groups', () => {
+        expect(JiraStatusMapSchema.safeParse({ ...base, cancelled: [] }).success).toBe(false);
+        expect(JiraStatusMapSchema.safeParse({ ...base, in_review: [''] }).success).toBe(false);
+        const { done: _done, ...missing } = base;
+        expect(JiraStatusMapSchema.safeParse(missing).success).toBe(false);
+    });
+});
+

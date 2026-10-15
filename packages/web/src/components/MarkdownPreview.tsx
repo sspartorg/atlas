@@ -57,6 +57,40 @@ function renderInline(text: string): ReactNode[] {
             i += italic[0].length;
             continue;
         }
+        const image = remaining.match(/^!\[([^\]]*)\]\(([^)\s]+)\)/);
+        if (image && image[2] !== undefined) {
+            // Only Atlas's own copies of Jira attachments render as images; any
+            // other image URL falls through to the link rule (the "!" is shown
+            // as text), so a description can't load third-party images.
+            if (/^\/api\/jira-attachments\/[^/?#]+$/.test(image[2])) {
+                parts.push(
+                    <Box
+                        key={`img-${keyCounter++}`}
+                        component="a"
+                        href={image[2]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{ display: 'inline-block', maxWidth: '100%' }}
+                    >
+                        <Box
+                            component="img"
+                            src={image[2]}
+                            alt={image[1] ?? ''}
+                            loading="lazy"
+                            sx={{
+                                display: 'block',
+                                maxWidth: '100%',
+                                maxHeight: 360,
+                                borderRadius: '6px',
+                                border: `1px solid ${ATLAS_PALETTE.slate10}`,
+                            }}
+                        />
+                    </Box>
+                );
+                i += image[0].length;
+                continue;
+            }
+        }
         const link = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
         if (link && link[1] !== undefined && link[2] !== undefined) {
             const href = link[2];

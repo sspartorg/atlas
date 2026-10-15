@@ -625,3 +625,43 @@ describe('team config resilience', () => {
         rmSync(remote, { recursive: true, force: true });
     });
 });
+
+describe('team config carries the Jira status mapping', () => {
+    const MAP = { draft: ['Backlog'], ready: ['Selected for Development'], in_progress: ['Dev'], waiting_for_info: [], in_review: ['Review'], done: ['Done'] };
+
+    it("a publisher's mapping reaches the subscriber, and a later change follows", async () => {
+        const remote = bareRepo();
+        await seedPublisher();
+        await testDb.updateTable('projects').set({ jira_status_map: JSON.stringify(MAP) } as never).where('id', '=', 'p1').execute();
+        await connect('publisher', remote);
+        await teamConfig.syncNow();
+        await truncateAll();
+        rmSync(teamConfigDir(), { recursive: true, force: true });
+        await connect('subscriber', remote);
+        await teamConfig.syncNow();
+        const got = await testDb.selectFrom('projects').select('jira_status_map').where('id', '=', 'p1').executeTakeFirstOrThrow();
+        expect(got.jira_status_map).toEqual(MAP);
+        rmSync(remote, { recursive: true, force: true });
+    });
+
+    it('a project file from before the mapping imports as unmapped', async () => {
+        const remote = bareRepo();
+        await publishThenBecomeSubscriber(remote);
+        // Drop the field from the published file, as an older Atlas wrote it.
+        const work = mkdtempSync(join(tmpdir(), 'atlas-pub-'));
+        execFileSync('git', ['clone', '-q', remote, work]);
+        const f = join(work, 'projects', 'ATL', 'project.json');
+        const json = JSON.parse(readFileSync(f, 'utf8')) as Record<string, unknown>;
+        delete json['jira_status_map'];
+        writeFileSync(f, JSON.stringify(json, null, 2));
+        execFileSync('git', ['-C', work, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'old format']);
+        execFileSync('git', ['-C', work, 'push', '-q', 'origin', 'HEAD:main']);
+        rmSync(work, { recursive: true, force: true });
+
+        const msg = await teamConfig.syncNow();
+        expect(msg).not.toMatch(/project\.json/);
+        expect((await testDb.selectFrom('projects').select('jira_status_map').where('id', '=', 'p1').executeTakeFirstOrThrow()).jira_status_map).toBeNull();
+        rmSync(remote, { recursive: true, force: true });
+    });
+});
+

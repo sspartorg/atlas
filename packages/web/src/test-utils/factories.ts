@@ -25,6 +25,7 @@ export function makeProject(overrides: Partial<IProject> = {}): IProject {
         guardrails_md: '',
         default_workflow_id: null,
         team_managed: false,
+        jira_status_map: null,
         created_at: ISO,
         updated_at: ISO,
         last_activity_at: ISO,

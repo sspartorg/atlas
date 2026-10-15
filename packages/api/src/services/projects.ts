@@ -77,6 +77,7 @@ function projectFromRow(r: Record<string, unknown>): IProject {
         guardrails_md: r['guardrails_md'] as string,
         default_workflow_id: (r['default_workflow_id'] as string | null) ?? null,
         team_managed: Boolean(r['team_managed']),
+        jira_status_map: (r['jira_status_map'] as IProject['jira_status_map']) ?? null,
         created_at: r['created_at'] as string,
         updated_at: r['updated_at'] as string,
         last_activity_at:
@@ -97,6 +98,7 @@ export const projectsService = {
                 'p.guardrails_md',
                 'p.default_workflow_id',
                 'p.team_managed',
+                'p.jira_status_map',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -129,6 +131,7 @@ export const projectsService = {
                     'p.guardrails_md',
                     'p.default_workflow_id',
                 'p.team_managed',
+                'p.jira_status_map',
                     'p.created_at',
                     'p.updated_at',
                     LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -160,6 +163,7 @@ export const projectsService = {
                 'p.guardrails_md',
                 'p.default_workflow_id',
                 'p.team_managed',
+                'p.jira_status_map',
                 'p.created_at',
                 'p.updated_at',
                 LAST_ACTIVITY_SQL.as('last_activity_at'),
@@ -212,6 +216,7 @@ export const projectsService = {
             guardrails_md?: string | undefined;
             default_workflow_id?: string | null | undefined;
             team_managed?: boolean | undefined;
+            jira_status_map?: IProject['jira_status_map'] | undefined;
         },
     ): Promise<IProject> {
         const keys = Object.keys(data).filter((k) => data[k as keyof typeof data] !== undefined);
@@ -219,7 +224,17 @@ export const projectsService = {
         // Same rule the Task rail enforces, so the form never preselects a
         // workflow that would then refuse the Task it just created.
         if (data.default_workflow_id) await workflowsService.assertTakesTasks(data.default_workflow_id, id);
-        await db.updateTable('projects').set(data as never).where('id', '=', id).execute();
+        const { jira_status_map, ...rest } = data;
+        await db
+            .updateTable('projects')
+            .set({
+                ...rest,
+                ...(jira_status_map !== undefined
+                    ? { jira_status_map: jira_status_map === null ? null : JSON.stringify(jira_status_map) }
+                    : {}),
+            } as never)
+            .where('id', '=', id)
+            .execute();
         // A rename changes the project label on every page that shows it.
         broadcastSSE({ type: 'counts_changed' });
         return (await this.get(id))!;
