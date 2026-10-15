@@ -33,8 +33,7 @@ test('model registry: add, duplicate, edit twice, delete', async ({ page, reques
     await page.keyboard.press('Escape');
 
     for (const note of ['note two', 'note three']) {
-        // The row, not the "Model added" toast that also names it.
-        await page.locator('[role="button"]:not(button)').filter({ hasText: NAME }).click();
+        await page.getByRole('button', { name: `Edit ${NAME}` }).click();
         await expect(page.getByRole('dialog').getByRole('textbox').first()).toBeDisabled();
         await page.getByRole('dialog').getByRole('textbox').nth(1).fill(note);
         await page.getByRole('dialog').getByRole('button', { name: /Save/ }).click();

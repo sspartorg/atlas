@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "author": "Sspart Enterprise Private Limited",
   "type": "module",
-  "description": "Atlas \u2014 AI Agent Orchestration Platform",
+  "description": "Atlas — AI Agent Orchestration Platform",
   "scripts": {
     "dev": "pnpm db:up && pnpm db:wait && pnpm db:migrate && pnpm --parallel -r dev",
     "dev:local": "pnpm db:migrate && pnpm --parallel --filter @atlas/web --filter @atlas/api dev",
@@ -73,12 +73,13 @@
     ]
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.61.1",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
     "@types/node": "^26.0.1",
-    "cross-env": "^10.1.0",
     "@typescript-eslint/eslint-plugin": "^8.62.1",
     "@typescript-eslint/parser": "^8.62.1",
+    "cross-env": "^10.1.0",
     "eslint": "^10.6.0",
     "husky": "^9.1.0",
     "knip": "^6.23.0",

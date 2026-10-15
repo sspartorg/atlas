@@ -171,6 +171,8 @@ function startApi(): ChildProcess {
                 ATLAS_DATA_DIR: E2E_DATA_DIR,
                 ATLAS_ENV_FILE: E2E_ENV_FILE,
                 ATLAS_TELEGRAM_API_BASE: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
+                // team-config.spec.ts publishes to a local bare repo over file://.
+                ATLAS_TEAM_CONFIG_ALLOW_FILE_URLS: '1',
             },
             shell: process.platform === 'win32',
             // POSIX: lead a process group so teardown can stop pnpm AND the

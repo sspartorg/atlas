@@ -1,3 +1,7 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 import { API, apiGet, chainGraph, createWorkflow } from '../helpers/api.js';
@@ -98,5 +102,49 @@ test('team config: branch and interval validate, and Sync is refused while off',
     await request.put(`${API}/api/team-config`, { data: { role: 'off' } });
     expect((await request.post(`${API}/api/team-config/sync`)).status()).toBe(409);
     await request.put(`${API}/api/team-config`, { data: { role: 'off', repo_url: null, branch: 'main', interval_minutes: 60 } });
+});
+
+test('Sync now: publish to a repo, publish again (no change), pull as a subscriber, empty branch', async ({ page, request }) => {
+    test.setTimeout(120_000);
+    const remote = mkdtempSync(join(tmpdir(), 'e2e-team-remote-'));
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+    const cred = (await (await request.post(`${API}/api/credentials`, { data: { label: 'e2e-team-sync', kind: 'pat', token: 'ghp_e2eFAKEtoken0000000007' } })).json()) as { id: string };
+    await request.patch(`${API}/api/projects/${PROJECT_ID}`, { data: { team_managed: true } });
+    await request.put(`${API}/api/team-config`, { data: { role: 'publisher', repo_url: `file://${remote}`, credential_id: cred.id, branch: 'main' } });
+    try {
+        await goto(page, '/settings?tab=team');
+        const sync = page.getByRole('button', { name: 'Sync now' });
+
+        await sync.click();
+        await expect(page.getByText('Team config synced')).toBeVisible();
+        await expect(page.getByText(/Last sync .* · Published [0-9a-f]{7}/)).toBeVisible();
+        const files = execFileSync('git', ['--git-dir', remote, 'ls-tree', '-r', '--name-only', 'main'], { encoding: 'utf8' });
+        expect(files).toMatch(/^projects\//m);
+        expect(files).toMatch(/^agents\//m);
+
+        await sync.click();
+        await expect(page.getByText(/Last sync .* · Up to date/)).toBeVisible();
+
+        await page.getByRole('combobox', { name: 'Team config role' }).click();
+        await page.getByRole('option', { name: 'Subscriber' }).click();
+        await expect.poll(async () => (await apiGet<{ role: string }>(request, '/api/team-config')).role).toBe('subscriber');
+        await sync.click();
+        // The seeded repo has no remote URL but is already on disk here, so the
+        // pull imports cleanly — and the project stays team-managed, not "left".
+        await expect(page.getByText(/Last sync .* · Agent "PO Writer" is now team-managed/)).toBeVisible();
+        await expect(page.getByText(/left the team config/)).toHaveCount(0);
+        expect((await apiGet<{ last_sync_ok: boolean | null }>(request, '/api/team-config')).last_sync_ok).toBe(true);
+        expect((await apiGet<{ team_managed: boolean }>(request, `/api/projects/${PROJECT_ID}`)).team_managed).toBe(true);
+
+        await request.put(`${API}/api/team-config`, { data: { branch: 'nothing-here' } });
+        await page.reload();
+        await page.getByRole('button', { name: 'Sync now' }).click();
+        await expect(page.getByText(/has nothing yet; waiting for the publisher/)).toBeVisible();
+    } finally {
+        await request.put(`${API}/api/team-config`, { data: { role: 'off', repo_url: null, credential_id: null, branch: 'main' } });
+        await request.patch(`${API}/api/projects/${PROJECT_ID}`, { data: { team_managed: false } });
+        await request.delete(`${API}/api/credentials/${cred.id}`);
+        rmSync(remote, { recursive: true, force: true });
+    }
 });
 
