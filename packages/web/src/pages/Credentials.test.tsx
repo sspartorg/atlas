@@ -149,6 +149,36 @@ describe('Credentials page', () => {
         if (editBtn) fireEvent.click(editBtn);
     });
 
+    it('warns in the delete dialog only for the credential team config uses', async () => {
+        server.use(
+            ...defaultHandlers,
+            http.get(`${BASE}/credentials`, () =>
+                HttpResponse.json([
+                    makeCredential({ id: 'cred-team', label: 'team-bot' }),
+                    makeCredential({ id: 'cred-other', label: 'other-bot' }),
+                ])
+            ),
+            http.get(`${BASE}/team-config`, () =>
+                HttpResponse.json({ role: 'publisher', credential_id: 'cred-team' })
+            )
+        );
+        renderWithProviders(<Credentials />, { initialEntries: ['/credentials'] });
+        // Rows render in API order: team-bot, then other-bot.
+        const openDelete = async (label: string) => {
+            await screen.findByText(label);
+            const menus = screen.getAllByRole('button', { name: 'Credential actions' });
+            fireEvent.click(menus[label === 'team-bot' ? 0 : 1]!);
+            fireEvent.click(await screen.findByRole('menuitem', { name: /delete/i }));
+            await screen.findByText(/Delete credential\?/i);
+        };
+        await openDelete('other-bot');
+        expect(screen.queryByText(/Team config syncs with this credential/)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+        await waitFor(() => expect(screen.queryByText(/Delete credential\?/i)).not.toBeInTheDocument());
+        await openDelete('team-bot');
+        expect(await screen.findByText(/Team config syncs with this credential/)).toBeInTheDocument();
+    });
+
     it('opens the row-action menu and clicks Delete → opens confirmation dialog', async () => {
         server.use(
             ...defaultHandlers,

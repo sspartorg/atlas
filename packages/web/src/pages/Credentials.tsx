@@ -13,6 +13,7 @@ import AddRounded from '@mui/icons-material/AddRounded';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCredentials } from '../hooks/useCredentials.js';
+import { useTeamConfig } from '../hooks/useTeamConfig.js';
 import { useToast } from '../hooks/useToast.js';
 import { api } from '../api/api.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
@@ -34,6 +35,10 @@ export function Credentials() {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<CredentialModalMode>({ kind: 'add' });
     const [deleteId, setDeleteId] = useState<string | null>(null);
+    const { data: teamConfig } = useTeamConfig();
+    // Deleting the team-config credential unsets it server-side (and stops sync).
+    const deletingTeamCredential =
+        deleteId !== null && teamConfig?.credential_id === deleteId && teamConfig.role !== 'off';
 
     const expiringSoon = useMemo(
         () => rows.filter((c) => daysUntilExpiry(c) !== null).length,
@@ -47,6 +52,7 @@ export function Credentials() {
         onSuccess: (_data, id) => {
             const cred = rows.find((c) => c.id === id);
             void qc.invalidateQueries({ queryKey: ['credentials'] });
+            void qc.invalidateQueries({ queryKey: ['team-config'] });
             setDeleteId(null);
             toast.show({
                 message: cred ? `Credential "${cred.label}" deleted` : 'Credential deleted',
@@ -167,6 +173,13 @@ export function Credentials() {
                         This will not affect projects already cloned — but new clones using this
                         credential will fail until you replace it.
                     </Typography>
+                    {deletingTeamCredential && (
+                        <Alert severity="warning" sx={{ mt: 2, fontSize: 13 }}>
+                            Team config syncs with this credential. Deleting it unsets the team
+                            config credential and stops syncing until you pick another one in
+                            Settings → Team config.
+                        </Alert>
+                    )}
                 </DialogContent>
                 <DialogActions sx={{ p: 4 }}>
                     <Button
