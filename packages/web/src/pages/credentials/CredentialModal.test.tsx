@@ -129,7 +129,7 @@ describe('CredentialModal — form view (add mode)', () => {
 
     it('shows validation error when label is empty on submit', async () => {
         await openFormView();
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         // ApiErrorAlert renders the string error with contextLabel prefix:
         // "Couldn't save credential: Label is required."
         await waitFor(() => expect(screen.getByText(/Label is required/i)).toBeInTheDocument());
@@ -139,7 +139,7 @@ describe('CredentialModal — form view (add mode)', () => {
         await openFormView();
         await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
         await userEvent.type(screen.getByLabelText(/^Token/), 'short');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         await waitFor(() =>
             expect(screen.getByText(/Paste a valid Personal Access Token/i)).toBeInTheDocument()
         );
@@ -178,7 +178,7 @@ describe('CredentialModal — submit success (add mode)', () => {
         await waitFor(() => screen.getByLabelText(/^Label/));
         await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
         await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         await waitFor(() => expect(screen.getByText('Credential saved')).toBeInTheDocument());
         expect(screen.getByText('my-bot')).toBeInTheDocument();
         expect(screen.getByText('fp:newxyz')).toBeInTheDocument();
@@ -191,7 +191,7 @@ describe('CredentialModal — submit success (add mode)', () => {
         await waitFor(() => screen.getByLabelText(/^Label/));
         await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
         await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         await waitFor(() => screen.getByText('Credential saved'));
         expect(screen.getByRole('button', { name: /Add another/i })).toBeInTheDocument();
     });
@@ -203,7 +203,7 @@ describe('CredentialModal — submit success (add mode)', () => {
         await waitFor(() => screen.getByLabelText(/^Label/));
         await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
         await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         await waitFor(() => screen.getByText('Credential saved'));
         await userEvent.click(screen.getByRole('button', { name: /Add another/i }));
         await waitFor(() => expect(screen.getByText('Add credential')).toBeInTheDocument());
@@ -227,7 +227,7 @@ describe('CredentialModal — submit error', () => {
         await waitFor(() => screen.getByLabelText(/^Label/));
         await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
         await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
         // ApiErrorAlert for AtlasApiError with kind=validation_error renders
         // an AlertTitle "Couldn't save credential — Invalid input"
         await waitFor(
@@ -252,6 +252,15 @@ describe('CredentialModal — edit mode', () => {
             expect(screen.getByText('Edit Personal Access Token')).toBeInTheDocument()
         );
         expect(screen.getByDisplayValue('acme-bot')).toBeInTheDocument();
+    });
+
+    it('edit mode has a Cancel button that closes without saving', async () => {
+        const onClose = vi.fn();
+        renderWithProviders(
+            <CredentialModal open mode={{ kind: 'edit', credential: existingCred }} onClose={onClose} />
+        );
+        await userEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+        expect(onClose).toHaveBeenCalled();
     });
 
     it('Save changes success navigates to saved view', { timeout: 30_000 }, async () => {
@@ -388,7 +397,7 @@ describe('CredentialModal — close guard while saving', () => {
             await waitFor(() => screen.getByLabelText(/^Label/));
             await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
             await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-            await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+            await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
 
             // While create.isPending=true, Dialog's onClose (which routes to
             // handleClose) must NOT fire onClose. We can't easily click an overlay
@@ -440,7 +449,7 @@ describe('CredentialModal — saved view defaults', () => {
             await waitFor(() => screen.getByLabelText(/^Label/));
             await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
             await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-            await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+            await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
             await waitFor(() => screen.getByText('Credential saved'));
             // The Scope row shows the literal fallback string "repo"
             expect(screen.getByText('repo')).toBeInTheDocument();
@@ -486,7 +495,7 @@ describe('CredentialModal — updateCred mutation edge cases', () => {
             // In add mode the "Verify & save" button calls create.mutate, not updateCred.
             // Just verify the form is in the expected state (add mode has no "Save changes" button).
             expect(screen.queryByRole('button', { name: /Save changes/i })).not.toBeInTheDocument();
-            expect(screen.getByRole('button', { name: /Verify & save/i })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /Verify & save|Save credential/i })).toBeInTheDocument();
         }
     );
 
@@ -534,7 +543,7 @@ describe('CredentialModal — updateCred mutation edge cases', () => {
             await waitFor(() => screen.getByLabelText(/^Label/));
             await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
             await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-            await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+            await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
             // Any error display (ApiErrorAlert) should appear
             await waitFor(
                 () => expect(screen.getByText(/Couldn't save credential/i)).toBeInTheDocument(),
@@ -557,7 +566,7 @@ describe('CredentialModal — updateCred mutation edge cases', () => {
             await waitFor(() => screen.getByLabelText(/^Label/));
             await userEvent.type(screen.getByLabelText(/^Label/), 'my-bot');
             await userEvent.type(screen.getByLabelText(/^Token/), 'ghp_1234567890abcdef');
-            await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+            await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
             await waitFor(() => screen.getByText('Credential saved'));
             // The scope is non-empty so its value should be shown directly
             expect(screen.getByText('acme/*,mantra-*')).toBeInTheDocument();
@@ -600,7 +609,7 @@ describe('CredentialModal — attribution fields reach the API', () => {
         await userEvent.type(screen.getByLabelText(/Your email/i), 'sunny@acme.test');
         await userEvent.type(screen.getByLabelText(/Your GitHub login/i), 'sunnysabhanam');
         await userEvent.type(screen.getByLabelText(/Repo scope/i), 'acme/*, mantra-*');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
 
         await waitFor(() => expect(body).not.toBeNull());
         expect(body).toEqual({
@@ -636,7 +645,7 @@ describe('CredentialModal — attribution fields reach the API', () => {
             await userEvent.type(screen.getByLabelText(/Installation owner/i), 'sspartorg');
             // Whitespace only — must be treated as "not set", not as a name.
             await userEvent.type(screen.getByLabelText(/Your name/i), '   ');
-            await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+            await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
 
             await waitFor(() => expect(body).not.toBeNull());
             expect(body).toMatchObject({
@@ -668,7 +677,7 @@ describe('CredentialModal — attribution fields reach the API', () => {
         await userEvent.type(screen.getByLabelText(/Your name/i), 'Sunny');
         await userEvent.type(screen.getByLabelText(/Your email/i), 'sunny@acme.test');
         await userEvent.type(screen.getByLabelText(/Repo scope/i), 'acme/*');
-        await userEvent.click(screen.getByRole('button', { name: /Verify & save/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Verify & save|Save credential/i }));
 
         await waitFor(() => expect(body).not.toBeNull());
         expect(body).toMatchObject({

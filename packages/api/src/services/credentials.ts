@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createPrivateKey, randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, isAbsolute, resolve, parse as parsePath } from 'node:path';
 import { db } from '../db/kysely-client.js';
@@ -258,6 +258,15 @@ function readBotInfoFolder(botInfoPath: string): {
     if (!pem.includes('BEGIN') || !pem.includes('PRIVATE KEY')) {
         throw new CredentialValidationError(
             `${pemFiles[0]} in ${absPath} does not look like a PEM private key`
+        );
+    }
+    // Parse it now: a corrupt key otherwise fails later inside the JWT signer
+    // with a decoder error that reads as transient, so the broken key was kept.
+    try {
+        createPrivateKey(pem);
+    } catch {
+        throw new CredentialValidationError(
+            `${pemFiles[0]} in ${absPath} is not a valid private key`
         );
     }
     return { app_id: appId, pem, app_slug: appSlug };
@@ -565,7 +574,6 @@ export const credentialsService = {
                         `GitHub App token mint failed (${safeMsg}). Verify the bot info folder points at the correct App. The previous key was kept.`
                     );
                 }
-                // eslint-disable-next-line no-console
                 console.warn(
                     `[credentials] mint after key change for ${id} failed transiently (will retry lazily): ${safeMsg}`
                 );

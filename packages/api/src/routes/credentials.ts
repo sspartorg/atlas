@@ -61,6 +61,10 @@ export async function credentialsRoutes(app: FastifyInstance) {
                           token: body.token,
                           scope: body.scope,
                           expires_at: body.expires_at,
+                          // The commit author for this PAT; dropping these here
+                          // silently lost the identity typed into the form.
+                          human_name: body.human_name ?? null,
+                          human_email: body.human_email ?? null,
                       })
                     : await credentialsService.create({
                           label: body.label,

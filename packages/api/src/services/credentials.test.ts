@@ -1,11 +1,19 @@
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { generateKeyPairSync } from 'node:crypto';
 import { join } from 'node:path';
 import { credentialsService } from './credentials.js';
 import type * as GithubAppTokens from './github-app-tokens.js';
 import * as GithubAppTokensMock from './github-app-tokens.js';
 import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
+
+// A real (throwaway) key: the folder reader parses the PEM, so placeholder
+// bytes are rejected the way a corrupt key file would be.
+const TEST_PEM = generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey.export({
+    type: 'pkcs1',
+    format: 'pem',
+}) as string;
 
 beforeEach(async () => {
     await truncateAll();
@@ -148,7 +156,7 @@ describe('credentialsService — github_app kind', () => {
         writeFileSync(join(botDir, 'app-config.json'), JSON.stringify(cfg));
         writeFileSync(
             join(botDir, 'test-bot.private-key.pem'),
-            '-----BEGIN RSA PRIVATE KEY-----\nfake-key-bytes\n-----END RSA PRIVATE KEY-----\n',
+            TEST_PEM,
         );
     }
 
@@ -394,7 +402,7 @@ describe('credentialsService — github_app kind', () => {
             writeFileSync(join(dir, 'app-config.json'), JSON.stringify({ id, slug: 'other-bot' }));
             writeFileSync(
                 join(dir, 'other.private-key.pem'),
-                '-----BEGIN RSA PRIVATE KEY-----\nother-key\n-----END RSA PRIVATE KEY-----\n',
+                TEST_PEM,
             );
             return dir;
         }
@@ -430,6 +438,22 @@ describe('credentialsService — github_app kind', () => {
                 bot_info_path: writeOtherFolder(999),
             });
             expect(Number(updated.app_id)).toBe(999);
+        });
+
+        it('rejects a corrupt key file before writing anything', async () => {
+            const app = await createApp();
+            const dir = mkdtempSync(join(tmpdir(), 'atlas-bot-test-'));
+            writeFileSync(join(dir, 'app-config.json'), JSON.stringify({ id: 999, slug: 'bad' }));
+            writeFileSync(
+                join(dir, 'bad.pem'),
+                '-----BEGIN RSA PRIVATE KEY-----\nnot-a-key\n-----END RSA PRIVATE KEY-----\n',
+            );
+            await expect(
+                credentialsService.update(app.id, { bot_info_path: dir }),
+            ).rejects.toThrow(/not a valid private key/);
+            const after = await credentialsService.get(app.id);
+            expect(Number(after!.app_id)).toBe(12345678);
+            expect(after!.app_slug).toBe('test-bot');
         });
 
         it('rejects a missing folder without touching the row', async () => {

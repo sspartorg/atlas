@@ -786,8 +786,8 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                 </>
                             ) : (
                                 <>
-                                    We&apos;ll verify the token against github.com and store it
-                                    encrypted. Required scopes:{' '}
+                                    Atlas stores the token encrypted; GitHub checks it the first
+                                    time Atlas clones or pushes with it. Required scopes:{' '}
                                     <Box
                                         component="code"
                                         sx={{
@@ -859,6 +859,20 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                     justifyContent: { xs: 'flex-end', sm: 'flex-start' },
                                 }}
                             >
+                                {mode.kind === 'edit' && (
+                                    // Add has Back (to the kind step); edit had no way
+                                    // out but Save or a backdrop tap.
+                                    <Button
+                                        onClick={handleClose}
+                                        sx={{
+                                            textTransform: 'none',
+                                            color: ATLAS_PALETTE.slate60,
+                                        }}
+                                        disabled={isPending}
+                                    >
+                                        Cancel
+                                    </Button>
+                                )}
                                 {mode.kind === 'add' && (
                                     <Button
                                         onClick={() => setView('kind')}
@@ -886,7 +900,11 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                                     }
                                     sx={{ textTransform: 'none', fontWeight: 600 }}
                                 >
-                                    {mode.kind === 'edit' ? 'Save changes' : 'Verify & save'}
+                                    {mode.kind === 'edit'
+                                        ? 'Save changes'
+                                        : chosenKind === 'app'
+                                          ? 'Verify & save'
+                                          : 'Save credential'}
                                 </Button>
                             </Box>
                         </Box>

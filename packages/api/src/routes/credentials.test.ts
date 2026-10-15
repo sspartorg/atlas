@@ -73,6 +73,19 @@ describe('POST /api/credentials', () => {
         expect(body.id).toBeDefined();
     });
 
+    it('keeps the commit identity sent with a new PAT', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/credentials',
+            payload: { ...VALID_CREDENTIAL, human_name: 'QA Person', human_email: 'qa@example.com' },
+        });
+        expect(res.statusCode).toBe(201);
+        expect(JSON.parse(res.body)).toMatchObject({
+            human_name: 'QA Person',
+            human_email: 'qa@example.com',
+        });
+    });
+
     it('returns 400 for missing label', async () => {
         const res = await app.inject({
             method: 'POST',
