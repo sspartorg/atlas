@@ -10,7 +10,7 @@ vi.mock('../routes/events.js', () => ({
 
 // Mock external notification delivery so tests don't hit real services
 vi.mock('../services/external-notifications.js', () => ({
-    sendExternalForNotification: vi.fn().mockResolvedValue(undefined),
+    deliverExternalNow: vi.fn().mockResolvedValue(undefined),
     sendExternalNotification: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -137,9 +137,9 @@ describe('POST /api/notifications/:id/resend', () => {
         expect(res.statusCode).toBe(200);
     });
 
-    it('returns 502 when sendExternalForNotification throws (lines 51-55)', async () => {
-        const { sendExternalForNotification } = await import('../services/external-notifications.js');
-        vi.mocked(sendExternalForNotification).mockRejectedValueOnce(new Error('transport error'));
+    it('returns 502 when deliverExternalNow throws (lines 51-55)', async () => {
+        const { deliverExternalNow } = await import('../services/external-notifications.js');
+        vi.mocked(deliverExternalNow).mockRejectedValueOnce(new Error('transport error'));
         const id = await insertNotification({ message: 'Fail to resend' });
         const res = await app.inject({
             method: 'POST',
@@ -151,11 +151,11 @@ describe('POST /api/notifications/:id/resend', () => {
         expect(body.detail).toBe('transport error');
     });
 
-    it('returns 502 with String(err) when sendExternalForNotification throws non-Error (NOTIF-STR-1)', async () => {
+    it('returns 502 with String(err) when deliverExternalNow throws non-Error (NOTIF-STR-1)', async () => {
         // Covers `err instanceof Error ? err.message : String(err)` false branch at line 53.
-        const { sendExternalForNotification } = await import('../services/external-notifications.js');
+        const { deliverExternalNow } = await import('../services/external-notifications.js');
         // eslint-disable-next-line @typescript-eslint/only-throw-error
-        vi.mocked(sendExternalForNotification).mockRejectedValueOnce('non-error-transport');
+        vi.mocked(deliverExternalNow).mockRejectedValueOnce('non-error-transport');
         const id = await insertNotification({ message: 'Fail to resend non-Error' });
         const res = await app.inject({
             method: 'POST',

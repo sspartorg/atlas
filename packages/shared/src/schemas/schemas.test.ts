@@ -589,6 +589,15 @@ describe('settings schemas', () => {
             UpdateNotificationsSchema.safeParse({ quiet_hours_from: '7am' }).success
         ).toBe(false);
     });
+
+    it('UpdateNotificationsSchema accepts real time zones, aliases included, and rejects junk', () => {
+        for (const tz of ['UTC', 'Asia/Kolkata', 'Asia/Calcutta', 'America/New_York', null]) {
+            expect(UpdateNotificationsSchema.safeParse({ quiet_hours_timezone: tz }).success).toBe(true);
+        }
+        for (const tz of ['Mars/Olympus', 'not a zone', '']) {
+            expect(UpdateNotificationsSchema.safeParse({ quiet_hours_timezone: tz }).success).toBe(false);
+        }
+    });
 });
 
 describe('cli-model schemas', () => {

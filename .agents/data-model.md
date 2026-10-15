@@ -323,10 +323,11 @@ Fields: `id, project_id, title, body_md, applies_to, icon, enabled, sort_order, 
 
 Delivery queue for external notification + in-app notifications.
 
-Fields: `id, kind, issue_type, issue_id, message, event_type, agent_id, external_status, failure_reason, scheduled_for, sent_at, created_at`
+Fields: `id, kind, issue_type, issue_id, project_id, message, event_type, agent_id, external_status, failure_reason, push_status, push_failure_reason, read_at, link_url, external_deferred_at, created_at`
 
 - `kind` âˆˆ `needs_you | update | system`
-- `external_status` âˆˆ `pending | sent | failed | cancelled`
+- `external_status` âˆˆ `none | pending | sent | failed`. `pending` + non-null `external_deferred_at` = held by quiet hours until the window ends (migration 010).
+- `link_url` — where a click opens; stamped at create time (`notificationLinkUrl` in @atlas/shared).
 - `event_type` âˆˆ external notification event keys (see below)
 
 ### IAgentRun

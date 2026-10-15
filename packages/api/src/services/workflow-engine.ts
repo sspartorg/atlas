@@ -36,6 +36,7 @@ import { broadcastSSE } from '../routes/events.js';
 import { eventsLog } from './events-log.js';
 import { notificationsService, plainNotice } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
+import { appLog } from './app-log.js';
 import { externalLinks, parseGithubPrUrl, fetchGithubPrTitle } from './external-links.js';
 import { commentsService } from './comments.js';
 import { assertDepsAllDoneForDispatch } from './dependency-guard.js';
@@ -170,11 +171,17 @@ async function setItemStatus(
     broadcastSSE({ type: 'counts_changed', issueType: item.type as IssueType, issueId: itemId });
 }
 
+type OwnerEventKey =
+    | 'item.status_changed:waiting_for_info'
+    | 'item.status_changed:in_review'
+    | 'agent.run_finished_no_item'
+    | 'workflow.failed';
+
 async function notifyOwner(
     run: RunRow,
     message: string,
     kind: 'needs_you' | 'update',
-    eventKey: 'item.status_changed:waiting_for_info' | 'item.status_changed:in_review' | 'agent.run_finished_no_item' | null,
+    eventKey: OwnerEventKey | null,
 ): Promise<void> {
     try {
         const item = run.item_id ? await loadItem(run.item_id) : undefined;
@@ -185,10 +192,13 @@ async function notifyOwner(
             issue_id: run.item_id,
             agent_id: null,
             kind,
+            // The run page says why it stopped and links the item to reply on.
+            link_url: `/workflows/${run.workflow_id}/runs/${run.id}`,
         });
         if (eventKey) await sendExternalForNotification(notification.id, notification.message, eventKey);
-    } catch {
-        /* notifications are best-effort */
+    } catch (err) {
+        // Best-effort (a notification must never wedge a run), but not silent.
+        appLog().warn({ err, runId: run.id }, '[workflow] owner notification failed');
     }
 }
 
@@ -313,7 +323,7 @@ export async function startWorkflowRun(
     if (workflow.use_worktree && !parent) {
         const failure = await prepareWorktree(run, pushesRunBranch(workflow));
         if (failure) {
-            await park(run, firstNodeId, `Could not prepare the worktree: ${failure}`);
+            await parkFailed(run, firstNodeId, `Could not prepare the worktree: ${failure}`);
             return runId;
         }
     }
@@ -517,7 +527,7 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
             if (!failTarget) {
                 // A gate with nobody to route a failure to is still a real
                 // verdict; it parks with the Owner rather than passing.
-                await park(run, node.id, detail);
+                await parkFailed(run, node.id, detail);
                 return;
             }
             const workflow = await loadWorkflow(run.workflow_id);
@@ -607,7 +617,7 @@ async function runNextSubtask(run: RunRow, node: IWorkflowNode): Promise<void> {
     try {
         await startWorkflowRun(node.sub_workflow_id ?? '', next.id, { run, nodeId: node.id });
     } catch (err) {
-        await park(run, node.id, `Could not start sub-task ${next.id}: ${(err as Error).message}`);
+        await parkFailed(run, node.id, `Could not start sub-task ${next.id}: ${(err as Error).message}`);
     }
 }
 
@@ -616,7 +626,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode, retryOf?: string): Pr
         ? await db.selectFrom('agents').select(['id', 'name', 'status']).where('id', '=', node.agent_id).executeTakeFirst()
         : undefined;
     if (!agent || agent.status !== 'active') {
-        await park(run, node.id, `Agent ${node.agent_id ?? '(none)'} is missing or inactive`);
+        await parkFailed(run, node.id, `Agent ${node.agent_id ?? '(none)'} is missing or inactive`);
         return;
     }
     await db
@@ -646,7 +656,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode, retryOf?: string): Pr
             },
         });
     } catch (err) {
-        await park(run, node.id, `Could not start ${agent.name}: ${(err as Error).message}`);
+        await parkFailed(run, node.id, `Could not start ${agent.name}: ${(err as Error).message}`);
     }
 }
 
@@ -682,7 +692,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
         return;
     }
     if (step.status === 'setup_failed') {
-        await park(run, step.node_id, 'Project setup script failed');
+        await parkFailed(run, step.node_id, 'Project setup script failed');
         return;
     }
     if (step.status === 'error') {
@@ -704,7 +714,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
             return;
         }
         const what = retried ? 'The agent step errored again after an automatic retry' : 'The agent step errored';
-        await park(run, step.node_id, detail ? `${what}: ${detail}` : what);
+        await parkFailed(run, step.node_id, detail ? `${what}: ${detail}` : what);
         return;
     }
     if (step.status !== 'completed') return;
@@ -811,7 +821,19 @@ export async function retryStep(runId: string, nodeId: string, crashedStepId: st
 
 // ─── Park / resume ──────────────────────────────────────────────────────────
 
-async function park(run: RunRow, nodeId: string | null, reason: string, stepPostedReason = false): Promise<void> {
+/** A park caused by something breaking (not a question or a review): it goes
+ *  outward as `workflow.failed`, with its own toggle. */
+function parkFailed(run: RunRow, nodeId: string | null, reason: string): Promise<void> {
+    return park(run, nodeId, reason, false, true);
+}
+
+async function park(
+    run: RunRow,
+    nodeId: string | null,
+    reason: string,
+    stepPostedReason = false,
+    failed = false,
+): Promise<void> {
     await db
         .updateTable('workflow_runs')
         .set({ status: 'waiting_for_owner', parked_node_id: nodeId, current_node_id: nodeId, park_reason: reason.slice(0, 1000) })
@@ -842,9 +864,14 @@ async function park(run: RunRow, nodeId: string | null, reason: string, stepPost
                 /* the item status + notification already carry the signal */
             }
         }
-        await notifyOwner(run, `${name} needs you on ${run.item_id}: ${reason}`, 'needs_you', 'item.status_changed:waiting_for_info');
+        await notifyOwner(
+            run,
+            `${name} needs you on ${run.item_id}: ${reason}`,
+            'needs_you',
+            failed ? 'workflow.failed' : 'item.status_changed:waiting_for_info',
+        );
     } else {
-        await notifyOwner(run, `${name} needs you: ${reason}`, 'needs_you', 'agent.run_finished_no_item');
+        await notifyOwner(run, `${name} needs you: ${reason}`, 'needs_you', failed ? 'workflow.failed' : 'agent.run_finished_no_item');
     }
     if (run.parent_workflow_run_id) await waitOnChild(run, reason);
 }
@@ -925,7 +952,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
         if (workflow?.use_worktree) {
             const failure = await prepareWorktree(run, pushesRunBranch(workflow));
             if (failure) {
-                await park(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`);
+                await parkFailed(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`);
                 return;
             }
         }
@@ -1151,7 +1178,7 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
     if (delivery.failure) {
         // Parked at End: fixing the cause (e.g. the project credential) and
         // resuming re-runs delivery against the kept worktree.
-        await park(run, endNode.id, `${delivery.failure}. Resume the run to retry delivery.`);
+        await parkFailed(run, endNode.id, `${delivery.failure}. Resume the run to retry delivery.`);
         return;
     }
 
@@ -1393,7 +1420,7 @@ export async function reconcileWorkflowRuns(now: Date = new Date()): Promise<num
         .execute();
     for (const { id } of stale) {
         const run = await loadRun(id);
-        if (run) await park(run, run.current_node_id, 'A step stopped reporting back (the API may have restarted)');
+        if (run) await parkFailed(run, run.current_node_id, 'A step stopped reporting back (the API may have restarted)');
     }
     return stale.length;
 }
@@ -1560,12 +1587,18 @@ async function reportDispatchFailure(
     const now = Date.now();
     if (seen && seen.message === message && now - seen.at < DISPATCH_FAILURE_REARM_MS) return;
     lastDispatchFailure.set(wf.id, { message, at: now });
-    await notificationsService.create({
-        event_type: 'workflow_run',
-        message: `${wf.name}: could not start a queued item — ${message}`,
-        kind: 'needs_you',
-        agent_id: null,
-    });
+    try {
+        const n = await notificationsService.create({
+            event_type: 'workflow_run',
+            message: `${wf.name}: could not start a queued item — ${message}`,
+            kind: 'needs_you',
+            agent_id: null,
+            link_url: `/workflows/${wf.id}`,
+        });
+        await sendExternalForNotification(n.id, n.message, 'workflow.failed');
+    } catch (err) {
+        appLog().warn({ err, workflowId: wf.id }, '[workflow-dispatch] failure notification failed');
+    }
 }
 
 // Every dispatch pass — the minute tick and each kick — runs one after

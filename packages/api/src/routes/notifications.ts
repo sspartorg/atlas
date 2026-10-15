@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { NotificationFilterSchema } from '@atlas/shared';
 import { notificationsService } from '../services/notifications.js';
-import {
-    sendExternalForNotification,
-    sendExternalNotification,
-} from '../services/external-notifications.js';
+import { deliverExternalNow, sendExternalNotification } from '../services/external-notifications.js';
 
 // A09 — body shape for the MCP-callable external-notification passthrough.
 // Manual validation here avoids adding a zod dep to @atlas/api just for one
@@ -59,7 +56,8 @@ export async function notificationsRoutes(app: FastifyInstance) {
         const row = await notificationsService.get(n);
         if (!row) return reply.status(404).send({ error: 'Notification not found' });
         try {
-            await sendExternalForNotification(row.id, row.message);
+            // The Owner pressed Resend/Retry: send now, quiet hours or not.
+            await deliverExternalNow(row.id, row.message);
             return reply.send(await notificationsService.get(row.id));
         } catch (err) {
             return reply.status(502).send({

@@ -70,6 +70,20 @@ afterAll(closeTestDb);
 const SLOW = { timeout: 30_000 };
 
 describe('completeRun', () => {
+    it('a standalone run notifies with a link to its run page and the run_finished_no_item key', SLOW, async () => {
+        const { sendExternalForNotification } = await import('./external-notifications.js');
+        vi.mocked(sendExternalForNotification).mockClear();
+        await seedRun('r-alone');
+        await completeRun('r-alone', 'agent-coder', null, null, TRANSCRIPT);
+        const n = await testDb
+            .selectFrom('notifications')
+            .select(['id', 'event_type', 'link_url'])
+            .where('event_type', '=', 'agent_completed_no_item')
+            .executeTakeFirstOrThrow();
+        expect(n.link_url).toBe('/agents/agent-coder/runs/r-alone');
+        expect(sendExternalForNotification).toHaveBeenCalledWith(Number(n.id), expect.any(String), 'agent.run_finished_no_item');
+    });
+
     it('stores what the run actually did, parsed from its own transcript', SLOW, async () => {
         await seedRun('r-trace');
         await completeRun('r-trace', 'agent-coder', null, null, TRANSCRIPT);

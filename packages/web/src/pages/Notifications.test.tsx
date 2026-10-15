@@ -290,4 +290,37 @@ describe('Notifications page', () => {
         }
         expect(document.body).toBeTruthy();
     });
+
+    it('on a phone, the header actions are icon buttons named for screen readers', async () => {
+        const original = window.matchMedia;
+        Object.defineProperty(window, 'matchMedia', {
+            writable: true,
+            value: (query: string) => ({
+                matches: query.includes('max-width'),
+                media: query,
+                onchange: null,
+                addListener: () => {},
+                removeListener: () => {},
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                dispatchEvent: () => false,
+            }),
+        });
+        try {
+            server.use(...defaultHandlers);
+            renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
+            for (const name of [
+                'Refresh notifications',
+                'Notification settings',
+                'Mark all read',
+            ]) {
+                const btn = await screen.findByRole('button', { name });
+                expect(btn).toHaveTextContent(/^[a-z_]*$/); // glyph only, no visible label
+            }
+            expect(screen.queryByText('Notification Settings')).not.toBeInTheDocument();
+            expect(screen.queryByText('Mark All Read')).not.toBeInTheDocument();
+        } finally {
+            Object.defineProperty(window, 'matchMedia', { writable: true, value: original });
+        }
+    });
 });

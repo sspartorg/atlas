@@ -786,7 +786,9 @@ export type ExternalNotificationEventKey =
     | 'item.status_changed:in_review'
     | 'agent.failed'
     | 'agent.run_finished_no_item'
-    | 'terminal.waiting_for_input';
+    | 'terminal.waiting_for_input'
+    | 'jira.sync_failed'
+    | 'workflow.failed';
 
 export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = [
     'item.status_changed:waiting_for_info',
@@ -794,6 +796,8 @@ export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = 
     'agent.failed',
     'agent.run_finished_no_item',
     'terminal.waiting_for_input',
+    'jira.sync_failed',
+    'workflow.failed',
 ];
 
 export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEventKey, { title: string; sub: string }> = {
@@ -816,6 +820,14 @@ export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEven
     'terminal.waiting_for_input': {
         title: 'Terminal: Waiting for Input',
         sub: 'terminal.waiting_for_input · session has been idle longer than the configured threshold',
+    },
+    'jira.sync_failed': {
+        title: 'Jira Sync Failed',
+        sub: 'jira.sync_failed · a Jira sync pass errored (sent once per new failure)',
+    },
+    'workflow.failed': {
+        title: 'Workflow Failed',
+        sub: 'workflow.failed · a workflow run errored and parked, or a queued Task could not be dispatched',
     },
 };
 
@@ -1071,6 +1083,10 @@ export interface INotification {
      *  the URL from issue_type/issue_id. Lets callers route to surfaces
      *  that aren't Atlas items (Terminal sessions, etc.). */
     link_url: string | null;
+    /** Set while quiet hours hold the outward (Telegram/Teams) send; the row
+     *  is `external_status='pending'` until the window ends and the minute
+     *  tick delivers it. Null otherwise. */
+    external_deferred_at: string | null;
     created_at: string;
 }
 

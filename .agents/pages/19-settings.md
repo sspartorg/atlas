@@ -66,12 +66,16 @@ The card Atlas sends looks like this — paste into [adaptivecards.io/designer](
 ```
 `wrap: true` is required so multi-line auto-fetch/agent messages render with line breaks preserved. If the flow run fails with `AdaptiveSerializationException: Property 'type' must be 'AdaptiveCard'`, the Body variable is mapped to a sub-field instead of `string(triggerBody())` — fix step 2 of the recipe.
 
-**Per-event notifications** — Switch per key in `EXTERNAL_NOTIFICATION_EVENT_KEYS`; commits → `useUpdateNotifications.mutate({ external_notification_event_toggles })`. Default ON.
+**Per-event notifications** — Switch per key in `EXTERNAL_NOTIFICATION_EVENT_KEYS`; commits → `useUpdateNotifications.mutate({ external_notification_event_toggles })`. Default ON (Terminal idle defaults OFF). Includes **Jira Sync Failed** (`jira.sync_failed`) and **Workflow Failed** (`workflow.failed`), added 2026-10-16.
 
 **Quiet hours**
+- Section copy: Telegram/Teams messages are **held** during the window and sent when it ends, marked with the time they were raised; in-app and push still arrive right away; same From and To = off.
+- Enable row helper: off → "deliver at any hour"; on with From == To → "From and To are the same, so there is no quiet window."; otherwise "held between the times below".
+- Section copy: Telegram/Teams messages are **held** during the window and sent when it ends, marked with the time they were raised; in-app and push still arrive right away; same From and To = off.
+- Enable row helper: off → "deliver at any hour"; on with From == To → "From and To are the same, so there is no quiet window."; otherwise "held between the times below".
 - **From** / **To** time inputs (HH:MM, monospace, max 120px)
 - **Time Zone** read-only (`settings.quiet_hours_timezone ?? detectedTimezone`)
-- On first load, if timezone unset, the page auto-saves the detected timezone.
+- On first load, if timezone unset, the page auto-saves the detected timezone. The API rejects a zone `Intl.DateTimeFormat` doesn't know (400), and a bad stored zone falls back to server time rather than breaking sends. The API rejects a zone `Intl.DateTimeFormat` doesn't know (400), and a bad stored zone falls back to server time rather than breaking sends.
 
 ## Tab 5 — Jira (`JiraTab`, ADR 0016)
 Configures the Jira bridge. Every field saves on blur (or on change for selects and switches) through `PUT /api/integrations/jira` and shows a toast.

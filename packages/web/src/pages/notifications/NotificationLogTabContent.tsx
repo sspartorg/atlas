@@ -18,6 +18,7 @@ import { HeroEmptyState } from '../../components/HeroEmptyState.js';
 import { KindIcon } from '../../components/KindIcon.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { EventTypeIcon, getEventMeta } from './EventTypeIcon.js';
+import { NotificationCard, PillRow } from './NotificationCard.js';
 import { timeOfDay, relativeDay } from './timeFormat.js';
 
 const MONO = '"JetBrains Mono", monospace';
@@ -57,6 +58,9 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
         [externalRows, filter]
     );
 
+    // A held row goes out on the first minute tick after the window closes.
+    const heldUntil = settings?.quiet_hours_to ?? null;
+
     if (externalRows.length === 0) {
         return <EmptyState settings={settings} />;
     }
@@ -72,9 +76,11 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                     flexWrap: 'wrap',
                     gap: 2,
                     mb: 3,
+                    minWidth: 0,
+                    '& > :first-of-type': { maxWidth: '100%' },
                 }}
             >
-                <Box sx={{ display: 'flex', gap: 1 }}>
+                <PillRow label="Filter deliveries">
                     <FilterPill
                         label="All"
                         count={counts.all}
@@ -99,7 +105,7 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         selected={filter === 'pending'}
                         onClick={() => setFilter('pending')}
                     />
-                </Box>
+                </PillRow>
                 {settings?.external_notification_endpoint_label && (
                     <Box
                         sx={{
@@ -168,7 +174,9 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                                 </Typography>
                             </Box>
                         ) : (
-                            visible.map((row) => <NotificationLogCard key={row.id} row={row} />)
+                            visible.map((row) => (
+                                <NotificationLogCard key={row.id} row={row} heldUntil={heldUntil} />
+                            ))
                         )}
                     </Box>
                 </Box>
@@ -221,6 +229,7 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         <NotificationLogRow
                             key={row.id}
                             row={row}
+                            heldUntil={heldUntil}
                             isLast={i === visible.length - 1}
                         />
                     ))}
@@ -244,171 +253,118 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
     );
 }
 
-function NotificationLogCard({ row }: { row: INotification }) {
-    const meta = getEventMeta(row.event_type);
+function useRowActions(row: INotification) {
     const resend = useResendNotification();
     const cancel = useCancelNotification();
     const toast = useToast();
+    return {
+        resendPending: resend.isPending,
+        cancelPending: cancel.isPending,
+        resend: () =>
+            resend.mutate(row.id, {
+                onSuccess: () => toast.show({ message: 'Resent external notification' }),
+                onError: (err) =>
+                    toast.show({
+                        message: 'Resend failed',
+                        detail: err instanceof Error ? err.message : String(err),
+                    }),
+            }),
+        cancel: () =>
+            cancel.mutate(row.id, {
+                onSuccess: () => toast.show({ message: 'Cancelled pending delivery' }),
+            }),
+    };
+}
 
-    function handleResend() {
-        resend.mutate(row.id, {
-            onSuccess: () => toast.show({ message: 'Resent external notification' }),
-            onError: (err) =>
-                toast.show({
-                    message: 'Resend failed',
-                    detail: err instanceof Error ? err.message : String(err),
-                }),
-        });
-    }
-    function handleCancel() {
-        cancel.mutate(row.id, {
-            onSuccess: () => toast.show({ message: 'Cancelled pending delivery' }),
-        });
-    }
-
+/** Sent → Resend, Failed → Retry, Pending (held or in flight) → Cancel. */
+function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium' }) {
+    const a = useRowActions(row);
+    const spec =
+        row.external_status === 'sent'
+            ? {
+                  label: 'Resend',
+                  icon: <RefreshRounded />,
+                  onClick: a.resend,
+                  busy: a.resendPending,
+                  color: ATLAS_PALETTE.slate60,
+              }
+            : row.external_status === 'failed'
+              ? {
+                    label: 'Retry',
+                    icon: <RefreshRounded />,
+                    onClick: a.resend,
+                    busy: a.resendPending,
+                    color: ATLAS_PALETTE.brandBlue,
+                }
+              : row.external_status === 'pending'
+                ? {
+                      label: 'Cancel',
+                      icon: <CloseRounded />,
+                      onClick: a.cancel,
+                      busy: a.cancelPending,
+                      color: ATLAS_PALETTE.slate60,
+                  }
+                : null;
+    if (!spec) return null;
     return (
-        <Box
-            sx={{
-                bgcolor:
-                    row.external_status === 'pending'
-                        ? 'rgba(223,172,45,.06)'
-                        : ATLAS_PALETTE.white,
-                border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                borderRadius: '12px',
-                p: 4,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-            }}
-        >
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                <Box sx={{ flexShrink: 0 }}>
-                    <EventTypeIcon eventType={row.event_type} size={32} />
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                    {/* Title row: label + status pill inline */}
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1.5,
-                            flexWrap: 'wrap',
-                        }}
-                    >
-                        <Typography
-                            sx={{ fontSize: 15, fontWeight: 700, color: ATLAS_PALETTE.slate }}
-                        >
-                            {meta.label}
-                        </Typography>
-                        <StatusChip status={row.external_status} />
-                    </Box>
-                    <Typography
-                        sx={{
-                            fontFamily: MONO,
-                            fontSize: 12,
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 0.5,
-                        }}
-                    >
-                        {timeOfDay(row.created_at)} · {relativeDay(row.created_at)}
-                        {row.issue_id && (
-                            <>
-                                {' · '}
-                                <Box component="span" sx={{ color: ATLAS_PALETTE.brandBlue }}>
-                                    {row.issue_id.slice(0, 12)}
-                                </Box>
-                            </>
-                        )}
-                    </Typography>
-                </Box>
-                {/* Action button takes the top-right slot where the status
-                    pill used to sit. */}
-                {(row.external_status === 'sent' ||
-                    row.external_status === 'failed' ||
-                    row.external_status === 'pending') && (
-                    <Box sx={{ flexShrink: 0 }}>
-                        {row.external_status === 'sent' && (
-                            <IconButton
-                                onClick={handleResend}
-                                disabled={resend.isPending}
-                                aria-label="Resend"
-                                sx={{ color: ATLAS_PALETTE.slate60 }}
-                            >
-                                <RefreshRounded sx={{ fontSize: 20 }} />
-                            </IconButton>
-                        )}
-                        {row.external_status === 'failed' && (
-                            <IconButton
-                                onClick={handleResend}
-                                disabled={resend.isPending}
-                                aria-label="Retry"
-                                sx={{ color: ATLAS_PALETTE.brandBlue }}
-                            >
-                                <RefreshRounded sx={{ fontSize: 20 }} />
-                            </IconButton>
-                        )}
-                        {row.external_status === 'pending' && (
-                            <IconButton
-                                onClick={handleCancel}
-                                disabled={cancel.isPending}
-                                aria-label="Cancel"
-                                sx={{ color: ATLAS_PALETTE.slate60 }}
-                            >
-                                <CloseRounded sx={{ fontSize: 20 }} />
-                            </IconButton>
-                        )}
-                    </Box>
-                )}
-            </Box>
-            <Typography
-                sx={{
-                    fontSize: 14,
-                    color: ATLAS_PALETTE.slate,
-                    lineHeight: 1.55,
-                    wordBreak: 'break-word',
-                    overflowWrap: 'anywhere',
-                }}
-            >
-                {row.message}
-            </Typography>
-            {row.external_status === 'failed' && row.failure_reason && (
-                <Typography
-                    sx={{
-                        fontFamily: MONO,
-                        fontSize: 11,
-                        color: ATLAS_PALETTE.error,
-                        wordBreak: 'break-word',
-                        overflowWrap: 'anywhere',
-                    }}
+        <Tooltip title={spec.label}>
+            <span>
+                <IconButton
+                    size={size}
+                    onClick={spec.onClick}
+                    disabled={spec.busy}
+                    aria-label={spec.label}
+                    sx={{ color: spec.color, '& svg': { fontSize: size === 'small' ? 18 : 20 } }}
                 >
-                    ⚠ {row.failure_reason}
-                </Typography>
-            )}
-        </Box>
+                    {spec.icon}
+                </IconButton>
+            </span>
+        </Tooltip>
     );
 }
 
-function NotificationLogRow({ row, isLast }: { row: INotification; isLast: boolean }) {
-    const meta = getEventMeta(row.event_type);
-    const resend = useResendNotification();
-    const cancel = useCancelNotification();
-    const toast = useToast();
+const isHeld = (row: INotification) =>
+    row.external_status === 'pending' && row.external_deferred_at !== null;
 
-    function handleResend() {
-        resend.mutate(row.id, {
-            onSuccess: () => toast.show({ message: 'Resent external notification' }),
-            onError: (err) =>
-                toast.show({
-                    message: 'Resend failed',
-                    detail: err instanceof Error ? err.message : String(err),
-                }),
-        });
-    }
-    function handleCancel() {
-        cancel.mutate(row.id, {
-            onSuccess: () => toast.show({ message: 'Cancelled pending delivery' }),
-        });
-    }
+function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil: string | null }) {
+    const meta = getEventMeta(row.event_type);
+    const held = isHeld(row);
+    return (
+        <NotificationCard
+            icon={<EventTypeIcon eventType={row.event_type} size={32} />}
+            title={meta.label}
+            chip={<StatusChip status={row.external_status} held={held} />}
+            message={row.message}
+            meta={
+                <>
+                    {row.issue_id && (
+                        <Box component="span" sx={{ color: ATLAS_PALETTE.brandBlue }}>
+                            {row.issue_id.slice(0, 12)}
+                            {' · '}
+                        </Box>
+                    )}
+                    {timeOfDay(row.created_at)} · {relativeDay(row.created_at)}
+                    {held && heldUntil && ` · sends ${heldUntil}`}
+                </>
+            }
+            alert={row.external_status === 'failed' ? row.failure_reason : null}
+            action={<RowAction row={row} size="medium" />}
+            tone={held ? 'held' : 'default'}
+        />
+    );
+}
+
+function NotificationLogRow({
+    row,
+    isLast,
+    heldUntil,
+}: {
+    row: INotification;
+    isLast: boolean;
+    heldUntil: string | null;
+}) {
+    const meta = getEventMeta(row.event_type);
+    const held = isHeld(row);
 
     return (
         <Box
@@ -515,73 +471,39 @@ function NotificationLogRow({ row, isLast }: { row: INotification; isLast: boole
                     </Typography>
                 )}
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <StatusChip status={row.external_status} />
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+                <StatusChip status={row.external_status} held={held} />
+                {held && heldUntil && (
+                    <Typography
+                        sx={{ fontFamily: MONO, fontSize: 10, color: ATLAS_PALETTE.slate60 }}
+                    >
+                        sends {heldUntil}
+                    </Typography>
+                )}
             </Box>
             <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                {row.external_status === 'sent' && (
-                    <Tooltip title="Resend">
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={handleResend}
-                                disabled={resend.isPending}
-                                aria-label="Resend"
-                                sx={{ color: ATLAS_PALETTE.slate60 }}
-                            >
-                                <RefreshRounded sx={{ fontSize: 18 }} />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
-                {row.external_status === 'failed' && (
-                    <Tooltip title="Retry">
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={handleResend}
-                                disabled={resend.isPending}
-                                aria-label="Retry"
-                                sx={{ color: ATLAS_PALETTE.brandBlue }}
-                            >
-                                <RefreshRounded sx={{ fontSize: 18 }} />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
-                {row.external_status === 'pending' && (
-                    <Tooltip title="Cancel">
-                        <span>
-                            <IconButton
-                                size="small"
-                                onClick={handleCancel}
-                                disabled={cancel.isPending}
-                                aria-label="Cancel"
-                                sx={{ color: ATLAS_PALETTE.slate60 }}
-                            >
-                                <CloseRounded sx={{ fontSize: 18 }} />
-                            </IconButton>
-                        </span>
-                    </Tooltip>
-                )}
+                <RowAction row={row} size="small" />
             </Box>
         </Box>
     );
 }
 
-function StatusChip({ status }: { status: NotificationDeliveryStatus }) {
-    const style = (() => {
-        switch (status) {
-            case 'sent':
-                return { label: 'Sent', bg: 'rgba(49,171,70,.12)', fg: ATLAS_PALETTE.success };
-            case 'failed':
-                return { label: 'Failed', bg: 'rgba(220,38,38,.10)', fg: ATLAS_PALETTE.error };
-            case 'pending':
-                return { label: 'Pending', bg: 'rgba(223,172,45,.16)', fg: ATLAS_PALETTE.gold };
-            default:
-                return { label: '—', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 };
-        }
-    })();
+function StatusChip({
+    status,
+    held = false,
+}: {
+    status: NotificationDeliveryStatus;
+    held?: boolean;
+}) {
+    const style = held
+        ? { label: 'Held · quiet hours', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
+        : status === 'sent'
+          ? { label: 'Sent', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg }
+          : status === 'failed'
+            ? { label: 'Failed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg }
+            : status === 'pending'
+              ? { label: 'Pending', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
+              : { label: '—', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 };
     return (
         <Box
             sx={{
@@ -592,12 +514,24 @@ function StatusChip({ status }: { status: NotificationDeliveryStatus }) {
                 color: style.fg,
                 fontSize: 11,
                 fontWeight: 600,
+                lineHeight: 1.6,
                 px: 1.5,
-                py: 0.5,
                 borderRadius: '9999px',
+                whiteSpace: 'nowrap',
             }}
         >
-            <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: style.fg }} />
+            {held ? (
+                <Box
+                    component="span"
+                    className="material-symbols-rounded"
+                    aria-hidden="true"
+                    sx={{ fontSize: 13 }}
+                >
+                    schedule
+                </Box>
+            ) : (
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: style.fg }} />
+            )}
             {style.label}
         </Box>
     );

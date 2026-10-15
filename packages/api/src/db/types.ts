@@ -694,6 +694,7 @@ export interface NotificationsTable {
     >;
     push_failure_reason: StrN;
     link_url: StrN;
+    external_deferred_at: TSn;
     created_at: CreatedAt;
 }
 

@@ -189,6 +189,30 @@ export const NOTIFICATION_DELIVERY_STATUSES: NotificationDeliveryStatus[] = [
     'failed',
 ];
 
+/**
+ * Where a notification opens: its stored `link_url`, else a route derived from
+ * what it points at. One chain for the API (stamping `link_url` at create time,
+ * the web-push click URL) and the web feed, so a click lands on the same page
+ * from either surface. Null = nothing to open (callers fall back to
+ * `/notifications`).
+ */
+export function notificationLinkUrl(n: {
+    link_url: string | null;
+    issue_type: IssueType | null;
+    issue_id: string | null;
+    project_id: string | null;
+    event_type: string;
+}): string | null {
+    if (n.link_url) return n.link_url;
+    if (n.issue_id && n.issue_type) {
+        return n.issue_type === 'task' ? `/tasks/${n.issue_id}` : `/sub-tasks/${n.issue_id}`;
+    }
+    if (n.event_type === 'reminder') return '/reminders';
+    if (n.event_type === 'jira_sync') return '/settings?tab=jira';
+    if (n.project_id) return `/projects/${n.project_id}`;
+    return null;
+}
+
 export const PUSH_DELIVERY_STATUSES: PushDeliveryStatus[] = [
     'none',
     'pending',

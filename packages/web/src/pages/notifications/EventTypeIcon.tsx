@@ -15,90 +15,36 @@ const DEFAULT: IconMeta = {
     bg: ATLAS_PALETTE.slate08,
 };
 
-const MAP: Record<string, IconMeta> = {
-    agent_completed: {
-        icon: 'task_alt',
-        label: 'Agent Completed',
-        color: ATLAS_PALETTE.success,
-        bg: 'rgba(49,171,70,.12)',
-    },
-    agent_error: {
-        icon: 'error',
-        label: 'Agent Failed',
-        color: ATLAS_PALETTE.error,
-        bg: 'rgba(220,38,38,.10)',
-    },
-    autofetch_success: {
-        icon: 'sync',
-        label: 'Auto-fetch Success',
-        color: ATLAS_PALETTE.success,
-        bg: 'rgba(49,171,70,.12)',
-    },
-    autofetch_skipped: {
-        icon: 'sync_disabled',
-        label: 'Auto-fetch Skipped',
-        color: ATLAS_PALETTE.slate60,
-        bg: ATLAS_PALETTE.slate08,
-    },
-    autofetch_failed: {
-        icon: 'cloud_off',
-        label: 'Auto-fetch Failed',
-        color: ATLAS_PALETTE.error,
-        bg: 'rgba(220,38,38,.10)',
-    },
-    autofetch_conflict: {
-        icon: 'merge_type',
-        label: 'Auto-fetch Conflict',
-        color: ATLAS_PALETTE.warning,
-        bg: 'rgba(199,83,47,.10)',
-    },
-    autofetch_disabled: {
-        icon: 'block',
-        label: 'Auto-fetch Disabled',
-        color: ATLAS_PALETTE.error,
-        bg: 'rgba(220,38,38,.10)',
-    },
-    pr_opened: {
-        icon: 'merge',
-        label: 'PR Ready for Review',
-        color: ATLAS_PALETTE.purple,
-        bg: 'rgba(70,33,124,.12)',
-    },
-    pr_merged: {
-        icon: 'call_merge',
-        label: 'PR Merged',
-        color: ATLAS_PALETTE.success,
-        bg: 'rgba(49,171,70,.12)',
-    },
-    story_complete: {
-        icon: 'check_circle',
-        label: 'Sub-task Complete',
-        color: ATLAS_PALETTE.success,
-        bg: 'rgba(49,171,70,.12)',
-    },
-    waiting_for_info: {
-        icon: 'help_outline',
-        label: 'Waiting for Info',
-        color: ATLAS_PALETTE.gold,
-        bg: 'rgba(223,172,45,.16)',
-    },
-    subtask_blocked: {
-        icon: 'block',
-        label: 'Sub-task Blocked',
-        color: ATLAS_PALETTE.error,
-        bg: 'rgba(220,38,38,.10)',
-    },
-    guardrails_updated: {
-        icon: 'shield',
-        label: 'Guard-rails Updated',
-        color: ATLAS_PALETTE.brandBlue,
-        bg: ATLAS_PALETTE.cloud,
-    },
+// Soft fills from the theme so the chips flip with dark mode.
+const ok = { color: ATLAS_PALETTE.success, bg: ATLAS_PALETTE.successSoft };
+const bad = { color: ATLAS_PALETTE.error, bg: ATLAS_PALETTE.dangerSoft };
+const warn = { color: ATLAS_PALETTE.gold, bg: ATLAS_PALETTE.warnSoft };
+const info = { color: ATLAS_PALETTE.brandBlue, bg: ATLAS_PALETTE.accentSoft };
+const quiet = { color: ATLAS_PALETTE.slate60, bg: ATLAS_PALETTE.slate08 };
+
+// One entry per event_type the API produces (grep `event_type:` / `eventType:`
+// in packages/api/src/services). `agent_completed` is no longer produced but
+// older rows still carry it.
+const EVENT_META: Record<string, IconMeta> = {
+    workflow_run: { icon: 'workflow', label: 'Workflow', ...info },
+    agent_completed: { icon: 'task_alt', label: 'Agent Completed', ...ok },
+    agent_completed_no_item: { icon: 'task_alt', label: 'Agent Run Finished', ...ok },
+    agent_error: { icon: 'error', label: 'Agent Failed', ...bad },
+    agent_error_no_item: { icon: 'error', label: 'Agent Run Failed', ...bad },
+    ci_failed: { icon: 'bug_report', label: 'CI Failed', ...bad },
+    reminder: { icon: 'alarm', label: 'Reminder', ...warn },
+    jira_sync: { icon: 'sync_alt', label: 'Jira', ...info },
+    'terminal.waiting_for_input': { icon: 'terminal', label: 'Terminal Waiting', ...warn },
+    autofetch_success: { icon: 'sync', label: 'Auto-fetch Success', ...ok },
+    autofetch_skipped: { icon: 'sync_disabled', label: 'Auto-fetch Skipped', ...quiet },
+    autofetch_failed: { icon: 'cloud_off', label: 'Auto-fetch Failed', ...bad },
+    autofetch_conflict: { icon: 'merge_type', label: 'Auto-fetch Conflict', ...warn },
+    autofetch_disabled: { icon: 'block', label: 'Auto-fetch Disabled', ...bad },
 };
 
 export function getEventMeta(eventType: string): IconMeta {
     return (
-        MAP[eventType] ?? {
+        EVENT_META[eventType] ?? {
             ...DEFAULT,
             label: eventType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         }

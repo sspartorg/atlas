@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { useTabParam } from '../hooks/useTabParam.js';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Tooltip from '@mui/material/Tooltip';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import TuneRounded from '@mui/icons-material/TuneRounded';
@@ -15,6 +17,7 @@ import { useNotifications, useMarkAllRead } from '../hooks/useNotifications.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useToast } from '../hooks/useToast.js';
 import { useNow } from '../hooks/useNow.js';
+import { useIsMobile } from '../hooks/useIsMobile.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { NotificationLogTab } from './notifications/NotificationLogTab.js';
 import { InAppFeedTab } from './notifications/InAppFeedTab.js';
@@ -24,6 +27,38 @@ import { RefreshButton } from '../components/index.js';
 import { PageHeader } from '../components/PageHeader.js';
 
 const MONO = '"JetBrains Mono", monospace';
+
+/** Phone header action: icon only, named for screen readers (RefreshButton pattern). */
+function HeaderIconButton({
+    label,
+    icon,
+    onClick,
+    disabled = false,
+}: {
+    label: string;
+    icon: ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+}) {
+    return (
+        <Tooltip title={label}>
+            {/* The span lets the tooltip work while the button is disabled. */}
+            <span>
+                <IconButton
+                    aria-label={label}
+                    onClick={onClick}
+                    disabled={disabled}
+                    sx={{
+                        color: ATLAS_PALETTE.slate60,
+                        '&:hover': { color: ATLAS_PALETTE.slate, bgcolor: ATLAS_PALETTE.slate08 },
+                    }}
+                >
+                    {icon}
+                </IconButton>
+            </span>
+        </Tooltip>
+    );
+}
 const TAB_KEYS = ['external', 'in-app'] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
@@ -31,6 +66,7 @@ export function Notifications() {
     useSetPageTitle('Notifications');
     const navigate = useNavigate();
     const [tab, setTab] = useTabParam<TabKey>(TAB_KEYS, 'external');
+    const isMobile = useIsMobile();
 
     const { data: settings } = useSettings();
     const markAllRead = useMarkAllRead();
@@ -71,6 +107,7 @@ export function Notifications() {
         });
     }
 
+    const openSettings = () => navigate('/settings?tab=notifications');
     const externalConnected = isExternalChannelConnected(settings);
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
 
@@ -132,30 +169,64 @@ export function Notifications() {
                     </>
                 }
                 actions={
-                    <>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            flexWrap: 'nowrap',
+                            gap: isMobile ? 1 : 2,
+                        }}
+                    >
                         <RefreshButton
                             onRefresh={handleRefresh}
                             isFetching={notifFetching > 0}
                             tooltipLabel="Refresh notifications"
+                            size={isMobile ? 'medium' : 'small'}
                         />
-                        <Button
-                            variant="outlined"
-                            startIcon={<TuneRounded sx={{ fontSize: 16 }} />}
-                            onClick={() => navigate('/settings?tab=notifications')}
-                            sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
-                        >
-                            Notification Settings
-                        </Button>
-                        <Button
-                            variant="outlined"
-                            startIcon={<DoneAllRounded sx={{ fontSize: 16 }} />}
-                            onClick={handleMarkAllRead}
-                            disabled={markAllRead.isPending}
-                            sx={{ textTransform: 'none', fontWeight: 500, whiteSpace: 'nowrap' }}
-                        >
-                            Mark All Read
-                        </Button>
-                    </>
+                        {isMobile ? (
+                            <>
+                                <HeaderIconButton
+                                    label="Notification settings"
+                                    icon={<TuneRounded sx={{ fontSize: 20 }} />}
+                                    onClick={openSettings}
+                                />
+                                <HeaderIconButton
+                                    label="Mark all read"
+                                    icon={<DoneAllRounded sx={{ fontSize: 20 }} />}
+                                    onClick={handleMarkAllRead}
+                                    disabled={markAllRead.isPending}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<TuneRounded sx={{ fontSize: 16 }} />}
+                                    onClick={openSettings}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    Notification Settings
+                                </Button>
+                                <Button
+                                    variant="outlined"
+                                    startIcon={<DoneAllRounded sx={{ fontSize: 16 }} />}
+                                    onClick={handleMarkAllRead}
+                                    disabled={markAllRead.isPending}
+                                    sx={{
+                                        textTransform: 'none',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap',
+                                    }}
+                                >
+                                    Mark All Read
+                                </Button>
+                            </>
+                        )}
+                    </Box>
                 }
             />
 

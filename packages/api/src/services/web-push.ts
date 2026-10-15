@@ -2,7 +2,7 @@ import webpush, { type PushSubscription, type WebPushError } from 'web-push';
 import { db } from '../db/kysely-client.js';
 import { notificationsService } from './notifications.js';
 import { encrypt, decrypt } from './crypto.js';
-import type { IssueType } from '@atlas/shared';
+import { notificationLinkUrl, type IssueType } from '@atlas/shared';
 
 // VAPID keys are persisted in the `settings` singleton row. The FIRST call
 // that needs them generates a fresh keypair and writes it back; every
@@ -107,24 +107,6 @@ export async function getVapidPublicKey(): Promise<string | null> {
     }
 }
 
-// The browser sends back a click URL routing the user to the originating item.
-// Mirrors the navigation logic in InAppFeedTabContent so a click in either
-// surface lands on the same place.
-function urlForNotification(row: {
-    item_id: string | null;
-    item_type: IssueType | null;
-    project_id: string | null;
-    link_url: string | null;
-}): string {
-    // Explicit per-notification deep link wins (Terminal sessions and
-    // any future non-item-shaped surface use this).
-    if (row.link_url) return row.link_url;
-    if (row.item_id && row.item_type) {
-        return row.item_type === 'task' ? `/tasks/${row.item_id}` : `/sub-tasks/${row.item_id}`;
-    }
-    return '/notifications';
-}
-
 interface PushPayload {
     title: string;
     body: string;
@@ -197,6 +179,7 @@ export async function sendWebPushForNotification(notificationId: number): Promis
                 'n.item_id as item_id',
                 'n.project_id as project_id',
                 'n.link_url as link_url',
+                'n.event_type as event_type',
                 'i.type as item_type',
             ])
             .where('n.id', '=', notificationId)
@@ -219,12 +202,15 @@ export async function sendWebPushForNotification(notificationId: number): Promis
             title: titleForKind(notification.kind as string),
             body: notification.message as string,
             kind: notification.kind as string,
-            url: urlForNotification({
-                item_id: (notification.item_id as string | null) ?? null,
-                item_type: (notification.item_type as IssueType | null) ?? null,
-                project_id: (notification.project_id as string | null) ?? null,
-                link_url: (notification.link_url as string | null) ?? null,
-            }),
+            // Same chain as the in-app feed, so a click lands on the same page.
+            url:
+                notificationLinkUrl({
+                    link_url: (notification.link_url as string | null) ?? null,
+                    issue_type: (notification.item_type as IssueType | null) ?? null,
+                    issue_id: (notification.item_id as string | null) ?? null,
+                    project_id: (notification.project_id as string | null) ?? null,
+                    event_type: notification.event_type as string,
+                }) ?? '/notifications',
             notification_id: Number(notification.id),
         };
 

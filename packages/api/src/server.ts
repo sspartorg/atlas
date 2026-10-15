@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { setAppLog } from './services/app-log.js';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
@@ -240,6 +241,7 @@ export async function buildApp(opts: FastifyServerOptions = {}): Promise<Fastify
         disableRequestLogging: resolveRequestLoggingDisabled(),
         ...opts,
     });
+    setAppLog(server.log);
 
     // W4 — Typed error envelope. Route + service code throws `ApiError`;
     // this handler maps it to `{ error, kind, details? }` with the carried

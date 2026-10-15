@@ -313,3 +313,22 @@ describe('notificationsService', () => {
         });
     });
 });
+
+describe('create stamps link_url', () => {
+    it('derives the item route, looking the type up when the producer did not pass it', async () => {
+        await insertProject('p1', 'ATL');
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1', title: 't', status: 'ready' });
+        await insertItem({ id: 'ATL-1-1', type: 'sub_task', project_id: 'p1', title: 's', status: 'ready', parent_id: 'ATL-1', parent_type: 'task' });
+        expect((await notificationsService.create({ event_type: 'ci_failed', message: 'm', issue_type: 'task', issue_id: 'ATL-1' })).link_url).toBe('/tasks/ATL-1');
+        expect((await notificationsService.create({ event_type: 'x', message: 'm', issue_id: 'ATL-1-1' })).link_url).toBe('/sub-tasks/ATL-1-1');
+    });
+
+    it('derives reminder, jira and project routes; keeps an explicit link; leaves the rest null', async () => {
+        await insertProject('p9', 'PNN');
+        expect((await notificationsService.create({ event_type: 'reminder', message: 'm' })).link_url).toBe('/reminders');
+        expect((await notificationsService.create({ event_type: 'jira_sync', message: 'm' })).link_url).toBe('/settings?tab=jira');
+        expect((await notificationsService.create({ event_type: 'autofetch_failed', message: 'm', project_id: 'p9' })).link_url).toBe('/projects/p9');
+        expect((await notificationsService.create({ event_type: 'terminal.waiting_for_input', message: 'm', project_id: 'p9', link_url: '/terminal/s1' })).link_url).toBe('/terminal/s1');
+        expect((await notificationsService.create({ event_type: 'boot', message: 'm' })).link_url).toBeNull();
+    });
+});

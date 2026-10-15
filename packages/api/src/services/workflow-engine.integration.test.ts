@@ -71,6 +71,8 @@ vi.mock('./external-links.js', async (importOriginal) => ({
     fetchGithubPrTitle: vi.fn(async () => null),
 }));
 vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, broadcastSSE: vi.fn() }));
+const sendExternal = vi.hoisted(() => vi.fn(async (_id: number, _m: string, _k?: string) => {}));
+vi.mock('./external-notifications.js', () => ({ sendExternalForNotification: sendExternal }));
 
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
@@ -1252,5 +1254,44 @@ describe('workflow engine — Sub-tasks steps', () => {
         // The first Task's run finishes: the repo is free and the second starts.
         await testDb.updateTable('workflow_runs').set({ status: 'completed' }).where('item_id', '=', 'ATL-2').execute();
         expect(await tickWorkflowDispatch()).toBe(1);
+    });
+});
+
+describe('workflow engine — Owner notifications', () => {
+    const notes = () =>
+        testDb.selectFrom('notifications').select(['id', 'link_url', 'kind']).where('event_type', '=', 'workflow_run').orderBy('id').execute();
+
+    it('a step that errors parks the run and goes outward as workflow.failed, opening the run page', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        // A permanent failure (bad key) is not retried: it parks straight away.
+        await testDb.updateTable('agent_runs').set({ output_text: '[ERROR] Invalid API key' }).where('id', '=', spawned.at(-1)!.runId).execute(); // reason: the run spawned its first step
+        await finishStep('error', null);
+        expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner' });
+        const rows = await notes();
+        expect(rows.at(-1)?.link_url).toBe(`/workflows/wf-dev/runs/${runId}`);
+        expect(sendExternal.mock.calls.at(-1)?.[2]).toBe('workflow.failed');
+    });
+
+    it('a question parks as waiting_for_info, not as a failure', async () => {
+        const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+        await finishStep('completed', 'asked_question', 'which API?');
+        expect((await notes()).at(-1)?.link_url).toBe(`/workflows/wf-dev/runs/${runId}`);
+        expect(sendExternal.mock.calls.at(-1)?.[2]).toBe('item.status_changed:waiting_for_info');
+    });
+
+    it('a dispatch failure notifies once, opens the workflow and goes outward as workflow.failed', async () => {
+        await testDb
+            .updateTable('workflows')
+            .set({ trigger: 'item_ready', graph: JSON.stringify({ nodes: [], edges: [] }) } as never)
+            .where('id', '=', 'wf-dev')
+            .execute();
+        await testDb.updateTable('items').set({ workflow_id: 'wf-dev' }).where('id', '=', 'ATL-2').execute();
+        await tickWorkflowDispatch();
+        await tickWorkflowDispatch();
+        const rows = await notes();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ link_url: '/workflows/wf-dev', kind: 'needs_you' });
+        expect(sendExternal).toHaveBeenCalledTimes(1);
+        expect(sendExternal.mock.calls[0]?.[2]).toBe('workflow.failed');
     });
 });

@@ -600,4 +600,89 @@ describe('NotificationLogTabContent', () => {
         expect(screen.getByText(/card failure detail/)).toBeInTheDocument();
         restoreViewport();
     });
+
+    describe('quiet hours hold', () => {
+        const quiet = {
+            ...settings,
+            quiet_hours_enabled: 1,
+            quiet_hours_from: '22:00',
+            quiet_hours_to: '08:00',
+        };
+        const held = makeNotification({
+            id: 70,
+            external_status: 'pending',
+            external_deferred_at: '2026-10-16T23:30:00.000Z',
+            message: 'Held one',
+        });
+
+        it('shows Held · quiet hours with the planned send time, and Cancel (desktop)', () => {
+            renderWithProviders(<NotificationLogTabContent settings={quiet} allRows={[held]} />);
+            expect(screen.getByText('Held · quiet hours')).toBeInTheDocument();
+            expect(screen.getByText('sends 08:00')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+        });
+
+        it('an in-flight pending row (not held) still reads Pending', () => {
+            const pending = makeNotification({
+                id: 71,
+                external_status: 'pending',
+                message: 'In flight',
+            });
+            renderWithProviders(<NotificationLogTabContent settings={quiet} allRows={[pending]} />);
+            // One in the filter pill, one on the row.
+            expect(screen.getAllByText('Pending')).toHaveLength(2);
+            expect(screen.queryByText('Held · quiet hours')).not.toBeInTheDocument();
+        });
+
+        it('mobile: the card carries the held chip, the send time in its meta line and one action', () => {
+            const restore = mockMobileViewport();
+            try {
+                renderWithProviders(
+                    <NotificationLogTabContent settings={quiet} allRows={[held]} />
+                );
+                const card = screen.getByTestId('notification-card');
+                expect(card).toHaveStyle({ display: 'grid' });
+                expect(card).toHaveTextContent('Held · quiet hours');
+                expect(card).toHaveTextContent(/sends 08:00/);
+                expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
+            } finally {
+                restore();
+            }
+        });
+    });
+
+    it('mobile: each status gets exactly one action in the fixed zone', () => {
+        const restore = mockMobileViewport();
+        try {
+            const rows = [
+                makeNotification({ id: 80, external_status: 'sent', message: 's' }),
+                makeNotification({
+                    id: 81,
+                    external_status: 'failed',
+                    failure_reason: 'blocked',
+                    message: 'f',
+                }),
+            ];
+            renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+            expect(screen.getAllByTestId('notification-card')).toHaveLength(2);
+            expect(screen.getByRole('button', { name: 'Resend' })).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+            expect(screen.getByText('blocked')).toBeInTheDocument();
+        } finally {
+            restore();
+        }
+    });
+
+    it('keeps the delivery filter pills on one scrollable row', () => {
+        renderWithProviders(
+            <NotificationLogTabContent
+                settings={settings}
+                allRows={[makeNotification({ external_status: 'sent' })]}
+            />
+        );
+        expect(screen.getByRole('group', { name: 'Filter deliveries' })).toHaveStyle({
+            flexWrap: 'nowrap',
+            overflowX: 'auto',
+        });
+    });
 });

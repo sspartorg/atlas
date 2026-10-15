@@ -11,7 +11,7 @@ import { makeAgent, makeNotification } from '../../test-utils/factories.js';
 // where the navigation actually landed.
 function LocationDisplay() {
     const loc = useLocation();
-    return <div data-testid="location">{loc.pathname}</div>;
+    return <div data-testid="location">{loc.pathname + loc.search}</div>;
 }
 
 const BASE = 'http://localhost:3000/api';
@@ -138,7 +138,7 @@ describe('InAppFeedTabContent', () => {
         fireEvent.click(el);
     });
 
-    it('falls back to /tasks when nothing else matches', () => {
+    it('falls back to /notifications when nothing else matches (same as a push click)', () => {
         const rows = [
             makeNotification({
                 id: 201,
@@ -156,7 +156,7 @@ describe('InAppFeedTabContent', () => {
             </>
         );
         fireEvent.click(screen.getByText('Lonely system message'));
-        expect(screen.getByTestId('location').textContent).toBe('/tasks');
+        expect(screen.getByTestId('location').textContent).toBe('/notifications');
     });
 
     it('routes reminder notifications to /reminders, not /tasks', () => {
@@ -271,5 +271,90 @@ describe('InAppFeedTabContent', () => {
         fireEvent.click(screen.getByText('Updates'));
         expect(screen.getByText('Update notification')).toBeInTheDocument();
         expect(screen.queryByText('Action needed')).not.toBeInTheDocument();
+    });
+
+    // Every producer's row lands where the push click would (notificationLinkUrl).
+    it.each([
+        [
+            'workflow run',
+            {
+                event_type: 'workflow_run',
+                link_url: '/workflows/wf1/runs/run1',
+                issue_type: 'task',
+                issue_id: 'ATL-1',
+            },
+            '/workflows/wf1/runs/run1',
+        ],
+        [
+            'standalone agent run',
+            {
+                event_type: 'agent_completed_no_item',
+                link_url: '/agents/a1/runs/r1',
+                issue_type: null,
+                issue_id: null,
+                project_id: null,
+            },
+            '/agents/a1/runs/r1',
+        ],
+        [
+            'item',
+            { event_type: 'ci_failed', issue_type: 'task', issue_id: 'ATL-7' },
+            '/tasks/ATL-7',
+        ],
+        [
+            'sub-task',
+            { event_type: 'agent_error', issue_type: 'sub_task', issue_id: 'ATL-7-1' },
+            '/sub-tasks/ATL-7-1',
+        ],
+        [
+            'jira',
+            { event_type: 'jira_sync', issue_type: null, issue_id: null, project_id: null },
+            '/settings?tab=jira',
+        ],
+        [
+            'terminal',
+            {
+                event_type: 'terminal.waiting_for_input',
+                link_url: '/terminal/s1',
+                issue_type: null,
+                issue_id: null,
+            },
+            '/terminal/s1',
+        ],
+        [
+            'autofetch',
+            { event_type: 'autofetch_failed', issue_type: null, issue_id: null, project_id: 'p1' },
+            '/projects/p1',
+        ],
+    ] as const)('a %s row opens %s', (_name, over, path) => {
+        const rows = [makeNotification({ id: 900, message: 'Route me', ...over })];
+        renderWithProviders(
+            <>
+                <InAppFeedTabContent allRows={rows} agents={[]} />
+                <LocationDisplay />
+            </>
+        );
+        fireEvent.click(screen.getByText('Route me'));
+        expect(screen.getByTestId('location').textContent).toBe(path);
+    });
+
+    it('opens from the keyboard and renders each row as a 3-zone card', () => {
+        const rows = [makeNotification({ id: 901, message: 'Key me', link_url: '/reminders' })];
+        renderWithProviders(
+            <>
+                <InAppFeedTabContent allRows={rows} agents={[]} />
+                <LocationDisplay />
+            </>
+        );
+        const card = screen.getByTestId('notification-card');
+        expect(card).toHaveAttribute('tabindex', '0');
+        fireEvent.keyDown(card, { key: 'Enter' });
+        expect(screen.getByTestId('location').textContent).toBe('/reminders');
+    });
+
+    it('keeps the filter pills on one scrollable row', () => {
+        renderWithProviders(<InAppFeedTabContent allRows={[makeNotification()]} agents={[]} />);
+        const group = screen.getByRole('group', { name: 'Filter notifications' });
+        expect(group).toHaveStyle({ flexWrap: 'nowrap', overflowX: 'auto' });
     });
 });

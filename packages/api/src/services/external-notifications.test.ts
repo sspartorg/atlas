@@ -47,8 +47,11 @@ import {
     shouldSendForEvent,
     sendExternalNotification,
     sendExternalForNotification,
+    deliverExternalNow,
+    flushDeferredExternal,
     testExternalNotification,
 } from './external-notifications.js';
+import { EXTERNAL_NOTIFICATION_EVENT_KEYS } from '@atlas/shared';
 import { settingsService } from './settings.js';
 import { notificationsService } from './notifications.js';
 import { truncateAll, closeTestDb } from '../../tests/_pg-db.js';
@@ -278,18 +281,6 @@ describe('sendExternalForNotification — status flow', () => {
         expect((await notificationsService.get(n.id))!.external_status).toBe('none');
     });
 
-    it('stays none (not sent) when quiet hours suppress the send', async () => {
-        await settingsService.updateNotifications({
-            quiet_hours_enabled: 1,
-            quiet_hours_from: '00:00',
-            quiet_hours_to: '23:59',
-            quiet_hours_timezone: 'UTC',
-        });
-        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
-        await sendExternalForNotification(n.id, 'm');
-        expect((await notificationsService.get(n.id))!.external_status).toBe('none');
-    });
-
     it('stays none (not sent) when the event toggle is off', async () => {
         await settingsService.updateNotifications({
             external_notification_event_toggles: { 'agent.failed': false },
@@ -334,5 +325,181 @@ describe('testExternalNotification — provider delegation', () => {
         expect(mocks.teamsTest).toHaveBeenCalledTimes(1);
         expect(mocks.telegramTest).not.toHaveBeenCalled();
         expect(r.endpoint_label).toBe('Microsoft Teams (Power Automate)');
+    });
+});
+
+// Quiet hours 22:00 → 08:00 UTC: the overnight, cross-midnight case.
+async function overnightQuietHours(): Promise<void> {
+    await settingsService.updateNotifications({
+        quiet_hours_enabled: 1,
+        quiet_hours_from: '22:00',
+        quiet_hours_to: '08:00',
+        quiet_hours_timezone: 'UTC',
+    });
+}
+const at = (iso: string) => new Date(iso);
+
+describe('quiet hours defer outward sends (held → flushed)', () => {
+    it('holds the send inside the window: pending + external_deferred_at, nothing sent', async () => {
+        await overnightQuietHours();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        const got = (await notificationsService.get(n.id))!;
+        expect(got.external_status).toBe('pending');
+        expect(new Date(got.external_deferred_at!).toISOString()).toBe('2026-10-16T23:30:00.000Z');
+        expect(mocks.telegramSend).not.toHaveBeenCalled();
+    });
+
+    it('flush does nothing while the window is still open (07:59 the next morning)', async () => {
+        await overnightQuietHours();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        await expect(flushDeferredExternal(at('2026-10-17T07:59:00Z'))).resolves.toBe(0);
+        expect((await notificationsService.get(n.id))!.external_status).toBe('pending');
+        expect(mocks.telegramSend).not.toHaveBeenCalled();
+    });
+
+    it('flush after the window sends every held row oldest first, prefixed with the original time', async () => {
+        await overnightQuietHours();
+        const a = await notificationsService.create({ event_type: 'e', message: 'first' });
+        const b = await notificationsService.create({ event_type: 'e', message: 'second' });
+        // Hold b before a; created_at decides the order, not hold order.
+        await sendExternalForNotification(b.id, 'second', undefined, at('2026-10-16T23:40:00Z'));
+        await sendExternalForNotification(a.id, 'first', undefined, at('2026-10-16T23:41:00Z'));
+        await expect(flushDeferredExternal(at('2026-10-17T08:00:00Z'))).resolves.toBe(2);
+        const sent = mocks.telegramSend.mock.calls.map((c) => c[0]);
+        expect(sent).toHaveLength(2);
+        expect(sent[0]).toMatch(/^Held during quiet hours · \d\d:\d\d\nfirst$/);
+        expect(sent[1]).toMatch(/\nsecond$/);
+        for (const id of [a.id, b.id]) {
+            const got = (await notificationsService.get(id))!;
+            expect(got.external_status).toBe('sent');
+            expect(got.external_deferred_at).toBeNull();
+        }
+        // The claim is a CAS: a second flush finds nothing to send.
+        await expect(flushDeferredExternal(at('2026-10-17T08:01:00Z'))).resolves.toBe(0);
+        expect(mocks.telegramSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('Cancel while held means it is never sent', async () => {
+        await overnightQuietHours();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        await expect(notificationsService.cancel(n.id)).resolves.toBe(true);
+        const got = (await notificationsService.get(n.id))!;
+        expect(got.external_status).toBe('none');
+        expect(got.external_deferred_at).toBeNull();
+        await expect(flushDeferredExternal(at('2026-10-17T09:00:00Z'))).resolves.toBe(0);
+        expect(mocks.telegramSend).not.toHaveBeenCalled();
+    });
+
+    it('turning quiet hours off releases held rows on the next flush', async () => {
+        await overnightQuietHours();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        await settingsService.updateNotifications({ quiet_hours_enabled: 0 });
+        await expect(flushDeferredExternal(at('2026-10-16T23:31:00Z'))).resolves.toBe(1);
+        expect((await notificationsService.get(n.id))!.external_status).toBe('sent');
+    });
+
+    it('one failing held send is marked failed and the rest still go out', async () => {
+        await overnightQuietHours();
+        const a = await notificationsService.create({ event_type: 'e', message: 'a' });
+        const b = await notificationsService.create({ event_type: 'e', message: 'b' });
+        await sendExternalForNotification(a.id, 'a', undefined, at('2026-10-16T23:30:00Z'));
+        await sendExternalForNotification(b.id, 'b', undefined, at('2026-10-16T23:30:00Z'));
+        mocks.telegramSend.mockRejectedValueOnce(new Error('rate limited'));
+        await flushDeferredExternal(at('2026-10-17T08:00:00Z'));
+        expect((await notificationsService.get(a.id))!.external_status).toBe('failed');
+        expect((await notificationsService.get(b.id))!.external_status).toBe('sent');
+    });
+
+    it('an event toggled off is not held (stays none)', async () => {
+        await overnightQuietHours();
+        await settingsService.updateNotifications({
+            external_notification_event_toggles: { 'workflow.failed': false },
+        });
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', 'workflow.failed', at('2026-10-16T23:30:00Z'));
+        const got = (await notificationsService.get(n.id))!;
+        expect(got.external_status).toBe('none');
+        expect(got.external_deferred_at).toBeNull();
+    });
+
+    it('nothing is held when no channel is configured', async () => {
+        await overnightQuietHours();
+        mocks.telegramIsConfigured.mockReturnValue(false);
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        expect((await notificationsService.get(n.id))!.external_status).toBe('none');
+    });
+
+    it('Resend (deliverExternalNow) ignores quiet hours — the Owner pressed it', async () => {
+        await settingsService.updateNotifications({
+            quiet_hours_enabled: 1,
+            quiet_hours_from: '00:00',
+            quiet_hours_to: '23:59',
+            quiet_hours_timezone: 'UTC',
+        });
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await deliverExternalNow(n.id, 'm');
+        expect((await notificationsService.get(n.id))!.external_status).toBe('sent');
+    });
+});
+
+describe('quiet hours edge cases', () => {
+    const on = { ...baseGating, quiet_hours_enabled: 1, quiet_hours_timezone: 'UTC' };
+
+    it('cross-midnight window: in at 22:00 and 07:59, out at 08:00 and 21:59', () => {
+        const w = { ...on, quiet_hours_from: '22:00', quiet_hours_to: '08:00' };
+        expect(isInQuietHours(w, at('2026-10-16T22:00:00Z'))).toBe(true);
+        expect(isInQuietHours(w, at('2026-10-17T07:59:00Z'))).toBe(true);
+        expect(isInQuietHours(w, at('2026-10-17T08:00:00Z'))).toBe(false);
+        expect(isInQuietHours(w, at('2026-10-17T21:59:00Z'))).toBe(false);
+    });
+
+    it('from == to means off, at any time', () => {
+        const w = { ...on, quiet_hours_from: '09:00', quiet_hours_to: '09:00' };
+        for (const t of ['2026-10-16T09:00:00Z', '2026-10-16T12:00:00Z', '2026-10-16T03:00:00Z']) {
+            expect(isInQuietHours(w, at(t))).toBe(false);
+        }
+    });
+
+    it('an invalid stored time zone falls back instead of throwing', () => {
+        const w = { ...on, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'Mars/Olympus' };
+        expect(() => isInQuietHours(w, at('2026-10-16T12:00:00Z'))).not.toThrow();
+    });
+
+    it('an invalid stored time zone never breaks a send', async () => {
+        // The schema now rejects it, so write it the way a hand-edited row would.
+        const { db } = await import('../db/kysely-client.js');
+        await db
+            .updateTable('settings')
+            .set({ quiet_hours_enabled: 1, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'Mars/Olympus' })
+            .where('id', '=', 1)
+            .execute();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        // Noon server-local (UTC in tests) is outside the window: sent now.
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T12:00:00Z'));
+        expect((await notificationsService.get(n.id))!.external_status).toBe('sent');
+    });
+});
+
+describe('every event key honours its own toggle', () => {
+    it.each(EXTERNAL_NOTIFICATION_EVENT_KEYS)('%s: off → none, on → sent', async (key) => {
+        await settingsService.updateNotifications({ external_notification_event_toggles: { [key]: false } });
+        const off = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(off.id, 'm', key);
+        expect((await notificationsService.get(off.id))!.external_status).toBe('none');
+
+        await settingsService.updateNotifications({ external_notification_event_toggles: { [key]: true } });
+        const on = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(on.id, 'm', key);
+        expect((await notificationsService.get(on.id))!.external_status).toBe('sent');
+    });
+
+    it('the new failure keys default ON', () => {
+        expect(shouldSendForEvent('jira.sync_failed', baseGating)).toBe(true);
+        expect(shouldSendForEvent('workflow.failed', baseGating)).toBe(true);
     });
 });

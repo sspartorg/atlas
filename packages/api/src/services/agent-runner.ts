@@ -432,6 +432,7 @@ async function createAgentNotification(opts: {
     issueType: IssueType | null;
     issueId: string | null;
     agentId: string;
+    runId: string;
     kind: 'needs_you' | 'update';
 }): Promise<number> {
     const row = await notificationsService.create({
@@ -441,6 +442,8 @@ async function createAgentNotification(opts: {
         issue_id: opts.issueId,
         agent_id: opts.agentId,
         kind: opts.kind,
+        // An item-attached run opens its item; a standalone one has only its run page.
+        link_url: opts.issueId ? null : `/agents/${opts.agentId}/runs/${opts.runId}`,
     });
     return row.id;
 }
@@ -555,6 +558,7 @@ export async function completeRun(
             issueType: null,
             issueId: null,
             agentId,
+            runId,
             kind: 'update',
         });
         try {
@@ -686,6 +690,7 @@ async function errorRun(
             issueType,
             issueId,
             agentId,
+            runId,
             kind: 'needs_you',
         });
         try {

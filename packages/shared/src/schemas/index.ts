@@ -627,6 +627,19 @@ export const UpdateProjectRepoSchema = z
 const HexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Expected hex color like #2E2E2E');
 const HHMMSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM 24-hour required');
 
+// Not `Intl.supportedValuesOf('timeZone')`: that list is canonical names only
+// and (Node 24 / V8) omits `UTC` and `Asia/Kolkata`, which browsers report.
+// The formatter accepts exactly the zones the quiet-hours math can use.
+function isValidTimeZone(tz: string): boolean {
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: tz });
+        return true;
+    } catch {
+        return false;
+    }
+}
+const TimeZoneSchema = z.string().refine(isValidTimeZone, 'Unknown IANA time zone');
+
 export const UpdateProfileSchema = z.object({
     owner_name: z.string().min(1).max(100).optional(),
     accent_color: HexColorSchema.optional(),
@@ -684,7 +697,7 @@ export const UpdateNotificationsSchema = z.object({
     external_notification_event_toggles: z.record(z.string(), z.boolean()).optional(),
     quiet_hours_from: HHMMSchema.nullable().optional(),
     quiet_hours_to: HHMMSchema.nullable().optional(),
-    quiet_hours_timezone: z.string().nullable().optional(),
+    quiet_hours_timezone: TimeZoneSchema.nullable().optional(),
     quiet_hours_enabled: z.coerce.number().int().min(0).max(1).optional(),
     // Terminal v2: idle-notification threshold in seconds. Clamped 60-3600
     // (1 min - 1 hr) to prevent both spam and silent forever-waits.

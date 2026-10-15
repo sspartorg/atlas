@@ -1,5 +1,6 @@
 import { db } from '../db/kysely-client.js';
 import { remindersService } from './reminders.js';
+import { flushDeferredExternal } from './external-notifications.js';
 import { refreshExpiring as refreshExpiringAppTokens } from './github-app-tokens.js';
 import { externalLinks } from './external-links.js';
 import { jiraSync } from './jira-sync.js';
@@ -7,7 +8,8 @@ import { teamConfig } from './team-config.js';
 import { onStepFinished, reconcileWorkflowRuns, tickWorkflowDispatch } from './workflow-engine.js';
 
 // Single clock-driven poller. One setInterval ticks every minute and runs,
-// in order: the stuck-run watchdog, due reminders, GitHub App token
+// in order: the stuck-run watchdog, due reminders, the quiet-hours flush of
+// held outward sends, GitHub App token
 // pre-warm, the workflow-run reconcile sweep, PR-state sync, the Jira
 // bridge, and workflow dispatch.
 //
@@ -53,6 +55,15 @@ export async function tickAgentScheduler(): Promise<void> {
         if (fired > 0) schedLog(`[reminders] fired ${fired} reminder(s)`);
     } catch (err) {
         schedLog(`[reminders] tick failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // After reminders, so a reminder that fires the minute quiet hours end
+    // goes out in this same pass alongside the backlog.
+    try {
+        const flushed = await flushDeferredExternal(now);
+        if (flushed > 0) schedLog(`[quiet-hours] sent ${flushed} held notification(s)`);
+    } catch (err) {
+        schedLog(`[quiet-hours] flush failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // Pre-warm GitHub App installation tokens within 15 minutes of expiry so
