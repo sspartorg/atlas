@@ -13,7 +13,7 @@ A free-form markdown-tile workspace for the Owner. Use it to capture half-formed
 ## UI elements
 **Page header**
 - Title `Scratch Pad` + one-line description.
-- **New tile** button → calls `useCreateScratchPad()` with `{}`. On success, opens the editor pointed at the new tile.
+- **New tile** button → calls `useCreateScratchPad()` with `{}`. On success, opens the editor pointed at the new tile. The button keeps its label and colour while the tile is created (no "Creating..." or disabled state, which made it stretch and flash); repeat clicks during the request are ignored.
 
 **Tile card (`TileCard`)**
 - Title (bold, 2-line clamp; falls back to "Untitled tile" when blank).

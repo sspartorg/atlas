@@ -37,6 +37,10 @@ export function ScratchPad() {
     const editingTile = editingId ? (tiles.find((t) => t.id === editingId) ?? null) : null;
 
     function openNew() {
+        // One tile per click; the button itself doesn't change while the
+        // tile is created (a "Creating..." label and disabled grey made it
+        // stretch and flash for the round-trip before the editor opened).
+        if (createTile.isPending) return;
         createTile.mutate(
             {},
             {
@@ -73,10 +77,9 @@ export function ScratchPad() {
                             variant="contained"
                             startIcon={<AddRounded sx={{ fontSize: 16 }} />}
                             onClick={openNew}
-                            disabled={createTile.isPending}
                             sx={{ textTransform: 'none', fontWeight: 500 }}
                         >
-                            {createTile.isPending ? 'Creating...' : 'New tile'}
+                            New tile
                         </Button>
                     </>
                 }

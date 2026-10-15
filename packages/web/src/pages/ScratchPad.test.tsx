@@ -100,6 +100,40 @@ describe('ScratchPad page', () => {
         }
     });
 
+    it('"New tile" keeps its label and look while creating, and creates one tile per click', async () => {
+        let posts = 0;
+        let release: () => void = () => {};
+        server.use(
+            http.get(`${BASE}/scratch-pad`, () => HttpResponse.json([])),
+            http.post(`${BASE}/scratch-pad`, async () => {
+                posts++;
+                await new Promise<void>((r) => (release = r));
+                return HttpResponse.json({
+                    id: 'new-tile',
+                    title: '',
+                    body_md: '',
+                    created_at: '2026-05-16T00:00:00.000Z',
+                    updated_at: '2026-05-16T00:00:00.000Z',
+                });
+            })
+        );
+        renderWithProviders(<ScratchPad />);
+        await waitFor(() => expect(screen.getByText('Scratch Pad')).toBeInTheDocument());
+        const btn = screen
+            .getAllByRole('button')
+            .find((b) => b.textContent === 'New tile' && b.closest('header'))!;
+        fireEvent.click(btn);
+        await waitFor(() => expect(posts).toBe(1));
+        // Mid-request: same label, not disabled (no stretch, no grey flash)...
+        expect(btn).toHaveTextContent('New tile');
+        expect(btn).not.toBeDisabled();
+        // ...and a second click doesn't create a second tile.
+        fireEvent.click(btn);
+        release();
+        await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+        expect(posts).toBe(1);
+    });
+
     it('openNew onError (lines 44-48): shows toast when POST /scratch-pad fails', async () => {
         server.use(
             http.get(`${BASE}/scratch-pad`, () => HttpResponse.json([])),
