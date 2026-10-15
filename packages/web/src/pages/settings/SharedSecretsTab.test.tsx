@@ -217,6 +217,20 @@ describe('SharedSecretsTab', () => {
         await waitFor(() => expect(saveBtn).not.toBeDisabled());
     });
 
+    it('blocks Save for a new key with no value instead of dropping it', async () => {
+        mountInitial([]);
+        const user = userEvent.setup();
+        renderWithProviders(<SharedSecretsTab />);
+        await waitFor(() => expect(screen.getByText(/no shared secrets yet/i)).toBeInTheDocument());
+        await user.click(screen.getByRole('button', { name: /add secret/i }));
+        await user.type(await screen.findByPlaceholderText('UPPER_SNAKE_CASE'), 'NEW_KEY');
+        expect(await screen.findByText(/"NEW_KEY" needs a value/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
+        await user.type(screen.getByPlaceholderText('value'), 'v');
+        await waitFor(() => expect(screen.queryByText(/needs a value/)).not.toBeInTheDocument());
+        expect(screen.getByRole('button', { name: /^save$/i })).not.toBeDisabled();
+    });
+
     it('shows save error toast when the API call fails', async () => {
         mountInitial([{ key: 'TOKEN', value: '' }]);
         server.use(

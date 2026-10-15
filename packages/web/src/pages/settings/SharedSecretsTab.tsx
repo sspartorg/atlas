@@ -130,7 +130,13 @@ export function SharedSecretsTab() {
         const errors: string[] = [];
         const seen = new Set<string>();
         for (const r of rows) {
-            if (r.key === '') continue;
+            // handleSave sends only rows with both a key and a value, so a
+            // half-filled new row would be dropped silently — block it instead.
+            if (r.key === '') {
+                if (r.value !== '') errors.push('A value needs a key');
+                continue;
+            }
+            if (!r.hasStoredValue && r.value === '') errors.push(`"${r.key}" needs a value`);
             if (!KEY_RE.test(r.key)) {
                 errors.push(`"${r.key}" must be UPPER_SNAKE_CASE`);
             } else if (seen.has(r.key)) {
@@ -357,7 +363,11 @@ export function SharedSecretsTab() {
                             key={row.rid}
                             sx={{
                                 display: 'grid',
-                                gridTemplateColumns: '220px 1fr auto auto',
+                                // Phones: key on its own line, value + buttons below.
+                                gridTemplateColumns: {
+                                    xs: '1fr auto auto',
+                                    sm: '220px 1fr auto auto',
+                                },
                                 gap: 1.5,
                                 alignItems: 'center',
                                 px: 1.5,
@@ -375,6 +385,7 @@ export function SharedSecretsTab() {
                                 }
                                 placeholder="UPPER_SNAKE_CASE"
                                 sx={{
+                                    gridColumn: { xs: '1 / -1', sm: 'auto' },
                                     fontFamily: MONO,
                                     fontSize: 13,
                                     color: ATLAS_PALETTE.slate,
