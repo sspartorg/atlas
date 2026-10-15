@@ -508,7 +508,7 @@ export function Analytics() {
                             display: 'grid',
                             gridTemplateColumns: { xs: '1fr', md: '1.4fr 1fr' },
                             gap: { xs: 5, md: 8 },
-                            alignItems: 'end',
+                            alignItems: 'start',
                         }}
                     >
                         {/* Left: brand line + headline metric */}
