@@ -529,6 +529,9 @@ export interface JiraIssuesTable {
     pushed_comment_id: ColumnType<string, number | undefined, number>;
     pushed_status: StrN;
     done_synced_at: TSD;
+    // Migration 008 — what the bridge last wrote into the Task.
+    synced_title: StrN;
+    synced_description: StrN;
     created_at: CreatedAt;
 }
 

@@ -1016,14 +1016,91 @@ describe('jira bridge lifecycle', () => {
         expect((await taskFor('ATL-1')).description).toContain('Given A, then B');
     });
 
-    it('Jira wins over a local description edit while the Task has not started', async () => {
+    it('keeps an Atlas edit while the Task has not started; the untouched field still follows Jira', async () => {
         issues = [issue('ATL-1', ['development'])];
         await configure();
         await jiraSync.syncNow();
         const t1 = await taskFor('ATL-1');
         await testDb.updateTable('items').set({ description: 'edited in Atlas' }).where('id', '=', t1.id).execute();
+
+        fieldsOf('ATL-1')['summary'] = 'Renamed in Jira';
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nChanged in Jira';
         await jiraSync.syncNow();
-        expect((await taskFor('ATL-1')).description).toContain('Build ATL-1');
+        const after = await taskFor('ATL-1');
+        expect(after.description).toBe('edited in Atlas');
+        expect(after.title).toContain('Renamed in Jira');
+
+        // And again: further Jira edits still don't touch the edited field.
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nChanged again';
+        await jiraSync.syncNow();
+        expect((await taskFor('ATL-1')).description).toBe('edited in Atlas');
+    });
+
+    it('with the description edited in Atlas, a new Jira comment arrives as a Task comment instead of being lost', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        await testDb.updateTable('items').set({ description: 'edited in Atlas' }).where('id', '=', t1.id).execute();
+        (fieldsOf('ATL-1')['comment'] as { comments: FakeComment[] }).comments.push(jiraComment('Please also cover Safari'));
+        const r = await jiraSync.syncNow();
+        expect(r.comments_imported).toBe(1);
+        expect((await taskFor('ATL-1')).description).toBe('edited in Atlas');
+        const bodies = (await testDb.selectFrom('comments').select('body').where('item_id', '=', t1.id).execute()).map((c) => c.body);
+        expect(bodies.some((b) => b.includes('Please also cover Safari'))).toBe(true);
+        // Once, however many syncs run.
+        expect((await jiraSync.syncNow()).comments_imported).toBe(0);
+    });
+
+    it('keeps an Atlas title edit; the description still follows Jira', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        await testDb.updateTable('items').set({ title: 'My own title' }).where('id', '=', t1.id).execute();
+        fieldsOf('ATL-1')['summary'] = 'Renamed in Jira';
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nChanged in Jira';
+        await jiraSync.syncNow();
+        const after = await taskFor('ATL-1');
+        expect(after.title).toBe('My own title');
+        expect(after.description).toContain('Changed in Jira');
+    });
+
+    it('putting the Jira text back makes the field follow Jira again', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        const original = t1.description;
+        await testDb.updateTable('items').set({ description: 'temporary edit' }).where('id', '=', t1.id).execute();
+        await jiraSync.syncNow();
+        await testDb.updateTable('items').set({ description: original }).where('id', '=', t1.id).execute();
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nFollow me';
+        await jiraSync.syncNow();
+        expect((await taskFor('ATL-1')).description).toContain('Follow me');
+    });
+
+    it('a Task linked before the tracking columns keeps an edit made before the upgrade', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        // As it looked before migration 008: nothing recorded.
+        await testDb.updateTable('jira_issues').set({ synced_title: null, synced_description: null }).execute();
+        await testDb.updateTable('items').set({ description: 'edited before the upgrade' }).where('id', '=', t1.id).execute();
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nChanged in Jira';
+        await jiraSync.syncNow();
+        expect((await taskFor('ATL-1')).description).toBe('edited before the upgrade');
+    });
+
+    it('a Task linked before the tracking columns, never edited, still follows Jira', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        await testDb.updateTable('jira_issues').set({ synced_title: null, synced_description: null }).execute();
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nChanged in Jira';
+        await jiraSync.syncNow();
+        expect((await taskFor('ATL-1')).description).toContain('Changed in Jira');
     });
 
     it('a Jira status change alone neither re-imports nor moves the Task', async () => {

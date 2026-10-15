@@ -567,16 +567,18 @@ async function importIssue(
     // workflow", which quietly borrowed a workflow from a different query.
     const workflowId = first.source.workflow_id;
     const url = `${siteUrl}/browse/${issue.key}`;
+    const title = taskTitle(issue);
+    const description = composeTaskDescription(
+        issue,
+        siteUrl,
+        extra,
+        new Set(),
+        repos.map((r) => r.name)
+    );
     const task = await tasksService.create({
         project_id: projectId,
-        title: taskTitle(issue),
-        description: composeTaskDescription(
-            issue,
-            siteUrl,
-            extra,
-            new Set(),
-            repos.map((r) => r.name)
-        ),
+        title,
+        description,
         priority: PRIORITIES[text(issue.fields['priority']).toLowerCase()] ?? 'normal',
         labels: labels.slice(0, 20),
         repo_ids: repos.map((r) => r.id),
@@ -591,6 +593,8 @@ async function importIssue(
             raw: JSON.stringify(issue),
             jira_updated_at: toIso(text(issue.fields['updated']) || null),
             seen_comment_ids: JSON.stringify(commentsOf(issue).map((c) => c.id)),
+            synced_title: title,
+            synced_description: description,
         })
         .execute();
     await externalLinks.create({
@@ -656,6 +660,8 @@ async function refreshIssue(
         jira_updated_at: string | null;
         seen_comment_ids?: string;
         imported_comment_ids?: string;
+        synced_title?: string;
+        synced_description?: string;
     } = {
         raw: JSON.stringify(issue),
         jira_updated_at: toIso(text(issue.fields['updated']) || null),
@@ -665,7 +671,10 @@ async function refreshIssue(
         const posted = new Set(row.posted_comment_ids);
         const seen = new Set(row.seen_comment_ids);
         const fresh = commentsOf(issue).filter((c) => !seen.has(c.id) && !posted.has(c.id));
-        if (task.status === 'draft' || task.status === 'ready') {
+        // New Jira comments either fold into the description (not started, and
+        // the description still follows Jira) or arrive as Task comments.
+        let asComments = !(task.status === 'draft' || task.status === 'ready');
+        if (!asComments) {
             // Not started yet: the description is still the whole prompt, so refresh it
             // in place, and the repos follow the sources that match now (the Task
             // keeps its repos when none of them are in its project any more).
@@ -680,18 +689,37 @@ async function refreshIssue(
                 matched.map((r) => r.name)
             );
             const reposChanged = repoIds.join('\n') !== task.repo_ids.join('\n');
-            if (title !== task.title || description !== task.description || reposChanged) {
+            // What the bridge wrote last time. A field that no longer matches it
+            // was edited in Atlas: keep the Owner's text, follow Jira otherwise.
+            // Rows linked before migration 008 rebuild it from the previous
+            // issue; if that doesn't match exactly, the field counts as edited
+            // and is kept, so the upgrade can never overwrite an edit.
+            const previous = row.raw as JiraIssue;
+            const syncedTitle = row.synced_title ?? taskTitle(previous);
+            const syncedDescription =
+                row.synced_description ??
+                composeTaskDescription(previous, siteUrl, extra, posted, matched.map((r) => r.name));
+            const nextTitle = task.title === syncedTitle ? title : task.title;
+            const nextDescription = task.description === syncedDescription ? description : task.description;
+            if (nextTitle !== task.title || nextDescription !== task.description || reposChanged) {
                 await tasksService.update(task.id, {
-                    title,
-                    description,
+                    title: nextTitle,
+                    description: nextDescription,
                     ...(reposChanged ? { repo_ids: repoIds } : {}),
                 });
                 result.updated++;
             }
-        } else {
-            // Work has started: new Jira comments arrive as read-only context. `system`
-            // keeps them from being attributed to the running agent, and they never
-            // resume a parked run (only Owner comments do).
+            patch.synced_title = title;
+            patch.synced_description = description;
+            // An edited description no longer carries Jira's comments, so bring
+            // them in as comments rather than marking them seen and losing them.
+            if (nextDescription !== description) asComments = true;
+        }
+        if (asComments) {
+            // Work has started (or the description is the Owner's): new Jira
+            // comments arrive as read-only context. `system` keeps them from
+            // being attributed to the running agent, and they never resume a
+            // parked run (only Owner comments do).
             const imported = [...row.imported_comment_ids];
             for (const c of fresh) {
                 const created = await commentsService.create({
