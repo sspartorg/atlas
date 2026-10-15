@@ -78,6 +78,10 @@ export function MoreSheet({ open, onClose }: Props) {
             onClose={onClose}
             onOpen={() => {}}
             disableSwipeToOpen
+            // SwipeableDrawer keeps a closed sheet mounted by default; with
+            // swipe-to-open off there's no reason to, and it duplicated the
+            // sheet's text (e.g. "More") in the page while closed.
+            ModalProps={{ keepMounted: false }}
             PaperProps={{
                 sx: {
                     borderTopLeftRadius: 16,
