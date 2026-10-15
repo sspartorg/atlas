@@ -6,11 +6,14 @@ import './theme/fonts.css';
 import { ThemeModeProvider } from './components/ThemeModeProvider.js';
 import { App } from './App.js';
 import { initWebVitalsReporter } from './perf/web-vitals.js';
+import { installDialogEscapeFix } from './utils/dialogEscape.js';
 
 void initWebVitalsReporter();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element not found');
+
+installDialogEscapeFix();
 
 createRoot(rootEl).render(
     <StrictMode>
