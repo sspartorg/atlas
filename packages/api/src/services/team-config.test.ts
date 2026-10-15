@@ -524,3 +524,59 @@ describe('team config edge cases', () => {
         rmSync(remote, { recursive: true, force: true });
     });
 });
+
+describe('team config lifecycle', () => {
+    it("a publisher's later change reaches the subscriber on the next pull", async () => {
+        const remote = bareRepo();
+        await publishThenBecomeSubscriber(remote);
+        await teamConfig.syncNow();
+        expect((await testDb.selectFrom('projects').select('name').where('id', '=', 'p1').executeTakeFirstOrThrow()).name).toBe('Atlas');
+
+        // The publisher renames the project: change the published file and push it.
+        const work = mkdtempSync(join(tmpdir(), 'atlas-pub-'));
+        execFileSync('git', ['clone', '-q', remote, work]);
+        const files = execFileSync('git', ['-C', work, 'ls-files'], { encoding: 'utf8' }).split('\n');
+        const projectFile = files.find((f) => /^projects\/ATL\/[^/]+\.json$/.test(f) && readFileSync(join(work, f), 'utf8').includes('"Atlas"'))!;
+        expect(projectFile).toBeDefined();
+        const p = join(work, projectFile);
+        writeFileSync(p, readFileSync(p, 'utf8').replace('"Atlas"', '"Atlas Renamed"'));
+        execFileSync('git', ['-C', work, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'rename']);
+        execFileSync('git', ['-C', work, 'push', '-q', 'origin', 'HEAD:main']);
+
+        await teamConfig.syncNow();
+        expect((await testDb.selectFrom('projects').select('name').where('id', '=', 'p1').executeTakeFirstOrThrow()).name).toBe('Atlas Renamed');
+        // A second pull with nothing new changes nothing.
+        await teamConfig.syncNow();
+        expect((await testDb.selectFrom('projects').select('name').where('id', '=', 'p1').executeTakeFirstOrThrow()).name).toBe('Atlas Renamed');
+        rmSync(work, { recursive: true, force: true });
+        rmSync(remote, { recursive: true, force: true });
+    });
+
+    it('switching the branch drops the clone and starts over', async () => {
+        const remote = bareRepo();
+        await publishThenBecomeSubscriber(remote);
+        await teamConfig.syncNow();
+        expect(existsSync(teamConfigDir())).toBe(true);
+        expect((await teamConfig.getConfig()).last_commit).toMatch(/^[0-9a-f]{40}$/);
+
+        await teamConfig.saveConfig({ branch: 'other' });
+        expect(existsSync(teamConfigDir())).toBe(false);
+        expect((await teamConfig.getConfig()).last_commit).toBeNull();
+        expect(await teamConfig.syncNow()).toBe('Nothing published yet');
+        // My pulled project stays until a real pull says otherwise.
+        expect(await testDb.selectFrom('projects').select('id').execute()).toEqual([{ id: 'p1' }]);
+        rmSync(remote, { recursive: true, force: true });
+    });
+
+    it('switching the repo URL drops the clone and pulls the new repo', async () => {
+        const first = bareRepo();
+        await publishThenBecomeSubscriber(first);
+        await teamConfig.syncNow();
+        const second = bareRepo();
+        await teamConfig.saveConfig({ repo_url: `file://${second}` });
+        expect(existsSync(teamConfigDir())).toBe(false);
+        expect(await teamConfig.syncNow()).toBe('Nothing published yet');
+        rmSync(first, { recursive: true, force: true });
+        rmSync(second, { recursive: true, force: true });
+    });
+});

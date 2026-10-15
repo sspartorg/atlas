@@ -80,6 +80,47 @@ describe('/api/secrets-bundle', () => {
         ]);
     });
 
+    it('refuses a tampered file and a file from a newer Atlas', async () => {
+        await environmentSecretsService.replaceAll([{ key: 'SHARED_A', value: 'a' }]);
+        const bundle = (await post('/api/secrets-bundle/export', { passphrase: PASS })).json();
+        const flipped = Buffer.from(bundle.data, 'base64');
+        flipped[0] = flipped[0]! ^ 0xff;
+        const tampered = await post('/api/secrets-bundle/import', { passphrase: PASS, bundle: { ...bundle, data: flipped.toString('base64') } });
+        expect(tampered.statusCode).toBe(400);
+        const newer = await post('/api/secrets-bundle/import', { passphrase: PASS, bundle: { ...bundle, version: bundle.version + 1 } });
+        expect(newer.statusCode).toBe(400);
+        expect(newer.json().error).toMatch(/newer Atlas/);
+        const notABundle = await post('/api/secrets-bundle/import', { passphrase: PASS, bundle: { hello: 1 } });
+        expect(notABundle.statusCode).toBe(400);
+        expect(await environmentSecretsService.list()).toEqual([{ key: 'SHARED_A', value: 'a' }]);
+    });
+
+    it('file wins on a shared key both have; a key only this machine has is kept', async () => {
+        await environmentSecretsService.replaceAll([{ key: 'BOTH', value: 'from-file' }]);
+        const bundle = (await post('/api/secrets-bundle/export', { passphrase: PASS })).json();
+        await environmentSecretsService.replaceAll([
+            { key: 'BOTH', value: 'local' },
+            { key: 'LOCAL_ONLY', value: 'mine' },
+        ]);
+        expect((await post('/api/secrets-bundle/import', { passphrase: PASS, bundle })).statusCode).toBe(200);
+        expect(new Map((await environmentSecretsService.list()).map((v) => [v.key, v.value]))).toEqual(
+            new Map([
+                ['BOTH', 'from-file'],
+                ['LOCAL_ONLY', 'mine'],
+            ]),
+        );
+    });
+
+    it("a bundle without Jira or a channel leaves this machine's Jira and channel alone", async () => {
+        const bundle = (await post('/api/secrets-bundle/export', { passphrase: PASS })).json();
+        await jiraSync.saveConfig({ site_url: 'https://acme.atlassian.net', email: 'me@acme.test', api_token: 'keep-me' });
+        await settingsService.updateExternalNotificationBatch({ external_notification_token: 'keep-bot', external_notification_chat_id: '7' });
+        const res = await post('/api/secrets-bundle/import', { passphrase: PASS, bundle });
+        expect(res.json()).toMatchObject({ jira: false, notification: false });
+        expect(await jiraSync.revealToken()).toBe('keep-me');
+        expect((await settingsService.getWithSecrets()).external_notification_token).toBe('keep-bot');
+    });
+
     it('refuses a short passphrase', async () => {
         const res = await post('/api/secrets-bundle/export', { passphrase: 'short' });
         expect(res.statusCode).toBe(400);

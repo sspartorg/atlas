@@ -973,3 +973,197 @@ describe('jira bridge resilience', () => {
         expect(posted[0]!.body).toContain('waiting on the owner.');
     });
 });
+
+// ── Lifecycle: what happens to an imported issue as it keeps changing ──────
+describe('jira bridge lifecycle', () => {
+    const fieldsOf = (key: string) => issues.find((i) => i.key === key)!.fields;
+    const searches = () =>
+        fakeFetch.mock.calls.filter(([u]) => String(u).includes('/rest/api/2/search/jql')).length;
+    const count = async (table: 'items' | 'jira_issues' | 'comments') =>
+        Number(
+            (await testDb.selectFrom(table).select((eb) => eb.fn.countAll().as('n')).executeTakeFirstOrThrow())
+                .n
+        );
+
+    it('refreshes title and description from Jira until work starts, then leaves them alone', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+
+        fieldsOf('ATL-1')['summary'] = 'Renamed in Jira';
+        fieldsOf('ATL-1')['description'] = 'h2. Goal\nA new goal';
+        const r1 = await jiraSync.syncNow();
+        expect(r1).toMatchObject({ imported: 0, updated: 1 });
+        const t1 = await taskFor('ATL-1');
+        expect(t1.title).toContain('Renamed in Jira');
+        expect(t1.description).toContain('A new goal');
+
+        // Nothing changed: nothing rewritten.
+        expect((await jiraSync.syncNow()).updated).toBe(0);
+
+        await setStatus(t1.id, 'in_progress');
+        fieldsOf('ATL-1')['summary'] = 'Renamed again';
+        expect((await jiraSync.syncNow()).updated).toBe(0);
+        expect((await taskFor('ATL-1')).title).toContain('Renamed in Jira');
+    });
+
+    it('an extra field changed in Jira is refreshed into the description before work starts', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        fieldsOf('ATL-1')['customfield_1'] = 'Given A, then B';
+        expect((await jiraSync.syncNow()).updated).toBe(1);
+        expect((await taskFor('ATL-1')).description).toContain('Given A, then B');
+    });
+
+    it('Jira wins over a local description edit while the Task has not started', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        await testDb.updateTable('items').set({ description: 'edited in Atlas' }).where('id', '=', t1.id).execute();
+        await jiraSync.syncNow();
+        expect((await taskFor('ATL-1')).description).toContain('Build ATL-1');
+    });
+
+    it('a Jira status change alone neither re-imports nor moves the Task', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const before = await taskFor('ATL-1');
+        fieldsOf('ATL-1')['status'] = { name: 'In Review' };
+        const r = await jiraSync.syncNow();
+        expect(r.imported).toBe(0);
+        expect((await taskFor('ATL-1')).status).toBe(before.status);
+        expect(await count('items')).toBe(1);
+    });
+
+    it('a Jira comment made before work starts lands in the description and is not re-imported later', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        (fieldsOf('ATL-1')['comment'] as { comments: FakeComment[] }).comments.push(
+            jiraComment('Before we start: use Postgres')
+        );
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        expect(t1.description).toContain('use Postgres');
+
+        await setStatus(t1.id, 'in_progress');
+        const r = await jiraSync.syncNow();
+        expect(r.comments_imported).toBe(0);
+        expect(await count('comments')).toBe(0);
+    });
+
+    it('imports each Jira comment once, however many syncs run', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        await setStatus(t1.id, 'in_progress');
+        (fieldsOf('ATL-1')['comment'] as { comments: FakeComment[] }).comments.push(jiraComment('Ping'));
+        expect((await jiraSync.syncNow()).comments_imported).toBe(1);
+        expect((await jiraSync.syncNow()).comments_imported).toBe(0);
+        expect((await jiraSync.syncNow()).comments_imported).toBe(0);
+        const jiraComments = await testDb
+            .selectFrom('comments')
+            .select('body')
+            .where('item_id', '=', t1.id)
+            .where('body', 'like', '%Ping%')
+            .execute();
+        expect(jiraComments).toHaveLength(1);
+    });
+
+    it('an issue that leaves the query (or is deleted in Jira) keeps its Task; if it returns it is refreshed, not re-imported', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const kept = issues;
+
+        issues = [];
+        expect((await jiraSync.syncNow()).imported).toBe(0);
+        expect(await count('items')).toBe(1);
+
+        issues = kept;
+        fieldsOf('ATL-1')['summary'] = 'Back with a new name';
+        const r = await jiraSync.syncNow();
+        expect(r).toMatchObject({ imported: 0, updated: 1 });
+        expect(await count('items')).toBe(1);
+        expect(await count('jira_issues')).toBe(1);
+    });
+
+    it('disconnect then reconnect does not duplicate imported Tasks', async () => {
+        issues = [issue('ATL-1', ['development']), issue('ATL-2', ['design'])];
+        await configure();
+        expect((await jiraSync.syncNow()).imported).toBe(2);
+        await jiraSync.disconnect();
+        expect(await count('items')).toBe(2);
+        await configure();
+        expect((await jiraSync.syncNow()).imported).toBe(0);
+        expect(await count('items')).toBe(2);
+    });
+
+    it('after Done, later Jira edits and syncs post nothing more; reopening in Atlas stays quiet', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        await setStatus(t1.id, 'done');
+        await jiraSync.syncNow();
+        expect(transitioned).toEqual(['ATL-1']);
+        const postedAtDone = posted.length;
+
+        fieldsOf('ATL-1')['summary'] = 'Edited after done';
+        await jiraSync.syncNow();
+        await jiraSync.syncNow();
+        await setStatus(t1.id, 'in_progress');
+        await jiraSync.syncNow();
+        expect(posted).toHaveLength(postedAtDone);
+        expect(transitioned).toEqual(['ATL-1']);
+    });
+
+    it('a revoked token mid-life keeps every Task, and the next good sync carries on', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+
+        failStatus = 401;
+        await expect(jiraSync.syncNow()).rejects.toThrow();
+        expect((await jiraSync.getConfig()).last_sync_ok).toBe(false);
+        expect(await count('items')).toBe(1);
+
+        failStatus = null;
+        await setStatus(t1.id, 'in_progress');
+        await jiraSync.syncNow();
+        expect(posted.some((p) => p.body.includes('work in progress'))).toBe(true);
+        expect((await jiraSync.getConfig()).last_sync_ok).toBe(true);
+    });
+
+    it('tick: a full sync only once the poll interval passes; a status change posts in between', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        const t0 = new Date();
+        await jiraSync.tick(t0); // never synced → full sync
+        expect(searches()).toBeGreaterThan(0);
+        const searchesAfterFirst = searches();
+        const t1 = await taskFor('ATL-1');
+        await setStatus(t1.id, 'in_progress');
+        posted = [];
+
+        await jiraSync.tick(new Date(Date.now() + 60_000)); // inside the 60-min window
+        expect(searches()).toBe(searchesAfterFirst);
+        expect(posted).toHaveLength(1);
+
+        await jiraSync.tick(new Date(Date.now() + 61 * 60_000)); // window passed
+        expect(searches()).toBeGreaterThan(searchesAfterFirst);
+    });
+
+    it('tick does nothing for a disconnected bridge', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.disconnect();
+        await jiraSync.tick(new Date());
+        expect(fakeFetch).not.toHaveBeenCalled();
+    });
+});

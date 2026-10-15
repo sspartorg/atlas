@@ -137,6 +137,48 @@ describe('ai_enabled enrichment', () => {
         expect(body.ai_enabled).toBe(true);
     });
 
+    it('PATCH /api/settings/notifications validates quiet hours and the idle threshold', async () => {
+        const patch = (payload: Record<string, unknown>) =>
+            app.inject({ method: 'PATCH', url: '/api/settings/notifications', payload });
+        for (const bad of [
+            { quiet_hours_from: '25:00' },
+            { quiet_hours_to: '7:5' },
+            { quiet_hours_enabled: 2 },
+            { terminal_idle_notify_seconds: 59 },
+            { terminal_idle_notify_seconds: 3601 },
+            { external_notification_event_toggles: { 'agent.failed': 'yes' } },
+        ]) {
+            expect((await patch(bad)).statusCode, JSON.stringify(bad)).toBe(400);
+        }
+        const ok = await patch({
+            quiet_hours_enabled: 1,
+            quiet_hours_from: '23:15',
+            quiet_hours_to: '07:45',
+            terminal_idle_notify_seconds: 600,
+            external_notification_event_toggles: { 'agent.failed': false },
+        });
+        expect(ok.statusCode).toBe(200);
+        expect(JSON.parse(ok.body)).toMatchObject({
+            quiet_hours_enabled: 1,
+            quiet_hours_from: '23:15',
+            quiet_hours_to: '07:45',
+            terminal_idle_notify_seconds: 600,
+        });
+    });
+
+    it('switching provider to Teams and back keeps the Telegram token', async () => {
+        const ext = (payload: Record<string, unknown>) =>
+            app.inject({ method: 'PATCH', url: '/api/settings/external-notification', payload });
+        await ext({ external_notification_token: 'tg-token', external_notification_chat_id: '42' });
+        await ext({ external_notification_provider: 'teams' });
+        const back = await ext({ external_notification_provider: 'telegram' });
+        expect(JSON.parse(back.body)).toMatchObject({
+            external_notification_provider: 'telegram',
+            external_notification_token_set: true,
+            external_notification_chat_id: '42',
+        });
+    });
+
     it('PATCH /api/settings/profile includes ai_enabled', async () => {
         const res = await app.inject({
             method: 'PATCH',
