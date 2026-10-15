@@ -39,6 +39,12 @@ export async function goto(
     const onRequestFailed = (req: { url(): string; failure(): { errorText: string } | null }) => {
         const failure = req.failure();
         const summary = `${req.url()} ${failure?.errorText ?? ''}`;
+        // net::ERR_ABORTED only means the browser stopped the request: the
+        // page navigated away (a spec calling goto() while the previous page
+        // is still loading its lazy chunks or data) or the app cancelled a
+        // fetch it no longer needed. Neither is a failure. Real ones —
+        // refused connections, DNS, 404/500 (console errors) — still fail.
+        if (/net::ERR_ABORTED/.test(summary)) return;
         // /api/events is the SSE long-poll opened on every page mount.
         // When the page navigates away (or a second EventSource replaces
         // the first), the prior request aborts with net::ERR_ABORTED —
@@ -52,13 +58,6 @@ export async function goto(
         // font fetch, the page navigates away before the woff2 lands).
         // The font is purely decorative — abort is benign.
         if (/fonts\.gstatic\.com.*woff2?/.test(summary) && /ERR_ABORTED|net::ERR_/.test(summary)) {
-            return;
-        }
-        // A workflow run's Changes section reads its diff (several git
-        // processes) once it nears the viewport. A spec that navigates on
-        // right after its assertion aborts that read-only GET mid-flight —
-        // the same benign navigation abort as the two cases above.
-        if (/\/api\/workflow-runs\/[^/]+\/diff\b/.test(summary) && /ERR_ABORTED/.test(summary)) {
             return;
         }
         if (allow.some((r) => r.test(summary))) return;
