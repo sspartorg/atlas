@@ -78,6 +78,8 @@ function StatusChip({ status }: { status: { kind: StatusKind; label: string } })
     );
 }
 
+const COLUMNS = '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px';
+
 const HEADER_SX = {
     fontSize: 11,
     fontWeight: 600,
@@ -97,12 +99,15 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
             }}
         >
             <Box sx={{ overflowX: 'auto' }}>
-                <Box sx={{ minWidth: 1100 }}>
+                {/* Phones: no header, and each row wraps into a card — label +
+                    actions on top, the other cells as chips underneath — so
+                    Edit/Delete never sit behind a sideways scroll. */}
+                <Box sx={{ minWidth: { xs: 0, md: 1100 } }}>
                     {/* Header row */}
                     <Box
                         sx={{
-                            display: 'grid',
-                            gridTemplateColumns: '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px',
+                            display: { xs: 'none', md: 'grid' },
+                            gridTemplateColumns: COLUMNS,
                             alignItems: 'center',
                             gap: 4,
                             px: 4,
@@ -127,11 +132,11 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
                             <Box
                                 key={c.id}
                                 sx={{
-                                    display: 'grid',
-                                    gridTemplateColumns:
-                                        '1.4fr 1fr 0.7fr 1.2fr 1.4fr 0.9fr 0.9fr 80px',
+                                    display: { xs: 'flex', md: 'grid' },
+                                    flexWrap: 'wrap',
+                                    gridTemplateColumns: COLUMNS,
                                     alignItems: 'center',
-                                    gap: 4,
+                                    gap: { xs: 2, md: 4 },
                                     px: 4,
                                     py: 4,
                                     borderBottom: `1px solid ${ATLAS_PALETTE.slate06}`,
@@ -146,6 +151,8 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
                                         alignItems: 'center',
                                         gap: 2,
                                         minWidth: 0,
+                                        order: { xs: -2, md: 0 },
+                                        flex: { xs: '1 1 calc(100% - 96px)', md: 'initial' },
                                     }}
                                 >
                                     <Box
@@ -241,6 +248,7 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
 
                                 <Typography
                                     sx={{
+                                        maxWidth: '100%',
                                         fontFamily: MONO,
                                         fontSize: 12,
                                         color: ATLAS_PALETTE.slate70,
@@ -266,7 +274,14 @@ export function CredentialsTable({ rows, onEdit, onDelete }: Props) {
                                     {relativeTime(c.last_used_at)}
                                 </Typography>
 
-                                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                                <Box
+                                    sx={{
+                                        display: 'flex',
+                                        justifyContent: 'flex-end',
+                                        gap: 0.5,
+                                        order: { xs: -1, md: 0 },
+                                    }}
+                                >
                                     <Tooltip title="Edit">
                                         <IconButton size="small" onClick={() => onEdit(c.id)}>
                                             <EditOutlined
