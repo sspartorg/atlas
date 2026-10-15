@@ -119,13 +119,18 @@ export function NotificationsTab() {
                 : 'Connected · message delivered'
             : '';
 
+    // Follow each saved value only when THAT value changes. Re-seeding every
+    // field on any settings refetch wiped whatever was being typed when an
+    // unrelated save (provider switch, token blur) came back. Token and
+    // webhook never round-trip (redacted), so they clear on their own save.
+    const savedProvider = settings?.external_notification_provider ?? 'telegram';
+    const savedChatId = settings?.external_notification_chat_id ?? '';
     useEffect(() => {
-        if (!settings) return;
-        setProvider(settings.external_notification_provider ?? 'telegram');
-        setToken(settings.external_notification_token ?? '');
-        setChatId(settings.external_notification_chat_id ?? '');
-        setWebhookUrl(settings.external_notification_webhook_url ?? '');
-    }, [settings]);
+        setProvider(savedProvider);
+    }, [savedProvider]);
+    useEffect(() => {
+        setChatId(savedChatId);
+    }, [savedChatId]);
 
     function commitProvider(next: ExternalNotificationProvider) {
         if (next === (settings?.external_notification_provider ?? 'telegram')) return;
@@ -146,7 +151,12 @@ export function NotificationsTab() {
         if (trimmed.length === 0) return;
         updateExternal.mutate(
             { external_notification_webhook_url: trimmed },
-            { onSuccess: () => toast.show({ message: 'Webhook URL saved' }) }
+            {
+                onSuccess: () => {
+                    setWebhookUrl('');
+                    toast.show({ message: 'Webhook URL saved' });
+                },
+            }
         );
     }
 
@@ -208,7 +218,10 @@ export function NotificationsTab() {
         }
         if (Object.keys(patch).length === 0) return;
         updateExternal.mutate(patch, {
-            onSuccess: () => toast.show({ message: 'Notification channel saved' }),
+            onSuccess: () => {
+                if (patch.external_notification_token) setToken('');
+                toast.show({ message: 'Notification channel saved' });
+            },
         });
     }
 
@@ -257,10 +270,11 @@ export function NotificationsTab() {
     const quietEnabled = settings?.quiet_hours_enabled === 1;
 
     useEffect(() => {
-        if (!settings) return;
-        if (settings.quiet_hours_from) setQuietFrom(settings.quiet_hours_from);
-        if (settings.quiet_hours_to) setQuietTo(settings.quiet_hours_to);
-    }, [settings]);
+        if (settings?.quiet_hours_from) setQuietFrom(settings.quiet_hours_from);
+    }, [settings?.quiet_hours_from]);
+    useEffect(() => {
+        if (settings?.quiet_hours_to) setQuietTo(settings.quiet_hours_to);
+    }, [settings?.quiet_hours_to]);
 
     // Terminal idle threshold (minutes). Server stores seconds; UI prefers
     // minutes because the practical range is 1-60.

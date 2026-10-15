@@ -251,6 +251,30 @@ describe('NotificationsTab', () => {
         expect(patch).not.toHaveBeenCalled();
     });
 
+    it('a save coming back does not wipe a field still being typed', async () => {
+        let current = settings({ external_notification_token_set: false, external_notification_chat_id: null });
+        server.use(
+            http.get(`${BASE}/settings`, () => HttpResponse.json(current)),
+            http.patch(`${BASE}/settings/external-notification`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>;
+                current = settings({
+                    external_notification_token_set: true,
+                    external_notification_chat_id: (body['external_notification_chat_id'] as string | undefined) ?? null,
+                });
+                return HttpResponse.json(current);
+            }),
+            ...defaultHandlers
+        );
+        renderWithProviders(<NotificationsTab />);
+        const token = (await screen.findAllByPlaceholderText(/123456789/i))[0] as HTMLInputElement;
+        const chat = screen.getByPlaceholderText(/-100/) as HTMLInputElement;
+        fireEvent.change(token, { target: { value: 'new-token' } });
+        fireEvent.change(chat, { target: { value: '42' } }); // typed, not yet blurred
+        fireEvent.blur(token); // token save → settings refetch
+        await waitFor(() => expect(screen.getByPlaceholderText(/Stored/)).toBeInTheDocument());
+        expect(chat).toHaveValue('42');
+    });
+
     it('clicking the eye after typing a token does not blur-save it', async () => {
         const patch = vi.fn();
         server.use(
