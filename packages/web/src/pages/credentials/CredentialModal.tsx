@@ -31,6 +31,7 @@ import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import type { ICredential } from '@atlas/shared';
 import { FormHeading } from '../../components/FormHeading.js';
 import { ApiErrorAlert } from '../../components/ApiErrorAlert.js';
+import { FolderPicker } from '../../components/FolderPicker.js';
 
 export type CredentialModalMode = { kind: 'add' } | { kind: 'edit'; credential: ICredential };
 
@@ -602,17 +603,35 @@ export function CredentialModal({ open, mode, onClose }: Props) {
                         {chosenKind === 'app' && (
                             <>
                                 {mode.kind !== 'edit' && (
-                                    <TextField
-                                        fullWidth
-                                        size="small"
-                                        required
-                                        label="Bot info folder"
-                                        value={botInfoPath}
-                                        onChange={(e) => setBotInfoPath(e.target.value)}
-                                        placeholder="C:\Users\you\AIPrograms\atlas\bots-info\atlas-bot"
-                                        helperText="Folder holding app-config.json and one .pem file. Atlas reads and encrypts them — the files stay put."
-                                        sx={{ mb: 3 }}
-                                    />
+                                    <Box sx={{ mb: 3 }}>
+                                        <Typography
+                                            variant="caption"
+                                            sx={{
+                                                display: 'block',
+                                                color: ATLAS_PALETTE.slate60,
+                                                mb: 1,
+                                            }}
+                                        >
+                                            Bot info folder *
+                                        </Typography>
+                                        <FolderPicker
+                                            ariaLabel="Bot info folder"
+                                            value={botInfoPath}
+                                            onChange={setBotInfoPath}
+                                            placeholder="C:\Users\you\AIPrograms\atlas\bots-info\atlas-bot"
+                                            size="small"
+                                        />
+                                        <Typography
+                                            sx={{
+                                                fontSize: 12,
+                                                color: ATLAS_PALETTE.slate60,
+                                                mt: 1,
+                                            }}
+                                        >
+                                            Folder holding app-config.json and one .pem file. Atlas
+                                            reads and encrypts them — the files stay put.
+                                        </Typography>
+                                    </Box>
                                 )}
                                 <TextField
                                     fullWidth
