@@ -128,18 +128,8 @@ describe('ModelRegistryTab', () => {
             http.get('http://localhost:3000/api/cli-models', () => HttpResponse.json(SEED_MODELS))
         );
         renderWithProviders(<ModelRegistryTab />);
-        // Wait for models to render then click the model row (role=button)
-        const modelRows = await screen.findAllByRole('button');
-        // Find the row with the model name text (not Remove/Add buttons)
-        const modelRow = modelRows.find(
-            (el) =>
-                el.getAttribute('role') === 'button' &&
-                !el.getAttribute('aria-label') &&
-                (el.textContent ?? '').includes('claude-opus-4-7')
-        );
-        if (modelRow) {
-            fireEvent.click(modelRow);
-        }
+        // The name + note is a real, labelled button (keyboard reachable).
+        fireEvent.click(await screen.findByRole('button', { name: 'Edit claude-opus-4-7' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeInTheDocument());
     });
 

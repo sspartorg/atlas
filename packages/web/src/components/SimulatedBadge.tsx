@@ -25,7 +25,9 @@ export function SimulatedBadge({ size = 'md' }: Props) {
                     borderRadius: '9999px',
                     bgcolor: 'rgba(243, 182, 90, 0.12)',
                     border: '1px solid rgba(243, 182, 90, 0.4)',
-                    color: ATLAS_PALETTE.orange,
+                    // Light mode: a darker amber — the palette orange is 4.1:1
+                    // on this tint, under WCAG AA's 4.5:1 for small text.
+                    color: (t) => (t.palette.mode === 'dark' ? ATLAS_PALETTE.orange : '#7F4F14'),
                     fontSize: isSmall ? 10 : 11,
                     fontWeight: 600,
                     letterSpacing: '0.04em',

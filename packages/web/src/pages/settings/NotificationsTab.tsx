@@ -315,10 +315,7 @@ export function NotificationsTab() {
             });
             return;
         }
-        if (
-            quietFrom === settings?.quiet_hours_from &&
-            quietTo === settings?.quiet_hours_to
-        ) {
+        if (quietFrom === settings?.quiet_hours_from && quietTo === settings?.quiet_hours_to) {
             return;
         }
         updateNotifications.mutate(
@@ -364,6 +361,7 @@ export function NotificationsTab() {
                         <Select
                             size="small"
                             value={provider}
+                            inputProps={{ 'aria-label': 'Notification provider' }}
                             onChange={(e) =>
                                 commitProvider(e.target.value as ExternalNotificationProvider)
                             }
@@ -397,6 +395,7 @@ export function NotificationsTab() {
                                     // masked — mono's bullets are wide and look chunky
                                     // on iOS where the input is forced to 16 px.
                                     inputProps={{
+                                        'aria-label': 'Telegram bot token',
                                         style: {
                                             fontFamily: showToken ? MONO : 'inherit',
                                             fontSize: 13,
@@ -469,7 +468,10 @@ export function NotificationsTab() {
                                     onChange={(e) => setChatId(e.target.value)}
                                     onBlur={commitConnection}
                                     placeholder="-100123456789"
-                                    inputProps={{ style: { fontFamily: MONO, fontSize: 13 } }}
+                                    inputProps={{
+                                        'aria-label': 'Telegram chat ID',
+                                        style: { fontFamily: MONO, fontSize: 13 },
+                                    }}
                                 />
                             </Row>
                             <Divider />
@@ -498,6 +500,7 @@ export function NotificationsTab() {
                                             : 'https://…powerautomate.com/…/triggers/manual/paths/invoke?…sig=…'
                                     }
                                     inputProps={{
+                                        'aria-label': 'Teams webhook URL',
                                         style: {
                                             fontFamily:
                                                 showWebhook || revealedWebhook !== null
@@ -680,6 +683,7 @@ export function NotificationsTab() {
                                     checked={isToggled(key)}
                                     onChange={(_, v) => setToggle(key, v)}
                                     color="success"
+                                    slotProps={{ input: { 'aria-label': meta.title } }}
                                 />
                             </Box>
                         );
@@ -710,6 +714,7 @@ export function NotificationsTab() {
                                 checked={quietEnabled}
                                 onChange={(_, v) => setQuietHoursEnabled(v)}
                                 color="success"
+                                slotProps={{ input: { 'aria-label': 'Quiet hours' } }}
                             />
                         </Box>
                     </Row>
@@ -781,7 +786,12 @@ export function NotificationsTab() {
                                 value={idleMinutes}
                                 onChange={(e) => setIdleMinutes(Number(e.target.value))}
                                 onBlur={commitIdleMinutes}
-                                inputProps={{ min: 1, max: 60, step: 1 }}
+                                inputProps={{
+                                    'aria-label': 'Terminal idle threshold in minutes',
+                                    min: 1,
+                                    max: 60,
+                                    step: 1,
+                                }}
                                 sx={{ width: 90 }}
                             />
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>

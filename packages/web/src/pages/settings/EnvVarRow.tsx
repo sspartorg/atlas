@@ -95,7 +95,7 @@ export function EnvVarRow({ env, value, onChange }: Props) {
                     value={LOG_LEVELS.includes(value as (typeof LOG_LEVELS)[number]) ? value : ''}
                     onChange={(e) => onChange(e.target.value)}
                     inputProps={{ style: { fontFamily: MONO, fontSize: 13 } }}
-                    SelectProps={{ displayEmpty: true }}
+                    SelectProps={{ displayEmpty: true, inputProps: { 'aria-label': env.key } }}
                 >
                     <MenuItem value="" sx={{ fontFamily: MONO, fontSize: 13, fontStyle: 'italic' }}>
                         (default — info)
@@ -113,7 +113,7 @@ export function EnvVarRow({ env, value, onChange }: Props) {
                     type={isSecret && !revealed ? 'password' : 'text'}
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
-                    inputProps={{ style: { fontFamily: MONO, fontSize: 13 } }}
+                    inputProps={{ 'aria-label': env.key, style: { fontFamily: MONO, fontSize: 13 } }}
                     slotProps={{
                         input: {
                             endAdornment: (

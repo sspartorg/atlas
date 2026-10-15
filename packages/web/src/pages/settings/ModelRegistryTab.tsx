@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -184,8 +185,6 @@ function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
                     {models.map((m) => (
                         <Box
                             key={m.id}
-                            role="button"
-                            onClick={() => openEdit(m)}
                             sx={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -200,7 +199,20 @@ function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
                                 '&:hover': { background: ATLAS_PALETTE.cloud },
                             }}
                         >
-                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                            {/* The name + note is the edit button; the row itself is a
+                                plain container so Remove isn't a button inside a button
+                                (axe nested-interactive) and Edit is reachable by Tab. */}
+                            <ButtonBase
+                                onClick={() => openEdit(m)}
+                                aria-label={`Edit ${m.model_name}`}
+                                sx={{
+                                    flex: 1,
+                                    minWidth: 0,
+                                    display: 'block',
+                                    textAlign: 'left',
+                                    borderRadius: '4px',
+                                }}
+                            >
                                 <Typography
                                     sx={{
                                         fontFamily: MONO,
@@ -230,13 +242,10 @@ function CliCard({ cli, models }: { cli: AgentCli; models: ICliModel[] }) {
                                         {m.note}
                                     </Typography>
                                 )}
-                            </Box>
+                            </ButtonBase>
                             <IconButton
                                 size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setPendingDelete(m);
-                                }}
+                                onClick={() => setPendingDelete(m)}
                                 aria-label={`Remove ${m.model_name}`}
                                 sx={{ flexShrink: 0 }}
                             >

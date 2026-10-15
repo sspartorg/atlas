@@ -184,7 +184,13 @@ export function FolderPicker(props: Props) {
 
     const statAdornment = (() => {
         if (stat === 'checking') {
-            return <CircularProgress size={14} sx={{ color: ATLAS_PALETTE.slate40 }} />;
+            return (
+                <CircularProgress
+                    size={14}
+                    aria-label="Checking folder"
+                    sx={{ color: ATLAS_PALETTE.slate40 }}
+                />
+            );
         }
         if (stat === 'exists') {
             return (
@@ -337,7 +343,7 @@ export function FolderPicker(props: Props) {
                                 height: 200,
                             }}
                         >
-                            <CircularProgress size={20} />
+                            <CircularProgress size={20} aria-label="Loading folders" />
                         </Box>
                     ) : listError ? (
                         <Box

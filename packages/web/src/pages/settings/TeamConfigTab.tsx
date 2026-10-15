@@ -122,6 +122,7 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                         placeholder="https://github.com/your-org/atlas-team-config.git"
                         onChange={(e) => setRepoUrl(e.target.value)}
                         onBlur={commitRepoUrl}
+                        slotProps={{ htmlInput: { 'aria-label': 'Team config repo URL' } }}
                     />
                 </FormRow>
                 <FormRow label="Credential">
@@ -154,6 +155,7 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                         helperText="A publisher's credential needs push rights here — an admin bypass on a protected branch, or a dedicated sync branch."
                         onChange={(e) => setBranch(e.target.value)}
                         onBlur={commitBranch}
+                        slotProps={{ htmlInput: { 'aria-label': 'Team config branch' } }}
                         sx={{ width: 240 }}
                     />
                 </FormRow>
