@@ -269,7 +269,8 @@ function JiraForm({ cfg }: { cfg: IJiraConfig }) {
                 >
                     <Typography
                         sx={{
-                            flex: 1,
+                            // Phones: full row, so Sync now drops to its own line.
+                            flex: { xs: '1 1 100%', sm: 1 },
                             minWidth: 200,
                             fontSize: 12.5,
                             color:

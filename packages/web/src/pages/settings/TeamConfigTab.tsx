@@ -122,7 +122,13 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                         select
                         fullWidth
                         size="small"
-                        value={cfg.credential_id ?? ''}
+                        // Blank until the saved credential is in the loaded list —
+                        // MUI warns on a value with no matching option.
+                        value={
+                            credentials.some((c) => c.id === cfg.credential_id)
+                                ? (cfg.credential_id ?? '')
+                                : ''
+                        }
                         helperText="My own GitHub credential with access to the repo (write access for a publisher). Also used to clone the team's project repos."
                         onChange={(e) => save({ credential_id: e.target.value || null })}
                         slotProps={{ htmlInput: { 'aria-label': 'Team config credential' } }}
@@ -177,7 +183,8 @@ function TeamConfigForm({ cfg }: { cfg: ITeamConfig }) {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pt: 1, flexWrap: 'wrap' }}>
                     <Typography
                         sx={{
-                            flex: 1,
+                            // Phones: full row, so Sync now drops to its own line.
+                            flex: { xs: '1 1 100%', sm: 1 },
                             minWidth: 200,
                             fontSize: 12.5,
                             whiteSpace: 'pre-line',
