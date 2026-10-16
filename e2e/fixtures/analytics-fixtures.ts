@@ -118,8 +118,9 @@ export function workflowsFixture() {
         agents: [
             agent('agent-architect', 'Architect', '#5B7CFA', 29, 27, 0, 2, 1, 0, 21.8, 190),
             agent('agent-architect-reviewer', 'Architect Reviewer', '#4263CB', 29, 22, 6, 1, 0, 0, 3.1, 24),
-            agent('agent-coder', 'Coder', '#7C3AED', 64, 51, 4, 9, 12, 7, 88.4, 640),
+            // In name order, as the API returns them (fleetPerformance sorts by name, ADR 0023).
             agent('agent-code-reviewer', 'Code Reviewer', '#0891B2', 64, 46, 17, 1, 2, 1, 14.2, 95),
+            agent('agent-coder', 'Coder', '#7C3AED', 64, 51, 4, 9, 12, 7, 88.4, 640),
             agent('agent-qa', 'QA Engineer', '#059669', 28, 25, 1, 2, 3, 2, 9.7, 210),
         ],
         previous: { runs: 35, success_rate: 0.81 },

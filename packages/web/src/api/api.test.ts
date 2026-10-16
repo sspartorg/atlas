@@ -76,8 +76,9 @@ describe('api.counts', () => {
     });
     it('GET /dashboard', async () => {
         const cap = captureGet('/dashboard', {});
-        await api.counts.dashboard();
-        expect(cap.url).toMatch(/\/dashboard$/);
+        await api.counts.dashboard('Asia/Tokyo');
+        // The viewer's zone, so the month spend starts where Analytics' month does.
+        expect(cap.url).toMatch(/\/dashboard\?tz=Asia%2FTokyo$/);
     });
 });
 

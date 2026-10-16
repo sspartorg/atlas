@@ -278,7 +278,8 @@ export const api = {
 
     counts: {
         sidenav: () => get<SidenavCounts>('/counts'),
-        dashboard: () => get<DashboardResponse>('/dashboard'),
+        // Same zone as Analytics, so the month spend starts at the same local month start.
+        dashboard: (tz: string = viewerTz()) => get<DashboardResponse>(`/dashboard?tz=${encodeURIComponent(tz)}`),
         project: (id: string) => get<ProjectCounts>(`/counts/project/${id}`),
         queueByAgent: () => get<Record<string, number>>('/counts/queue-by-agent'),
     },

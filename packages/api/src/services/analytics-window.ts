@@ -3,6 +3,20 @@ import type { AnalyticsWindow, IAnalyticsPeriod } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { iso } from './agent-scorecard.js';
 
+// Allow `Area/Location` style IANA names plus UTC. Anything else falls back to UTC.
+const TZ_RE = /^[A-Za-z_+\-/]{1,64}$/;
+
+export function normalizeTz(raw: unknown): string {
+    if (typeof raw !== 'string' || !TZ_RE.test(raw)) return 'UTC';
+    // A well-formed but unknown zone would otherwise reach Postgres as a 500.
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: raw });
+        return raw;
+    } catch {
+        return 'UTC';
+    }
+}
+
 const DAYS: Record<Exclude<AnalyticsWindow, 'month'>, number> = { '7d': 7, '30d': 30, '90d': 90 };
 
 /**
@@ -49,4 +63,14 @@ export async function resolveWindow(
         previous_start: iso(row?.prev_start) ?? n,
         previous_end: iso(row?.prev_end) ?? n,
     };
+}
+
+/**
+ * Agent-test runs (`items.is_test`) are left out of spend, as they are of
+ * every other Analytics number — and of the Dashboard's month spend, so the
+ * two still agree. Their cost is on the agent's Tests tab. A run with no item
+ * (a standalone agent run) is real spend and stays in.
+ */
+export function notTestRun(itemIdColumn: string) {
+    return sql<boolean>`NOT EXISTS (SELECT 1 FROM items ti WHERE ti.id = ${sql.ref(itemIdColumn)} AND ti.is_test)`;
 }

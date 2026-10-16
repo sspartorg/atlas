@@ -4,6 +4,7 @@ import { WORKFLOW_PARK_KIND_LABELS } from '../../packages/shared/src/constants/i
 import type { WorkflowParkKind } from '../../packages/shared/src/types/index.js';
 import { goto } from '../helpers/nav.js';
 import { API } from '../helpers/api.js';
+import { one, sql } from '../helpers/db.js';
 
 // The Analytics pages against the REAL API over a realistic seed
 // (`fixtures/analytics-seed.ts`): every number below is hand-computed from
@@ -24,19 +25,6 @@ function analyticsSeed(clean = false): void {
         stdio: 'pipe',
     });
 }
-
-/** Rows of a query on the e2e DB, tab-separated columns. */
-function sql(query: string): string[][] {
-    const out = execFileSync('docker', ['exec', 'atlas-postgres', 'psql', '-U', 'atlas', '-d', 'atlas_e2e', '-tAF', '\t', '-c', query], {
-        encoding: 'utf8',
-    });
-    return out
-        .trim()
-        .split('\n')
-        .filter(Boolean)
-        .map((l) => l.split('\t'));
-}
-const one = (query: string): string => sql(query)[0]?.[0] ?? '';
 
 /** The window's first instant, in UTC, as the page defines it. */
 function start(w: Win): string {
@@ -91,15 +79,15 @@ function successRate(w: Win): string {
     return rate(Number(row?.[0]), Number(row?.[1]));
 }
 
-/** Completed agent runs + closed terminal sessions in the window. */
-function spend(w: Win): string {
-    return usd(
-        Number(
-            one(`SELECT COALESCE((SELECT SUM(total_cost_usd) FROM agent_runs WHERE status = 'completed' AND completed_at >= ${start(w)}), 0)
-                      + COALESCE((SELECT SUM(total_cost_usd) FROM cli_sessions WHERE status = 'closed' AND closed_at >= ${start(w)}), 0)`),
-        ),
+/** Completed agent runs (agent tests out) + closed terminal sessions in the window. */
+function spendUsd(w: Win): number {
+    return Number(
+        one(`SELECT COALESCE((SELECT SUM(r.total_cost_usd) FROM agent_runs r LEFT JOIN items i ON i.id = r.item_id
+                               WHERE r.status = 'completed' AND NOT COALESCE(i.is_test, false) AND r.completed_at >= ${start(w)}), 0)
+                  + COALESCE((SELECT SUM(total_cost_usd) FROM cli_sessions WHERE status = 'closed' AND closed_at >= ${start(w)}), 0)`),
     );
 }
+const spend = (w: Win): string => usd(spendUsd(w));
 
 /**
  * Parks per kind in the window. A sub-task's park also parks its Task's run
@@ -170,6 +158,17 @@ test.describe('/analytics over the realistic seed, against the real API', () => 
             else expect(await barList(page, 'Park reasons')).toEqual(expected);
         });
     }
+
+    test('agent-test runs are not spend, and the Dashboard month spend equals Analytics month spend', async ({ page }) => {
+        // The seed's agent-test Tasks did spend: that is what the exclusion is for.
+        const testSpend = Number(one(`SELECT COALESCE(SUM(r.total_cost_usd), 0) FROM agent_runs r JOIN items i ON i.id = r.item_id WHERE i.is_test AND r.status = 'completed' AND r.completed_at >= ${start('90d')}`));
+        expect(testSpend).toBeGreaterThan(0);
+        await goto(page, '/analytics?tab=spend');
+        const month = await tile(page, 'Spend');
+        expect(month).toBe(spend('month'));
+        await goto(page, '/');
+        await expect(page.getByText(month, { exact: true }).first()).toBeVisible();
+    });
 
     test('the seed parks with every kind the engine writes, over 90 days', () => {
         const kinds = parks('90d').map(([label]) => label);

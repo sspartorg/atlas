@@ -446,8 +446,8 @@ export function AnalyticsTask() {
                                             py: 0.25,
                                             borderRadius: '999px',
                                             background: `${ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate40}1a`,
-                                            color:
-                                                ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate60,
+                                            // The tint carries the kind; chart hues as 10px text miss AA.
+                                            color: ATLAS_PALETTE.slate,
                                             fontFamily: MONO,
                                             fontSize: 10,
                                             fontWeight: 700,
@@ -505,7 +505,9 @@ export function AnalyticsTask() {
                                     textAlign: 'center',
                                 }}
                             >
-                                No items match the current filter.
+                                {typeFilter
+                                    ? 'No items match the current filter.'
+                                    : 'No completed runs on this Task or its sub-tasks yet.'}
                             </Typography>
                         )}
                     </Box>

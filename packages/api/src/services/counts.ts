@@ -1,4 +1,5 @@
 import type { ExpressionBuilder } from 'kysely';
+import { notTestRun, resolveWindow } from './analytics-window.js';
 import { db } from '../db/kysely-client.js';
 import type { DB } from '../db/types.js';
 import type { ICostSummary, ITerminalCostSummary } from '@atlas/shared';
@@ -202,10 +203,14 @@ export const countsService = {
         /* v8 ignore stop */
     },
 
-    async getDashboardKpis(): Promise<DashboardKpis> {
+    /**
+     * `tz` is the viewer's zone: the month spend starts at the same local month
+     * start as Analytics' `window=month` and leaves agent tests out the same
+     * way, so the two figures agree. No zone = the server's own.
+     */
+    async getDashboardKpis(tz: string = Intl.DateTimeFormat().resolvedOptions().timeZone): Promise<DashboardKpis> {
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-        const now = new Date();
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const monthStart = (await resolveWindow(tz, 'month')).start;
         const [
             activeAgents,
             tasks,
@@ -267,6 +272,7 @@ export const countsService = {
                     fn.countAll<string>().as('run_count'),
                 ])
                 .where('status', '=', 'completed')
+                .where(notTestRun('agent_runs.item_id'))
                 .where('completed_at', '>=', monthStart)
                 .executeTakeFirst(),
             // Manual terminal sessions for the same period. Same
