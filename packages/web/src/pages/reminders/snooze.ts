@@ -36,7 +36,7 @@ export function resolveZone(timeZone: string | null | undefined): string {
 }
 
 /** The instant a wall-clock time (given as UTC fields in `wall`) names in `zone`. */
-export function zonedWallToDate(wall: number, zone: string): Date {
+function zonedWallToDate(wall: number, zone: string): Date {
     // Wall time → instant; the second pass settles a DST change.
     const first = wall - zoneOffsetMs(wall, zone);
     return new Date(wall - zoneOffsetMs(first, zone));

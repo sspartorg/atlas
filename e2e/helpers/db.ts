@@ -18,7 +18,7 @@ export function sql(query: string): string[][] {
 export const one = (query: string): string => sql(query)[0]?.[0] ?? '';
 
 /** A SQL string literal. */
-export const lit = (v: string | null): string => (v === null ? 'NULL' : `'${v.replace(/'/g, "''")}'`);
+const lit = (v: string | null): string => (v === null ? 'NULL' : `'${v.replace(/'/g, "''")}'`);
 
 export interface NotificationRow {
     event_type: string;
