@@ -1,5 +1,7 @@
 import { settingsService } from '../settings.js';
-import type { ExternalNotificationTransport } from './types.js';
+import { TRANSPORT_TIMEOUT_MS, type ExternalNotificationTransport } from './types.js';
+
+const TELEGRAM_MAX_CHARS = 4096;
 
 // Test hook: the e2e suite points this at a local fake so Send Test runs offline.
 function telegramApiBase(): string {
@@ -26,10 +28,15 @@ async function postMessage(
     message: string,
 ): Promise<void> {
     const url = `${telegramApiBase()}/bot${config.token}/sendMessage`;
+    // Plain text, no parse_mode: messages carry paths, error text and URLs
+    // with `_` / `*` / `[`, and Telegram's Markdown parser rejected those
+    // sends outright (400 "can't parse entities").
+    const text = message.length > TELEGRAM_MAX_CHARS ? `${message.slice(0, TELEGRAM_MAX_CHARS - 1)}…` : message;
     const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: config.chatId, text: message, parse_mode: 'Markdown' }),
+        body: JSON.stringify({ chat_id: config.chatId, text }),
+        signal: AbortSignal.timeout(TRANSPORT_TIMEOUT_MS),
     });
     if (!res.ok) {
         const body = await res.text();
@@ -39,7 +46,7 @@ async function postMessage(
 
 async function fetchBotUsername(token: string): Promise<string | null> {
     try {
-        const res = await fetch(`${telegramApiBase()}/bot${token}/getMe`);
+        const res = await fetch(`${telegramApiBase()}/bot${token}/getMe`, { signal: AbortSignal.timeout(TRANSPORT_TIMEOUT_MS) });
         if (!res.ok) return null;
         const data = (await res.json()) as { ok?: boolean; result?: { username?: string } };
         const u = data?.result?.username;

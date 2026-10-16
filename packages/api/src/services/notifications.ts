@@ -30,6 +30,9 @@ interface CreateInput {
     /** False = log-only (external-only reminder, MCP send): no feed row, no
      *  unread count, no web push. Defaults to true. */
     in_app?: boolean;
+    /** The Settings toggle this event is gated by (the outward send passes the
+     *  same key). Web push follows it; null = only quiet hours hold the push. */
+    event_key?: string | null;
 }
 
 interface ListFilter {
@@ -233,6 +236,7 @@ export const notificationsService = {
                 link_url: linkUrl,
                 reminder_id: data.reminder_id ?? null,
                 in_app: data.in_app ?? true,
+                external_event_key: data.event_key ?? null,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -254,7 +258,7 @@ export const notificationsService = {
         // delivery hiccup can never wedge the in-app feed. The push service
         // catches its own errors and updates `push_status` accordingly; the
         // wrapper here just guarantees a synchronous create() return.
-        void sendWebPushForNotification(created.id).catch(() => {});
+        void sendWebPushForNotification(created.id, data.event_key ?? null).catch(() => {});
         return created;
     },
 

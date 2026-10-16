@@ -117,6 +117,8 @@ describe('red CI on a Task in review', () => {
         const [n] = await notifications();
         expect(n?.kind).toBe('needs_you');
         expect(n?.event_type).toBe('ci_failed');
+        // Gated (outward + web push) by its own Settings toggle.
+        expect(n?.external_event_key).toBe('ci.failed');
         expect(n?.message).toContain('CI failed on ATL-T (test)');
 
         const l = await link();

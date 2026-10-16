@@ -95,22 +95,26 @@ export async function runAutoFetch(repoId: string): Promise<void> {
 
     if (!repo.credential_id) {
         await schedulesService.recordRun(repoId, 'failure', 'no credential attached', schedule.next_run_at);
-        await notificationsService.create({
+        const failed = await notificationsService.create({
             event_type: 'autofetch_failed',
+            event_key: 'autofetch.failed',
             project_id: projectId,
             message: `Auto-fetch skipped on "${project.name}/${repo.name}": no credential attached.`,
         });
+        await sendExternalForNotification(failed.id, failed.message, 'autofetch.failed').catch(() => {});
         broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'no credential attached' });
         return;
     }
     const cred = await credentialsService.get(repo.credential_id);
     if (!cred) {
         await schedulesService.recordRun(repoId, 'failure', 'credential missing', schedule.next_run_at);
-        await notificationsService.create({
+        const failed = await notificationsService.create({
             event_type: 'autofetch_failed',
+            event_key: 'autofetch.failed',
             project_id: projectId,
             message: `Auto-fetch failed on "${project.name}/${repo.name}": credential missing.`,
         });
+        await sendExternalForNotification(failed.id, failed.message, 'autofetch.failed').catch(() => {});
         broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'credential missing' });
         return;
     }
@@ -119,11 +123,13 @@ export async function runAutoFetch(repoId: string): Promise<void> {
         token = await credentialsService.getToken(repo.credential_id);
     } catch {
         await schedulesService.recordRun(repoId, 'failure', 'token unreadable', schedule.next_run_at);
-        await notificationsService.create({
+        const failed = await notificationsService.create({
             event_type: 'autofetch_failed',
+            event_key: 'autofetch.failed',
             project_id: projectId,
             message: `Auto-fetch failed on "${project.name}/${repo.name}": token unreadable.`,
         });
+        await sendExternalForNotification(failed.id, failed.message, 'autofetch.failed').catch(() => {});
         broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result: 'failure', detail: 'token unreadable' });
         return;
     }
@@ -180,12 +186,13 @@ export async function runAutoFetch(repoId: string): Promise<void> {
             );
             const disabled = await notificationsService.create({
                 event_type: 'autofetch_disabled',
+                event_key: 'autofetch.failed',
                 kind: 'needs_you',
                 project_id: projectId,
                 message: `Auto-fetch disabled on "${project.name}/${repo.name}": credential rejected ${count} times in a row. Re-attach credential and re-enable.`,
             });
             // On the row, so the Notification Log tracks it and quiet hours hold it.
-            await sendExternalForNotification(disabled.id, disabled.message).catch(() => {});
+            await sendExternalForNotification(disabled.id, disabled.message, 'autofetch.failed').catch(() => {});
             broadcastSSE({
                 type: 'autofetch_error',
                 autofetchId,
@@ -204,12 +211,13 @@ export async function runAutoFetch(repoId: string): Promise<void> {
     const evt = `autofetch_${result === 'success' ? 'success' : result === 'skipped' ? 'skipped' : result === 'conflict' ? 'conflict' : 'failed'}`;
     const done = await notificationsService.create({
         event_type: evt,
+        event_key: evt === 'autofetch_failed' || evt === 'autofetch_conflict' ? 'autofetch.failed' : null,
         kind: 'system',
         project_id: projectId,
         message: `Auto-fetch on "${project.name}/${repo.name}": ${detail}.`,
     });
-    if (result === 'failure' || (result === 'conflict' && schedule.conflict_policy === 'abort')) {
-        await sendExternalForNotification(done.id, done.message).catch(() => {});
+    if (evt === 'autofetch_failed' || (result === 'conflict' && schedule.conflict_policy === 'abort')) {
+        await sendExternalForNotification(done.id, done.message, 'autofetch.failed').catch(() => {});
     }
     broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result, detail });
 }

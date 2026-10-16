@@ -80,23 +80,36 @@ None.
 
 ## Notification dispatch model
 - **In-app notifications are always created** for every run completion (item-attached or freedom-mode, success or error). They appear in the In-App Feed regardless of any toggle. The "always published" invariant. The two log-only producers (external-only reminders, MCP `send-external`) are the exception by design: an outward message, not an inbox item.
-- **external notification delivery is gated by two checks:**
-  1. Per-event toggle in `settings.external_notification_event_toggles` (see Settings → Notifications). Off → the row stays `none`.
-  2. `settings.quiet_hours_enabled` — when `1`, a send inside the `quiet_hours_from` / `quiet_hours_to` window is **held** (`pending` + `external_deferred_at`) and the minute tick sends it once the window ends, prefixed `Held during quiet hours · HH:MM`. Nothing is dropped. `from == to` means no window. The flush re-checks the event toggle: one turned off while the row was held is **Skipped** (`none`), not sent. MCP `send-external` gets a log-only row, so it is held like everything else (before 2026-10-16 quiet hours dropped it).
-- **Workflow failures** (a run parked because something broke, or a queued Task that could not be dispatched) go out as `workflow.failed`; **Jira sync failures** as `jira.sync_failed`. Reminders (no event key; opt-in per reminder) and auto-fetch failures go through the same held path on their own row.
-- **Item-attached runs** map the external-notification event key from the item's final post-handoff status:
-  - `waiting_for_info` â†’ `item.status_changed:waiting_for_info`
-  - `in_review` â†’ `item.status_changed:in_review`
-  - any other status (e.g. `done`, `in_progress`) â†’ no external notification, in-app only.
-- **Freedom-mode runs** (no item attached) emit an external notification under `agent.run_finished_no_item` for both success and error paths.
-- **Errored runs** on item-attached agents emit under `agent.failed`.
+- **Outward delivery (Telegram / Teams) and web push follow one rule** (`outwardGate`, `services/external-notifications.ts`):
+  1. Per-event toggle in `settings.external_notification_event_toggles` (Settings → Notifications). Off → the row is `none` with reason `Skipped: "<toggle title>" is turned off in Settings`, so the Log shows it **Skipped** with **Send now** (before 2026-10-17 it was a bare `none` and the row vanished). Web push for that row is not sent.
+  2. Quiet hours (`quiet_hours_enabled = 1`, Owner zone `quiet_hours_timezone`): a send inside the window is **held** (`pending` + `external_deferred_at`), and its web push too (`push_deferred_at`, migration 015). The minute tick sends both once the window ends; the outward text is prefixed `Held during quiet hours · HH:MM`. Nothing is dropped. `from == to` = no window. The flush re-checks the toggle: turned off while held → **Skipped**. An in-app-only event (no key) is held by quiet hours only.
+- **Which events go outward** (Owner decision 2026-10-17: needs-you, failures and every Task finish):
+
+  | Event | event_type | Toggle key |
+  |---|---|---|
+  | Workflow parks on an item or project (question / rejection) | `workflow_run` | `item.status_changed:waiting_for_info` |
+  | Workflow park because something broke; queued Task could not start | `workflow_run` | `workflow.failed` |
+  | Workflow finished a Task with a PR | `workflow_run` | `item.status_changed:in_review` |
+  | Workflow finished a Task without a PR, or a project-level run | `workflow_run` | `workflow.finished` |
+  | Direct (non-workflow) agent run finished on an item | `agent_completed` | `workflow.finished` |
+  | Direct agent run errored on an item | `agent_error` | `agent.failed` |
+  | Standalone agent run finished / errored | `agent_completed_no_item` / `agent_error_no_item` | `agent.run_finished_no_item` / `agent.failed_no_item` |
+  | CI failed on a Task's PR | `ci_failed` | `ci.failed` |
+  | Jira sync failed (once per new failure) | `jira_sync` | `jira.sync_failed` |
+  | Auto-fetch failed (incl. no / missing / unreadable credential), conflict-abort, auto-disabled | `autofetch_failed` / `_conflict` / `_disabled` | `autofetch.failed` |
+  | Reminder fired with channel External or Both | `reminder` | `reminder.fired` |
+  | Terminal idle (default OFF) | `terminal.waiting_for_input` | `terminal.waiting_for_input` |
+  | MCP `send-external` | `mcp_external` (log-only) | its own free-form `event_key`, if any |
+
+  In-app only (no outward send): Jira imports / moves, sub-task done, auto-fetch success / skipped.
+- **Telegram is sent as plain text** (no `parse_mode`), capped at 4096 characters. With `parse_mode: 'Markdown'` Telegram rejected every message carrying an unbalanced `_` / `*` / `[` (paths, check names, error text) with 400 "can't parse entities" — most workflow parks never arrived (fixed 2026-10-17). Both transports time out after 15 s, so a hung send cannot stall the minute tick.
 - **Test Message** (`POST /api/settings/external-notification/test`) deliberately bypasses both checks â€” the Owner pressed Send Test, so a silent success would be indistinguishable from misconfiguration.
 
 ## Edge cases / quirks
 - The header "last delivery" age uses `useNow` to tick every minute â€” UI updates without refetch.
 - Marking all read does **not** mark externally delivered notifications as cancelled â€” it's a separate read-state field.
-- Quiet hours hold external notifications only — in-app notifications and web push keep arriving.
-- An off event toggle or an unconfigured channel leaves the row at `external_status='none'` — it never shows **Sent** unless a transport actually delivered. A quiet-hours send shows **Held** until the flush (2026-10-16; before, it was dropped to `none`).
+- Quiet hours hold outward sends and web push; in-app rows still arrive in the feed.
+- An unconfigured channel leaves the row at `external_status='none'` (not listed); an off toggle leaves `none` + a Skipped reason (listed). A row never shows **Sent** unless a transport actually delivered. A quiet-hours send shows **Held** until the flush (2026-10-16; before, it was dropped to `none`).
 - **Resend / Retry** send immediately, even inside quiet hours.
 - A send left in flight by a server that died mid-send is retried by the minute tick after 10 minutes, once; stuck again, it shows **Failed** ("Send interrupted twice … Press Retry").
 - Clicking a web-push notification marks it read (`sw.js` → `POST /api/notifications/:id/read`) before navigating.

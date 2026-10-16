@@ -84,6 +84,26 @@ describe('completeRun', () => {
         expect(sendExternalForNotification).toHaveBeenCalledWith(Number(n.id), expect.any(String), 'agent.run_finished_no_item');
     });
 
+    // A direct run on an item (not a workflow step) used to leave only a
+    // comment: nobody was told it finished.
+    it('a direct run on a Task notifies in-app and outward under the Task Finished key', SLOW, async () => {
+        const { sendExternalForNotification } = await import('./external-notifications.js');
+        vi.mocked(sendExternalForNotification).mockClear();
+        const taskId = await insertItem({ type: 'task', project_id: 'p1' });
+        await seedRun('r-item');
+        await completeRun('r-item', 'agent-coder', 'task', taskId, TRANSCRIPT);
+        const n = await testDb
+            .selectFrom('notifications')
+            .select(['id', 'event_type', 'item_id', 'kind', 'external_event_key', 'message'])
+            .where('event_type', '=', 'agent_completed')
+            .executeTakeFirstOrThrow();
+        expect(n.item_id).toBe(taskId);
+        expect(n.kind).toBe('update');
+        expect(n.external_event_key).toBe('workflow.finished');
+        expect(n.message).toContain(`finished its run on task ${taskId}`);
+        expect(sendExternalForNotification).toHaveBeenCalledWith(Number(n.id), n.message, 'workflow.finished');
+    });
+
     it('stores what the run actually did, parsed from its own transcript', SLOW, async () => {
         await seedRun('r-trace');
         await completeRun('r-trace', 'agent-coder', null, null, TRANSCRIPT);

@@ -29,3 +29,7 @@ export interface ExternalNotificationTransport {
      */
     test(): Promise<{ ok: boolean; error?: string; endpoint_label?: string | null }>;
 }
+
+// A send that hangs would stall every reminder and held send queued behind it
+// on the minute tick, and outlive the stuck-send reclaim (a double send).
+export const TRANSPORT_TIMEOUT_MS = 15_000;

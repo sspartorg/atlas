@@ -788,7 +788,12 @@ export type ExternalNotificationEventKey =
     | 'agent.run_finished_no_item'
     | 'terminal.waiting_for_input'
     | 'jira.sync_failed'
-    | 'workflow.failed';
+    | 'workflow.failed'
+    | 'workflow.finished'
+    | 'agent.failed_no_item'
+    | 'ci.failed'
+    | 'autofetch.failed'
+    | 'reminder.fired';
 
 export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = [
     'item.status_changed:waiting_for_info',
@@ -798,6 +803,11 @@ export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = 
     'terminal.waiting_for_input',
     'jira.sync_failed',
     'workflow.failed',
+    'workflow.finished',
+    'agent.failed_no_item',
+    'ci.failed',
+    'autofetch.failed',
+    'reminder.fired',
 ];
 
 export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEventKey, { title: string; sub: string }> = {
@@ -828,6 +838,26 @@ export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEven
     'workflow.failed': {
         title: 'Workflow Failed',
         sub: 'workflow.failed · a workflow run errored and parked, or a queued Task could not be dispatched',
+    },
+    'workflow.finished': {
+        title: 'Task Finished',
+        sub: 'workflow.finished · a workflow finished a Task (with or without a PR), or an agent finished work on an item',
+    },
+    'agent.failed_no_item': {
+        title: 'Agent Run Failed (no item)',
+        sub: 'agent.failed_no_item · a standalone agent run errored',
+    },
+    'ci.failed': {
+        title: 'CI Failed',
+        sub: "ci.failed · CI failed on a Task's pull request",
+    },
+    'autofetch.failed': {
+        title: 'Auto-fetch Failed',
+        sub: 'autofetch.failed · a project auto-fetch failed, conflicted or was turned off after repeated failures',
+    },
+    'reminder.fired': {
+        title: 'Reminders',
+        sub: 'reminder.fired · a reminder set to External or Both fired',
     },
 };
 

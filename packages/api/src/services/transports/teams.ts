@@ -1,5 +1,5 @@
 import { settingsService } from '../settings.js';
-import type { ExternalNotificationTransport } from './types.js';
+import { TRANSPORT_TIMEOUT_MS, type ExternalNotificationTransport } from './types.js';
 
 // Transport adapter for Microsoft Teams via a Power Automate "When an HTTP
 // request is received" workflow webhook. The recommended flow uses the
@@ -27,6 +27,7 @@ async function postTeamsMessage(url: string, message: string): Promise<void> {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildAdaptiveCard(message)),
+        signal: AbortSignal.timeout(TRANSPORT_TIMEOUT_MS),
     });
     if (!res.ok) {
         const body = await res.text();

@@ -44,7 +44,7 @@ Abbreviations for the files used most:
 | # | event_type | Label · icon | Target | Tests | Before |
 |---|---|---|---|---|---|
 | N1 | `workflow_run` (link_url) | Workflow · workflow | `/workflows/:id/runs/:runId` | NF "each renders its icon and label…"; NM routing; u:EventTypeIcon | yes |
-| N2 | `agent_completed` (task item) | Agent Completed · task_alt | `/tasks/:id` | NF same | gap |
+| N2 | `agent_completed` (direct agent run on an item, re-added 2026-10-17) | Agent Completed · task_alt | `/tasks/:id` | NF same; u:`agent-run-trace.integration.test.ts` | gap |
 | N3 | `agent_completed_no_item` | Agent Run Finished · task_alt | `/agents/:id/runs/:runId` | NF same | gap |
 | N4 | `agent_error` (sub-task item) | Agent Failed · error | `/sub-tasks/:id` | NF same | gap |
 | N5 | `agent_error_no_item` | Agent Run Failed · error | `/agents/:id/runs/:runId` | NF same | gap |
@@ -114,6 +114,18 @@ Abbreviations for the files used most:
 | N64 | Topbar pill + popover: provider, endpoint / untested / none, unread count, Open notifications, Settings, Escape | NF "Mark All Read…", "the popover names…"; A11 keyboard; u:NotificationStatusPopover | gap |
 | N65 | Sidenav badge count / hidden at 0 | NF; u:Sidenav | partial |
 | N66 | Phone cards (3-zone grid), icon header buttons | NM | yes |
+
+### 1.6 Outward routing (added 2026-10-17)
+
+| # | Rule | Tests |
+|---|---|---|
+| N70 | Telegram gets plain text (no `parse_mode`), ≤ 4096 chars; the e2e fake Bot API 400s unbalanced Markdown like the real one | u:`transports/telegram.test.ts`; NF "a park and the finish both reach Telegram verbatim…" |
+| N71 | A real workflow park and its finish both go outward (needs-you + `workflow.finished`) | NF same; u:`workflow-engine.integration.test.ts` delivery modes |
+| N72 | Each producer passes its own toggle key (CI, auto-fetch incl. pre-checks, reminders, standalone failure, item-run finish) | u:`ci-follow-through.test.ts`, `auto-fetch-runner.integration.test.ts`, `agent-run-trace.integration.test.ts`, `external-notifications.test.ts` "every event key honours its own toggle" |
+| N73 | Toggle off → Log shows Skipped + `"<title>" is turned off in Settings`, Send now sends | NF "a finish whose toggle is off…"; u:`external-notifications.test.ts` |
+| N74 | Web push: toggle off → not pushed; quiet hours → held, flushed after, re-checks toggle | u:`web-push.test.ts` "web push follows the outward rules" |
+| N75 | Midnight renders 00:00 (hourCycle h23) in the quiet-hours compare | u:`external-notifications.test.ts` |
+| N76 | Settings lists every outward event switch | NF "Settings lists every outward event…" |
 
 ## 2. Settings → Notifications
 

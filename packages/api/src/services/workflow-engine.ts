@@ -175,7 +175,7 @@ async function setItemStatus(
 type OwnerEventKey =
     | 'item.status_changed:waiting_for_info'
     | 'item.status_changed:in_review'
-    | 'agent.run_finished_no_item'
+    | 'workflow.finished'
     | 'workflow.failed';
 
 async function notifyOwner(
@@ -187,6 +187,7 @@ async function notifyOwner(
     try {
         const item = run.item_id ? await loadItem(run.item_id) : undefined;
         const notification = await notificationsService.create({
+            event_key: eventKey,
             event_type: 'workflow_run',
             message: plainNotice(message),
             issue_type: (item?.type as IssueType | undefined) ?? null,
@@ -888,7 +889,7 @@ async function park(
             failed ? 'workflow.failed' : 'item.status_changed:waiting_for_info',
         );
     } else {
-        await notifyOwner(run, `${name} needs you: ${reason}`, 'needs_you', failed ? 'workflow.failed' : 'agent.run_finished_no_item');
+        await notifyOwner(run, `${name} needs you: ${reason}`, 'needs_you', failed ? 'workflow.failed' : 'item.status_changed:waiting_for_info');
     }
     if (run.parent_workflow_run_id) await waitOnChild(run, reason);
 }
@@ -1225,10 +1226,10 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
             run,
             `${name} finished ${run.item_id}.${suffix}${delivery.log.length ? ` (${delivery.log.join('; ')})` : ''}`,
             delivery.prUrl ? 'needs_you' : 'update',
-            delivery.prUrl ? 'item.status_changed:in_review' : null,
+            delivery.prUrl ? 'item.status_changed:in_review' : 'workflow.finished',
         );
     } else {
-        await notifyOwner(run, `${name} finished.${delivery.prUrl ? ` PR: ${delivery.prUrl}` : ''}`, 'update', 'agent.run_finished_no_item');
+        await notifyOwner(run, `${name} finished.${delivery.prUrl ? ` PR: ${delivery.prUrl}` : ''}`, 'update', 'workflow.finished');
     }
     // Start the next queued Task now instead of waiting for the next tick.
     void kickWorkflowDispatch('finished');
@@ -1611,6 +1612,7 @@ async function reportDispatchFailure(
     try {
         const n = await notificationsService.create({
             event_type: 'workflow_run',
+            event_key: 'workflow.failed',
             message: `${wf.name}: could not start a queued item — ${message}`,
             kind: 'needs_you',
             agent_id: null,

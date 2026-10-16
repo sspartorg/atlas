@@ -2,6 +2,7 @@ import type { IExternalCiCheck } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { commentsService } from './comments.js';
 import { notificationsService } from './notifications.js';
+import { sendExternalForNotification } from './external-notifications.js';
 import { subTasksService } from './sub-tasks.js';
 import { startWorkflowRun } from './workflow-engine.js';
 import { decideCiAction, MAX_CI_FIX_ATTEMPTS } from './ci-routing.js';
@@ -124,7 +125,8 @@ export async function followThroughRedCi(taskId: string, pr: RedPr): Promise<voi
     }
     try {
         const names = pr.failing.map((c) => c.name).join(', ') || 'a check';
-        await notificationsService.create({
+        const n = await notificationsService.create({
+            event_key: 'ci.failed',
             event_type: 'ci_failed',
             message: `CI failed on ${taskId} (${names}). ${outcome}`,
             issue_type: 'task',
@@ -132,6 +134,7 @@ export async function followThroughRedCi(taskId: string, pr: RedPr): Promise<voi
             agent_id: null,
             kind: 'needs_you',
         });
+        await sendExternalForNotification(n.id, n.message, 'ci.failed');
     } catch {
         /* best-effort, like every other Owner notification */
     }
