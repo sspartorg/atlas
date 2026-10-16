@@ -119,7 +119,7 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         onClick={() => setFilter('skipped')}
                     />
                 </PillRow>
-                {settings?.external_notification_endpoint_label && (
+                {settings?.external_notification_endpoint_label && isExternalChannelConnected(settings) && (
                     <Box
                         sx={{
                             display: 'inline-flex',
