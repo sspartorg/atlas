@@ -135,17 +135,17 @@ describe('migrations (Knex, via globalSetup)', () => {
         expect(rows).toHaveLength(1);
     });
 
-    it('idx_notifications_created_at exists (Phase 2 audited addition)', async () => {
-        // The notifications service orders by `created_at DESC` without
-        // an unfiltered index pre-rebase. Phase 2 of the rebase added
-        // this index. Verify it materialized.
+    it('notifications are indexed for the (created_at, id) keyset (migration 015)', async () => {
+        // The page orders by `created_at DESC, id DESC`. Migration 015
+        // replaced the single-column `idx_notifications_created_at` with the
+        // two-column index, so the id tie-break needs no sort.
         const rows = await sql<{ indexname: string }>`
             SELECT indexname FROM pg_indexes
             WHERE schemaname = 'public'
               AND tablename = 'notifications'
-              AND indexname = 'idx_notifications_created_at'
+              AND indexname IN ('idx_notifications_created_at', 'idx_notifications_created_id')
         `.execute(testDb);
-        expect(rows.rows).toHaveLength(1);
+        expect(rows.rows.map((r) => r.indexname)).toEqual(['idx_notifications_created_id']);
     });
 
     it('agent_runs.status CHECK allows `setup_failed` (migration 005)', async () => {

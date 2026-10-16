@@ -63,6 +63,12 @@ const numOrNull = (v: unknown): number | null => (v === null || v === undefined 
  * Each item's first Done (and first In progress before it), for items whose
  * first Done is in [start, end). Shared by this page and the Spend tab's cost
  * per shipped Task, so "shipped" means one thing everywhere.
+ *
+ * An item whose first Done is in the window has a Done event in the window,
+ * so the candidates come from the window's events first (index-only on
+ * `idx_issue_events_status_created_at`) and only their history is read
+ * (`idx_issue_events_item`), not every status event before `end`. HAVING
+ * keeps the answer exact.
  */
 function firstDoneIn(start: string, end: string) {
     return sql`
@@ -71,6 +77,11 @@ function firstDoneIn(start: string, end: string) {
                MIN(e.created_at) FILTER (WHERE e.to_value = 'in_progress') AS ip_at
           FROM issue_events e
          WHERE e.field = 'status' AND e.created_at < ${end}::timestamptz
+           AND e.item_id IN (
+               SELECT d.item_id FROM issue_events d
+                WHERE d.field = 'status' AND d.to_value = 'done'
+                  AND d.created_at >= ${start}::timestamptz AND d.created_at < ${end}::timestamptz
+           )
          GROUP BY e.item_id
         HAVING MIN(e.created_at) FILTER (WHERE e.to_value = 'done') >= ${start}::timestamptz
     `;
@@ -165,14 +176,16 @@ export async function deliveryAnalytics(opts: {
              GROUP BY status
         `.execute(db),
         // Every move into Waiting for info that started in the window; one
-        // still open is measured to the window's end.
+        // still open is measured to the window's end. The lower bound is
+        // safe: a wait's next event is never earlier than the wait itself.
         sql<{ parks: string; total_s: string | null; median_s: string | null; still_waiting: string }>`
             WITH ev AS (
                 SELECT e.to_value, e.created_at,
                        LEAD(e.created_at) OVER (PARTITION BY e.item_id ORDER BY e.created_at, e.id) AS next_at
                   FROM issue_events e
                   JOIN items i ON i.id = e.item_id AND NOT i.is_test
-                 WHERE e.field = 'status' AND e.created_at < ${end}::timestamptz
+                 WHERE e.field = 'status'
+                   AND e.created_at >= ${start}::timestamptz AND e.created_at < ${end}::timestamptz
             ),
             w AS (
                 SELECT EXTRACT(EPOCH FROM COALESCE(next_at, ${end}::timestamptz) - created_at) AS s,

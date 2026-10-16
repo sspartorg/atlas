@@ -2,7 +2,7 @@ import { sql } from 'kysely';
 import { WORKFLOW_PARK_KIND_LABELS, type AnalyticsWindow, type IAnalyticsWorkflows, type WorkflowParkKind } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { fleetPerformance } from './agent-scorecard.js';
-import { resolveWindow } from './analytics-window.js';
+import { notTestRun, resolveWindow } from './analytics-window.js';
 
 // Workflow analytics: how the runs went, per workflow, plus each agent's row.
 //
@@ -28,8 +28,7 @@ export async function workflowAnalytics(opts: {
         sql<{ cur: boolean; status: string; n: string }>`
             SELECT r.started_at >= ${start}::timestamptz AS cur, r.status, COUNT(*)::text AS n
               FROM workflow_runs r
-              LEFT JOIN items i ON i.id = r.item_id
-             WHERE r.parent_workflow_run_id IS NULL AND NOT COALESCE(i.is_test, false)
+             WHERE r.parent_workflow_run_id IS NULL AND ${notTestRun('r.item_id')}
                AND ((r.started_at >= ${start}::timestamptz AND r.started_at < ${end}::timestamptz)
                  OR (r.started_at >= ${pStart}::timestamptz AND r.started_at < ${pEnd}::timestamptz))
              GROUP BY 1, 2
@@ -49,15 +48,22 @@ export async function workflowAnalytics(opts: {
             WITH runs AS (
                 SELECT r.id, r.workflow_id, r.status, r.started_at, r.finished_at, r.loop_count, r.gate_rounds
                   FROM workflow_runs r
-                  LEFT JOIN items i ON i.id = r.item_id
-                 WHERE r.parent_workflow_run_id IS NULL AND NOT COALESCE(i.is_test, false)
+                 WHERE r.parent_workflow_run_id IS NULL AND ${notTestRun('r.item_id')}
                    AND r.started_at >= ${start}::timestamptz AND r.started_at < ${end}::timestamptz
             ),
+            -- Two index probes (the runs themselves, their children by
+            -- workflow_runs_parent_idx) instead of an OR that seq-scans.
+            tree AS (
+                SELECT id AS run_id, id AS root FROM runs
+                UNION ALL
+                SELECT c.id, c.parent_workflow_run_id FROM workflow_runs c JOIN runs ON c.parent_workflow_run_id = runs.id
+            ),
+            -- numeric: a float8 SUM depends on row order, which the plan
+            -- picks; the decimal sum is the same whatever the plan.
             cost AS (
-                SELECT COALESCE(c.parent_workflow_run_id, c.id) AS root, SUM(a.total_cost_usd) AS usd
-                  FROM workflow_runs c
-                  JOIN agent_runs a ON a.workflow_run_id = c.id
-                 WHERE c.id IN (SELECT id FROM runs) OR c.parent_workflow_run_id IN (SELECT id FROM runs)
+                SELECT tree.root, SUM(a.total_cost_usd::numeric) AS usd
+                  FROM tree
+                  JOIN agent_runs a ON a.workflow_run_id = tree.run_id
                  GROUP BY 1
             )
             SELECT runs.workflow_id, w.name,

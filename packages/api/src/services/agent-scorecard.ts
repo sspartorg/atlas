@@ -171,20 +171,32 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
     // 1. Root runs in scope. A Task's sub-task runs are children (ADR 0015) and
     //    are pulled in via the tree below, never selected directly — otherwise
     //    a sub-task run would be counted as its own delivery.
+    // Only the ScoredRun columns: `graph_snapshot` (the whole workflow graph
+    // per run) is the bulk of the row and nothing here reads it.
     let q = db
         .selectFrom('workflow_runs')
-        .selectAll()
+        .select([
+            'id', 'workflow_id', 'item_id', 'project_id', 'status', 'started_at', 'finished_at',
+            'loop_count', 'gate_rounds', 'park_reason', 'pr_url', 'pr_urls',
+        ])
         .where('parent_workflow_run_id', 'is', null);
     if (args.runs.length > 0) q = q.where('id', 'in', args.runs);
     if (args.since) q = q.where('started_at', '>=', args.since);
     if (args.until) q = q.where('started_at', '<=', args.until);
     if (args.project) q = q.where('project_id', '=', args.project);
     if (scope.exclude_test_items) {
-        q = q.where((eb) =>
-            eb.or([
-                eb('item_id', 'is', null),
-                eb('item_id', 'not in', eb.selectFrom('items').select('id').where('is_test', '=', true)),
-            ]),
+        // NOT EXISTS, not NOT IN: one probe of idx_items_is_test per run, and
+        // a run with no item matches nothing, so it stays in.
+        q = q.where(({ not, exists, selectFrom }) =>
+            not(
+                exists(
+                    selectFrom('items as ti')
+                        .select(sql`1`.as('one'))
+                        .whereRef('ti.id', '=', 'workflow_runs.item_id')
+                        // Bare column, so the planner matches the partial index predicate.
+                        .where(sql<boolean>`ti.is_test`),
+                ),
+            ),
         );
     }
     const roots = await q.orderBy('started_at', 'asc').execute();
@@ -201,7 +213,7 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
     const rootIds = roots.map((r) => r.id);
     const children = await db
         .selectFrom('workflow_runs')
-        .selectAll()
+        .select(['id', 'parent_workflow_run_id'])
         .where('parent_workflow_run_id', 'in', rootIds)
         .execute();
 
