@@ -132,6 +132,79 @@ test.describe('/analytics — every metric states its definition', () => {
         await page.getByRole('tab', { name: /Delivery/ }).click();
         await expectTip('Cycle time, median', 'first move into In progress');
         await expectTip('Reopen rate', /Done/);
+        await expectTip('Flow efficiency', 'In progress or In review (worked) ÷ all their time from creation to first Done');
+        await expectTip('Your response to parks', 'From a workflow run parking for you to that run resuming on your answer');
+        await expectTip('Weekly throughput', "÷ the window's length in weeks");
+        await expectTip('Rework after Done', 'moved out of Done again before the window ended');
+        await expectTip('First-attempt merges', 'no retried agent step and no park');
+        await page.getByRole('tab', { name: /Workflows & agents/ }).click();
+        await expectTip('Retries per Task', "a sub-task's run counts for its Task");
+    });
+});
+
+test.describe('/analytics — trends, flow, quality and cost efficiency', () => {
+    for (const [tab, tiles] of [
+        ['overview', 6],
+        ['delivery', 13],
+        ['workflows', 5],
+        ['spend', 4],
+    ] as const) {
+        test(`${tab}: every tile compares with the previous window and draws its sparkline`, async ({ page }) => {
+            await serve(page);
+            await goto(page, `/analytics${tab === 'overview' ? '' : `?tab=${tab}`}`);
+            const infos = page.getByRole('button', { name: /^How .+ is measured$/ });
+            await expect(infos).toHaveCount(tiles);
+            await expect(page.getByText(/vs the same days last month/)).toHaveCount(tiles);
+            // A sparkline names its range in words for a screen reader.
+            const sparks = page.getByRole('img', { name: / per day: lowest .+, highest .+, latest / });
+            await expect(sparks).toHaveCount(tiles);
+            // ▲/▼ with a colour that says good or bad news; never colour alone.
+            await expect(page.getByText(/^[▲▼]\s*$/).first()).toBeAttached();
+        });
+    }
+
+    test('Delivery: the flow and quality group reads the fixture', async ({ page }) => {
+        await serve(page);
+        await goto(page, '/analytics?tab=delivery');
+        const group = page.getByRole('region', { name: 'Flow and quality' });
+        await expect(group).toContainText('31%');
+        await expect(group).toContainText('p90 11.5h · 21 answered · 3 open');
+        await expect(group).toContainText('16.6');
+        await expect(group).toContainText('2 of 38 shipped');
+        await expect(group).toContainText('21 of 33 merged runs');
+    });
+
+    test('Workflows: red checks by script and agents cost vs success', async ({ page }) => {
+        await serve(page);
+        await goto(page, '/analytics?tab=workflows');
+        const checks = page.getByRole('table', { name: 'Red checks by script' });
+        await expect(checks.getByRole('row')).toHaveCount(4);
+        await expect(checks.getByRole('row').nth(1)).toContainText('Unit tests');
+        await expect(page.getByRole('heading', { name: 'Agents: cost vs first-attempt success' })).toBeVisible();
+        // One dot per agent with steps.
+        await expect(page.locator('.recharts-scatter-symbol')).toHaveCount(5);
+    });
+
+    test('Spend: cost per PR and per shipped Task, and the cache-savings trend', async ({ page }) => {
+        await serve(page);
+        await goto(page, '/analytics?tab=spend');
+        const wf = page.getByRole('table', { name: 'Cost per PR and Task by workflow' });
+        await expect(wf.getByRole('row').filter({ hasText: 'Delivery' })).toContainText('$3.85');
+        await expect(wf.getByRole('row').filter({ hasText: 'Build' })).toContainText('—');
+        const models = page.getByRole('table', { name: 'Cost per PR and Task by model' });
+        await expect(models.getByRole('row')).toHaveCount(4);
+        await expect(page.getByRole('heading', { name: 'Cache savings per day' })).toBeVisible();
+    });
+
+    test('nothing scrolls sideways at 390px', async ({ page }) => {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await serve(page);
+        for (const tab of ['overview', 'delivery', 'workflows', 'spend']) {
+            await goto(page, `/analytics${tab === 'overview' ? '' : `?tab=${tab}`}`);
+            await expect(page.getByRole('button', { name: /^How .+ is measured$/ }).first()).toBeVisible();
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expect(overflow, tab).toBeLessThanOrEqual(0);
+        }
     });
 });
 

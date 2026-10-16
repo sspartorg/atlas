@@ -28,7 +28,7 @@ describe('analytics chrome helpers', () => {
         rerender(<Delta cur={0.9} prev={0.8} goodWhen="up" points />);
         expect(screen.getByText(/up 10/)).toHaveTextContent('pts');
         rerender(<Delta cur={5} prev={null} goodWhen="down" />);
-        expect(screen.getByText('no earlier data')).toBeInTheDocument();
+        expect(screen.getByTitle('No earlier data to compare')).toHaveTextContent('—');
         rerender(<Delta cur={5} prev={0} goodWhen="down" />);
         expect(screen.getByText('none before')).toBeInTheDocument();
         rerender(<Delta cur={0} prev={0} goodWhen="down" />);

@@ -1,4 +1,4 @@
-import type { IAnalyticsDelivery, IAnalyticsWorkflows } from '@atlas/shared';
+import type { IAnalyticsDelivery, IAnalyticsSpendInsight, IAnalyticsTrend, IAnalyticsWorkflows } from '@atlas/shared';
 import type { AnalyticsResponse } from '../api/types.js';
 
 // Small, hand-readable analytics payloads for the /analytics page tests.
@@ -13,10 +13,38 @@ const period = {
     previous_start: '2026-09-01T00:00:00.000Z',
     previous_end: '2026-09-03T12:00:00.000Z',
 };
+const buckets = ['2026-10-01', '2026-10-02', '2026-10-03'];
+const t = (cur: number | null, prev: number | null, series: Array<number | null> = [cur, null, cur]): IAnalyticsTrend => ({ cur, prev, series });
 
 export function deliveryFixture(over: Partial<IAnalyticsDelivery> = {}): IAnalyticsDelivery {
     return {
         period,
+        buckets,
+        trends: {
+            tasks_shipped: t(6, 4, [2, 0, 4]),
+            lead_p50_s: t(30 * H, 40 * H),
+            cycle_p50_s: t(7 * H, 12 * H, [5 * H, null, 8 * H]),
+            wip: t(2, 3, [3, 3, 2]),
+            waiting_s: t(9 * H, 6 * H),
+            reopen_rate: t(1 / 15, 0),
+            prs_merged: t(4, 3, [1, 0, 3]),
+            time_to_pr_s: t(40 * 60, null),
+            flow_efficiency: t(0.4, 0.5),
+            owner_response_p50_s: t(2 * H, 3 * H),
+            weekly_throughput: t(14, 9.3, [14, 14, 14]),
+            rework_rate: t(1 / 6, 0),
+            first_attempt_merge_rate: t(0.5, null),
+        },
+        flow: {
+            efficiency: 0.4,
+            active_s: 60 * H,
+            waiting_s: 90 * H,
+            owner_response: { answered: 3, unanswered: 1, p50_s: 2 * H, p90_s: 6 * H },
+            weekly_throughput: 14,
+            weekly: [{ bucket: '2026-09-28', tasks: 6 }],
+        },
+        rework: { shipped: 6, reopened: 1, rate: 1 / 6 },
+        first_attempt: { merged_runs: 4, clean: 2, rate: 0.5 },
         shipped: { tasks: 6, sub_tasks: 9 },
         throughput: [
             { bucket: '2026-10-01', tasks: 2, sub_tasks: 3, cycle_p50_s: 5 * H },
@@ -77,12 +105,38 @@ export function emptyDeliveryFixture(): IAnalyticsDelivery {
         source_mix: { jira: 0, native: 0 },
         prs: { opened: 0, merged: 0, merge_rate: null, median_s_to_pr: null },
         previous: { tasks_shipped: 0, cycle_p50_s: null, prs_merged: 0 },
+        buckets: ['2026-10-01'],
+        trends: Object.fromEntries(
+            Object.keys(deliveryFixture().trends).map((k) => [k, { cur: null, prev: null, series: [null] }]),
+        ) as IAnalyticsDelivery['trends'],
+        flow: {
+            efficiency: null,
+            active_s: 0,
+            waiting_s: 0,
+            owner_response: { answered: 0, unanswered: 0, p50_s: null, p90_s: null },
+            weekly_throughput: 0,
+            weekly: [{ bucket: '2026-09-28', tasks: 0 }],
+        },
+        rework: { shipped: 0, reopened: 0, rate: null },
+        first_attempt: { merged_runs: 0, clean: 0, rate: null },
     });
 }
 
 export function workflowsFixture(over: Partial<IAnalyticsWorkflows> = {}): IAnalyticsWorkflows {
     return {
         period,
+        buckets,
+        trends: {
+            success_rate: t(7 / 9, 0.6),
+            runs: t(10, 8, [4, 0, 6]),
+            gate_pass_rate: t(20 / 22, 0.8),
+            retries: t(2, 5, [1, 0, 1]),
+            retries_per_task: t(0.25, null),
+        },
+        retries_per_task: { retries: 2, tasks: 8, rate: 0.25 },
+        gate_failures: [
+            { script_id: 'tests', name: 'Unit tests', failures: 2, runs: 2, last_at: '2026-10-03T10:00:00.000Z' },
+        ],
         runs: { total: 10, completed: 7, cancelled: 1, error: 1, waiting_for_owner: 1, running: 0, success_rate: 7 / 9 },
         by_workflow: [
             { workflow_id: 'wf-d', name: 'Delivery', runs: 6, completed: 4, success_rate: 4 / 5, median_duration_s: 50 * 60, avg_loops: 0.5, avg_gate_rounds: 0.2, cost_per_run_usd: 3.5 },
@@ -125,6 +179,28 @@ export function spendFixture(over: Partial<AnalyticsResponse> = {}): AnalyticsRe
         cache_savings_usd: 1.25,
         cache_savings_unpriced_tokens: 100,
         shipped_tasks: 6,
+        ...spendInsightFixture(),
         ...over,
+    };
+}
+
+function spendInsightFixture(): IAnalyticsSpendInsight {
+    return {
+        buckets,
+        trends: {
+            spend: t(24, 32, [9, 0, 15]),
+            cost_per_task: t(4, 8, [4.5, null, 3.75]),
+            cache_savings: t(1.25, 2, [0.5, 0, 0.75]),
+            cache_hit_rate: t(0.9, 0.85, [0.9, null, 0.9]),
+        },
+        cost_efficiency: {
+            by_workflow: [
+                { workflow_id: 'wf-d', name: 'Delivery', runs: 6, cost_usd: 21, prs: 5, shipped_tasks: 4, per_pr_usd: 4.2, per_task_usd: 5.25 },
+                { workflow_id: 'wf-q', name: 'Quick change', runs: 4, cost_usd: 0, prs: 0, shipped_tasks: 0, per_pr_usd: null, per_task_usd: null },
+            ],
+            by_model: [
+                { model: 'claude-opus-5-5', cli: 'claude', runs: 6, cost_usd: 15, prs: 5, shipped_tasks: 4, per_pr_usd: 3, per_task_usd: 3.75 },
+            ],
+        },
     };
 }

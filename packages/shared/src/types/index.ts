@@ -1956,8 +1956,59 @@ export interface IAnalyticsSpread {
     p90_s: number | null;
 }
 
+/**
+ * One headline number with its trend: this window (`cur`), the previous
+ * equal-length window (`prev`, null when it has no data to compare) and the
+ * per-bucket series behind a sparkline (aligned with `buckets`, null where a
+ * bucket has nothing to measure).
+ */
+export interface IAnalyticsTrend {
+    cur: number | null;
+    prev: number | null;
+    series: Array<number | null>;
+}
+
+export type AnalyticsDeliveryTrendKey =
+    | 'tasks_shipped'
+    | 'lead_p50_s'
+    | 'cycle_p50_s'
+    | 'wip'
+    | 'waiting_s'
+    | 'reopen_rate'
+    | 'prs_merged'
+    | 'time_to_pr_s'
+    | 'flow_efficiency'
+    | 'owner_response_p50_s'
+    | 'weekly_throughput'
+    | 'rework_rate'
+    | 'first_attempt_merge_rate';
+
+export type AnalyticsWorkflowsTrendKey = 'success_rate' | 'runs' | 'gate_pass_rate' | 'retries' | 'retries_per_task';
+
+export type AnalyticsSpendTrendKey = 'spend' | 'cost_per_task' | 'cache_savings' | 'cache_hit_rate';
+
 export interface IAnalyticsDelivery {
     period: IAnalyticsPeriod;
+    /** Bucket keys (`YYYY-MM-DD`, Monday for weeks) every `trends[*].series` is aligned with. */
+    buckets: string[];
+    trends: Record<AnalyticsDeliveryTrendKey, IAnalyticsTrend>;
+    /**
+     * Flow over the shipped Tasks: time In progress or In review (worked) vs
+     * every other status before Done (waiting), the Owner's answer time to
+     * workflow parks, and Tasks shipped per Monday week.
+     */
+    flow: {
+        efficiency: number | null;
+        active_s: number;
+        waiting_s: number;
+        owner_response: { answered: number; unanswered: number; p50_s: number | null; p90_s: number | null };
+        weekly_throughput: number | null;
+        weekly: Array<{ bucket: string; tasks: number }>;
+    };
+    /** Tasks shipped in the window that later left Done (by the window's end). */
+    rework: { shipped: number; reopened: number; rate: number | null };
+    /** Task runs whose every PR merged, and how many got there with no retried step and no park. */
+    first_attempt: { merged_runs: number; clean: number; rate: number | null };
     /** Items whose first move into Done falls in the window. */
     shipped: { tasks: number; sub_tasks: number };
     /** One row per bucket, zero-filled. `cycle_p50_s` is over the bucket's Tasks. */
@@ -2025,6 +2076,13 @@ export interface IAnalyticsAgentRow {
 
 export interface IAnalyticsWorkflows {
     period: IAnalyticsPeriod;
+    /** Bucket keys every `trends[*].series` is aligned with. */
+    buckets: string[];
+    trends: Record<AnalyticsWorkflowsTrendKey, IAnalyticsTrend>;
+    /** Agent-run retries ÷ the Tasks that had an agent run in the window. */
+    retries_per_task: { retries: number; tasks: number; rate: number | null };
+    /** Failed Script-step checks in the window by script, most failures first. */
+    gate_failures: Array<{ script_id: string; name: string; failures: number; runs: number; last_at: string }>;
     /** Top-level runs started in the window, agent tests left out. */
     runs: {
         total: number;
@@ -2044,4 +2102,30 @@ export interface IAnalyticsWorkflows {
     retries: { retries: number; dispatches: number; rate: number | null };
     agents: IAnalyticsAgentRow[];
     previous: { runs: number; success_rate: number | null };
+}
+
+/**
+ * One row of cost efficiency: what the workflow runs started in the window
+ * cost (every step of the run tree), the PRs they opened, and the Tasks among
+ * theirs that shipped in the window.
+ */
+export interface IAnalyticsCostEfficiencyRow {
+    runs: number;
+    cost_usd: number;
+    prs: number;
+    shipped_tasks: number;
+    per_pr_usd: number | null;
+    per_task_usd: number | null;
+}
+
+/** The trend and cost-efficiency part of `GET /api/analytics` (the Spend tab). */
+export interface IAnalyticsSpendInsight {
+    /** Bucket keys every `trends[*].series` is aligned with. */
+    buckets: string[];
+    trends: Record<AnalyticsSpendTrendKey, IAnalyticsTrend>;
+    cost_efficiency: {
+        by_workflow: Array<IAnalyticsCostEfficiencyRow & { workflow_id: string; name: string }>;
+        /** A model's spend in the run trees it worked in, over those trees' PRs and shipped Tasks. */
+        by_model: Array<IAnalyticsCostEfficiencyRow & { model: string | null; cli: string | null }>;
+    };
 }

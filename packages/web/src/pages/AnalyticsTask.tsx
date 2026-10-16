@@ -168,17 +168,14 @@ export function AnalyticsTask() {
                 <MetricMarquee
                     label="Total cost"
                     value={formatCostUsd(data.totals.total_cost_usd)}
-                    accent={CHART_PALETTE.output}
                 />
                 <MetricMarquee
                     label="Runs"
                     value={data.totals.run_count.toLocaleString()}
-                    accent={ATLAS_PALETTE.gold}
                 />
                 <MetricMarquee
                     label="Descendants"
                     value={data.descendant_count.toLocaleString()}
-                    accent={ATLAS_PALETTE.green}
                 />
                 <MetricMarquee
                     label="Avg cost / run"
@@ -187,7 +184,6 @@ export function AnalyticsTask() {
                             ? formatCostUsd(data.totals.total_cost_usd / data.totals.run_count)
                             : '—'
                     }
-                    accent={CHART_PALETTE.terminal}
                 />
             </Hero>
 
