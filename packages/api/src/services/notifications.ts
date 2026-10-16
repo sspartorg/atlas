@@ -42,6 +42,10 @@ interface ListFilter {
     // Keyset cursor: rows strictly older than this notification id's row.
     before?: number | undefined;
     in_app?: boolean | undefined;
+    // The Notification Log: every row with an outward send or a reason, stale
+    // or not — a delivered park must not vanish from the delivery history
+    // because its item moved on (that rule is for the feed and the badge).
+    log?: boolean | undefined;
 }
 
 export const SKIPPED_WHILE_HELD = 'Skipped: event turned off while held';
@@ -182,7 +186,11 @@ function selectNotificationsWithItemType() {
 
 export const notificationsService = {
     async list(filter: ListFilter = {}): Promise<INotification[]> {
-        let q = selectNotificationsWithItemType().where(notStaleNeedsYou);
+        let q = filter.log
+            ? selectNotificationsWithItemType().where((eb) =>
+                  eb.or([eb('n.external_status', '!=', 'none'), eb('n.failure_reason', 'is not', null)]),
+              )
+            : selectNotificationsWithItemType().where(notStaleNeedsYou);
         if (filter.kind) q = q.where('n.kind', '=', filter.kind);
         if (filter.external_status) q = q.where('n.external_status', '=', filter.external_status);
         if (filter.in_app !== undefined) q = q.where('n.in_app', '=', filter.in_app);

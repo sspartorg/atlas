@@ -278,6 +278,21 @@ describe('notificationsService', () => {
             expect(rows.some((r) => r.kind === 'update' && r.issue_id === moved)).toBe(true);
         });
 
+        it('the Notification Log (log: true) keeps a delivered row whose item moved on, and only lists rows with a send or a reason', async () => {
+            await insertProject('p1');
+            const item = await insertItem({ type: 'task', project_id: 'p1', status: 'waiting_for_info' });
+            const park = await notificationsService.create({ event_type: 'workflow_run', message: 'park', kind: 'needs_you', issue_id: item });
+            await notificationsService.updateExternalStatus(park.id, 'sent');
+            const skipped = await notificationsService.create({ event_type: 'ci_failed', message: 'skipped' });
+            await notificationsService.updateExternalStatus(skipped.id, 'none', 'Skipped: "CI Failed" is turned off in Settings');
+            await notificationsService.create({ event_type: 'jira_sync', message: 'in-app only' });
+            await testDb.updateTable('items').set({ status: 'done' }).where('id', '=', item).execute();
+
+            expect((await notificationsService.list()).some((r) => r.id === park.id)).toBe(false);
+            const log = await notificationsService.list({ log: true });
+            expect(log.map((r) => r.message).sort()).toEqual(['park', 'skipped']);
+        });
+
         it('countUnread excludes the same stale rows', async () => {
             await seed();
             expect(await notificationsService.countUnread()).toBe(4);

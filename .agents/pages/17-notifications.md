@@ -67,7 +67,7 @@ None.
 - `useIsMobile` (header icon buttons, log cards)
 
 ## API endpoints touched
-- `GET /api/notifications?limit=200[&before=<id>]` (feed pages) and `?external_status=sent&limit=1` (last delivery)
+- `GET /api/notifications?limit=200[&before=<id>]` (In-App Feed pages) and `?log=true&limit=200[&before=<id>]` (Notification Log pages: every row with an outward send or a reason, **including** needs-you rows whose item moved on — a delivered park stays in the delivery history; before 2026-10-17 both tabs shared the feed query and such rows vanished from the Log) and `?external_status=sent&limit=1` (last delivery)
 - `POST /api/notifications/:id/resend`
 - `POST /api/notifications/:id/cancel`
 - `POST /api/notifications/mark-all-read`

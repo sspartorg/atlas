@@ -277,7 +277,7 @@ test.describe('/notifications — empty, error and the header', () => {
     });
 
     test('a failed load is an error, not an empty state', async ({ page }) => {
-        await page.route(/\/api\/notifications\?limit=200/, (r) => r.fulfill({ status: 500, json: { error: 'database is down', kind: 'internal_error' } }));
+        await page.route(/\/api\/notifications\?(log=true&)?limit=200/, (r) => r.fulfill({ status: 500, json: { error: 'database is down', kind: 'internal_error' } }));
         await goto(page, '/notifications', { allow: [/500|Internal Server Error/] });
         await expect(page.getByRole('alert')).toContainText('Could not load notifications: database is down');
         await expect(page.getByText('No External Channel Yet')).toHaveCount(0);
@@ -349,8 +349,12 @@ test.describe('/notifications — In-App Feed', () => {
         await page.getByRole('button', { name: 'Load more' }).click();
         await expect(page.getByTestId('notification-card')).toHaveCount(205);
         await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0);
+        // The Log pages its own rows (every outward send, stale or not).
         await page.getByRole('tab', { name: 'Notification Log' }).click();
+        await expect(page.getByTestId('notification-log-row')).toHaveCount(200);
+        await page.getByRole('button', { name: 'Load more' }).click();
         await expect(page.getByTestId('notification-log-row')).toHaveCount(205);
+        await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0);
         await expect(page.getByRole('group', { name: 'Filter deliveries' }).getByRole('button', { name: /^Sent/ })).toContainText('205');
     });
 
@@ -512,7 +516,7 @@ test.describe('/notifications — outward delivery from real producers', () => {
     test('Settings lists every outward event with its own switch', async ({ page }) => {
         await goto(page, '/settings?tab=notifications');
         for (const title of ['Task Finished', 'Agent Run Failed (no item)', 'CI Failed', 'Auto-fetch Failed', 'Reminders', 'Workflow Failed', 'Jira Sync Failed']) {
-            await expect(page.getByText(title, { exact: true })).toBeVisible();
+            await expect(page.getByRole('main').getByText(title, { exact: true })).toBeVisible();
         }
     });
 });

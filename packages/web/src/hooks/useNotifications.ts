@@ -23,11 +23,13 @@ export function useNotifications(opts: UseNotificationsArgs = {}) {
 const FEED_PAGE = 200;
 
 /** The Notifications page's rows, newest first, 200 at a time ("Load more" walks the `before` cursor). */
-export function useNotificationFeed() {
+/** `log`: the Notification Log's rows (every outward send, stale or not);
+ *  otherwise the In-App Feed's (stale needs-you rows dropped). */
+export function useNotificationFeed(log = false) {
     const q = useInfiniteQuery({
-        queryKey: ['notifications', 'feed-pages'],
+        queryKey: ['notifications', log ? 'log-pages' : 'feed-pages'],
         queryFn: ({ pageParam }) =>
-            api.notifications.list({ limit: FEED_PAGE, ...(pageParam ? { before: pageParam } : {}) }),
+            api.notifications.list({ limit: FEED_PAGE, ...(log ? { log } : {}), ...(pageParam ? { before: pageParam } : {}) }),
         initialPageParam: 0,
         getNextPageParam: (last) => (last.length < FEED_PAGE ? undefined : last[last.length - 1]?.id),
     });

@@ -31,6 +31,10 @@ function parseSendExternalBody(body: unknown): { message: string; event_key?: st
 // rather than in @atlas/shared.
 const ListQuerySchema = NotificationFilterSchema.extend({
     before: z.coerce.number().int().min(1).optional(),
+    log: z
+        .enum(['true', 'false'])
+        .transform((v) => v === 'true')
+        .optional(),
     in_app: z
         .enum(['true', 'false'])
         .transform((v) => v === 'true')
