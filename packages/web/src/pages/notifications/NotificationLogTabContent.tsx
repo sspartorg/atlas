@@ -24,7 +24,7 @@ import { timeOfDay, relativeDay } from './timeFormat.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
-type Filter = 'all' | NotificationDeliveryStatus;
+type Filter = 'all' | NotificationDeliveryStatus | 'skipped';
 
 interface Props {
     settings: ISettings | undefined;
@@ -44,11 +44,12 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
         [allRows]
     );
     const counts = useMemo(() => {
-        const c = { all: externalRows.length, sent: 0, failed: 0, pending: 0 };
+        const c = { all: externalRows.length, sent: 0, failed: 0, pending: 0, skipped: 0 };
         for (const r of externalRows) {
             if (r.external_status === 'sent') c.sent++;
             else if (r.external_status === 'failed') c.failed++;
             else if (r.external_status === 'pending') c.pending++;
+            else if (isSkipped(r)) c.skipped++;
         }
         return c;
     }, [externalRows]);
@@ -57,7 +58,9 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
         () =>
             filter === 'all'
                 ? externalRows
-                : externalRows.filter((r) => r.external_status === filter),
+                : filter === 'skipped'
+                  ? externalRows.filter(isSkipped)
+                  : externalRows.filter((r) => r.external_status === filter),
         [externalRows, filter]
     );
 
@@ -107,6 +110,13 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         count={counts.pending}
                         selected={filter === 'pending'}
                         onClick={() => setFilter('pending')}
+                    />
+                    {/* Skipped and cancelled sends: without this pill "All" summed to more than the rest. */}
+                    <FilterPill
+                        label="Skipped"
+                        count={counts.skipped}
+                        selected={filter === 'skipped'}
+                        onClick={() => setFilter('skipped')}
                     />
                 </PillRow>
                 {settings?.external_notification_endpoint_label && (

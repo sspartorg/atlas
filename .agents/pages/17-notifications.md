@@ -22,7 +22,7 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 
 ### Notification Log tab (`NotificationLogTab`)
 - Lists every row with an outward send (`external_status != 'none'`, plus skipped / cancelled rows — `none` with a reason), including log-only rows (`in_app=false`: external-only reminders, MCP sends) that the feed hides.
-- Filter pills: All / Sent / Failed / Pending (with counts), in one row that scrolls sideways instead of wrapping (`PillRow`, `role="group"` "Filter deliveries"). Pending counts held rows too.
+- Filter pills: All / Sent / Failed / Pending / Skipped (with counts; Skipped holds skipped and cancelled rows, so the four add up to All), in one row that scrolls sideways instead of wrapping (`PillRow`, `role="group"` "Filter deliveries"). Pending counts held rows too.
 - **Empty state**: "External Channel Is Configured but Quiet" (channel connected) or "No External Channel Yet", + **Send a Test Message** (enabled whenever the active provider is connected — it used to need an endpoint label and a chat id, so it was always disabled for Teams and before the first test) → `POST /api/settings/external-notification/test` → toast "Test message sent" / "Test failed" + reason (a network error toasts too) and refreshes settings so the subtitle and topbar update
 - Table columns:
   - Timestamp (time + relative day)

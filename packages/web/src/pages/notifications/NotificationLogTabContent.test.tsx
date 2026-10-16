@@ -663,7 +663,8 @@ describe('NotificationLogTabContent', () => {
         it('stays in the log with a Skipped chip, its reason and Send now; a cancelled row does not', () => {
             renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[skipped, cancelled]} />);
             expect(screen.getByText('Run failed overnight')).toBeInTheDocument();
-            expect(screen.getByText('Skipped')).toBeInTheDocument();
+            // The chip, plus the Skipped filter pill.
+            expect(screen.getAllByText('Skipped')).toHaveLength(2);
             expect(screen.getByText(/Skipped: event turned off while held/)).toBeInTheDocument();
             expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
             expect(screen.queryByText('Cancelled one')).not.toBeInTheDocument();
@@ -765,5 +766,21 @@ describe('NotificationLogTabContent — cancelled rows and refusals', () => {
         expect(btn).toBeEnabled();
         fireEvent.click(btn);
         expect(await screen.findByText('Test failed')).toBeInTheDocument();
+    });
+});
+
+describe('NotificationLogTabContent — the pills add up to All', () => {
+    it('Skipped counts skipped and cancelled rows and filters to them', () => {
+        const rows = [
+            makeNotification({ id: 1, message: 'S', external_status: 'sent' }),
+            makeNotification({ id: 2, message: 'K', external_status: 'none', failure_reason: 'Skipped: event turned off while held' }),
+            makeNotification({ id: 3, message: 'C', external_status: 'none', failure_reason: 'Cancelled by you' }),
+        ];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        const pill = screen.getByRole('button', { name: /^Skipped/ });
+        expect(pill).toHaveTextContent('2');
+        fireEvent.click(pill);
+        expect(screen.queryByText('S', { exact: true })).not.toBeInTheDocument();
+        expect(screen.getByText('C', { exact: true })).toBeInTheDocument();
     });
 });

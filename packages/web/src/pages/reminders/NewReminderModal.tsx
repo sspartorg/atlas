@@ -204,7 +204,8 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                             row
                             value={kind}
                             onChange={(_, v) => setKind(v as ReminderScheduleKind)}
-                            sx={{ mt: 1 }}
+                            // Two by two on a phone: four in a row left "Cron" alone on a second line.
+                            sx={{ mt: 1, display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(4, auto)' }, justifyContent: 'start' }}
                         >
                             <FormControlLabel
                                 value="once"
@@ -306,7 +307,8 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                             row
                             value={channel}
                             onChange={(_, v) => setChannel(v as ReminderChannel)}
-                            sx={{ mt: 1 }}
+                            // A column on a phone, so "Both" never sits alone on a second line.
+                            sx={{ mt: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, auto)' }, justifyContent: 'start' }}
                         >
                             <FormControlLabel
                                 value="notification"
