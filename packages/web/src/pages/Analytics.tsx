@@ -79,6 +79,8 @@ export function Analytics() {
                         exclusive
                         value={window}
                         aria-label="Window"
+                        // Phones: on its own line under the title, the four windows share it evenly.
+                        sx={{ width: { xs: '100%', sm: 'auto' }, '& > *': { flex: { xs: 1, sm: 'none' } } }}
                         onChange={(_e, v: AnalyticsWindow | null) => {
                             if (v !== null) setWindow(v);
                         }}

@@ -312,9 +312,9 @@ test.describe('/reminders — history, fire log, refresh', () => {
         await toggle.click();
         const log = hist.getByRole('list', { name: 'Fire log' });
         await expect(log.getByRole('listitem')).toHaveCount(3);
-        await expect(log.getByRole('listitem').nth(0)).toContainText('push offexternal held / sending');
-        await expect(log.getByRole('listitem').nth(1)).toContainText('push failedexternal failed · Forbidden: bot was blocked');
-        await expect(log.getByRole('listitem').nth(2)).toContainText('push sentexternal sent');
+        await expect(log.getByRole('listitem').nth(0)).toContainText('Push offExternal held / sending');
+        await expect(log.getByRole('listitem').nth(1)).toContainText('Push failedExternal failedForbidden: bot was blocked');
+        await expect(log.getByRole('listitem').nth(2)).toContainText('Push sentExternal sent');
         await hist.getByRole('button', { name: /hide fire log/ }).click();
         await expect(log).toHaveCount(0);
     });

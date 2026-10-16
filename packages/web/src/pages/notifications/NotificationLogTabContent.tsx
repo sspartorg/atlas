@@ -362,6 +362,7 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
             icon={<EventTypeIcon eventType={row.event_type} size={32} />}
             title={meta.label}
             chip={<StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} cancelled={isCancelled(row)} />}
+            chipDetail={held && heldUntil ? `sends ${heldUntil}` : undefined}
             message={row.message}
             meta={
                 <>
@@ -372,7 +373,6 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
                         </Box>
                     )}
                     {timeOfDay(row.created_at)} · {relativeDay(row.created_at)}
-                    {held && heldUntil && ` · sends ${heldUntil}`}
                 </>
             }
             alert={reasonOf(row)}

@@ -36,7 +36,10 @@ export function PillRow({ children, label }: { children: ReactNode; label: strin
 interface CardProps {
     icon: ReactNode;
     title: string;
+    /** Status chip, at the start of the bottom line (never beside the title). */
     chip?: ReactNode;
+    /** Kept beside the chip, e.g. a held send's "sends 08:00". */
+    chipDetail?: ReactNode;
     message: string;
     /** Item id · relative time — set in mono. */
     meta: ReactNode;
@@ -53,7 +56,8 @@ interface CardProps {
 
 /**
  * One notification on a phone: a fixed 32px icon, a middle that is always
- * title line → message (2 lines max) → mono meta line, and a fixed 40px action
+ * title line (full width) → message (2 lines max) → status line (when there is
+ * a chip) → mono meta line, and a fixed 40px action
  * zone. Every card has the same three tracks, so a long message or a missing
  * item id never shifts the columns of the next card.
  */
@@ -61,6 +65,7 @@ export function NotificationCard({
     icon,
     title,
     chip,
+    chipDetail,
     message,
     meta,
     alert,
@@ -115,32 +120,23 @@ export function NotificationCard({
         >
             <Box sx={{ width: 32, height: 32 }}>{icon}</Box>
             <Box sx={{ minWidth: 0 }}>
-                <Box
+                <Typography
+                    component="div"
                     sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        minWidth: 0,
                         minHeight: 22,
+                        fontSize: 14,
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        // Line up with the 32px icon tile's centre.
+                        pt: 0.25,
+                        color: ATLAS_PALETTE.slate,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                     }}
                 >
-                    <Typography
-                        component="span"
-                        sx={{
-                            minWidth: 0,
-                            fontSize: 14,
-                            fontWeight: 600,
-                            lineHeight: 1.4,
-                            color: ATLAS_PALETTE.slate,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                        }}
-                    >
-                        {title}
-                    </Typography>
-                    {chip && <Box sx={{ flexShrink: 0, display: 'flex' }}>{chip}</Box>}
-                </Box>
+                    {title}
+                </Typography>
                 <Typography
                     sx={{
                         mt: 0.5,
@@ -156,6 +152,36 @@ export function NotificationCard({
                 >
                     {message}
                 </Typography>
+                {/* The status gets its own line (chip + detail), so it never squeezes the
+                    title and "sends 08:00" is never ellipsised away with the meta. */}
+                {chip && (
+                    <Box
+                        data-testid="notification-card-status"
+                        sx={{
+                            mt: 1.5,
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            columnGap: 1.5,
+                            rowGap: 1,
+                        }}
+                    >
+                        {chip}
+                        {chipDetail && (
+                            <Box
+                                component="span"
+                                sx={{
+                                    fontFamily: MONO,
+                                    fontSize: 11,
+                                    color: ATLAS_PALETTE.slate70,
+                                    whiteSpace: 'nowrap',
+                                }}
+                            >
+                                {chipDetail}
+                            </Box>
+                        )}
+                    </Box>
+                )}
                 <Typography
                     component="div"
                     sx={{

@@ -113,7 +113,7 @@ Abbreviations for the files used most:
 | N63 | SSE: new row + badge arrive without reload | NF live "a workflow park arrives over SSE…"; u:useSSE | gap |
 | N64 | Topbar pill + popover: provider, endpoint / untested / none, unread count, Open notifications, Settings, Escape | NF "Mark All Read…", "the popover names…"; A11 keyboard; u:NotificationStatusPopover | gap |
 | N65 | Sidenav badge count / hidden at 0 | NF; u:Sidenav | partial |
-| N66 | Phone cards (3-zone grid), icon header buttons | NM | yes |
+| N66 | Phone cards (3-zone grid; title full width, status chip + "sends HH:MM" on their own line, nothing escapes the card, title and chip never overlap), icon header buttons on the title row — at 390 and 360px, plus the iPad project (834px) | NM; `packages/web/src/pages/notifications/NotificationCard.test.tsx`; `packages/web/src/components/PageHeader.test.tsx` | yes |
 
 ### 1.6 Outward routing (added 2026-10-17)
 
@@ -197,7 +197,7 @@ Abbreviations for the files used most:
 | R44 | An open Reminders page follows a fire without refresh | RF "an open Reminders page follows a fire…"; u:useSSE | gap |
 | R45 | Loading skeleton; load error `Alert` (not the empty hero) | RF "a failed load…"; u:R | new |
 | R46 | Empty state hero | `e2e/pages/reminders.spec.ts`; RF | yes |
-| R47 | Phone card layout, FAB | RM | yes |
+| R47 | Phone card layout, FAB; header actions (Refresh + History switch) on the title row; ≥8px between cards; ⋮ never touches the expand chevron; fire log entries two lines (date, then push / external chips; reason clamped, tap to expand), never overlapping — at 390 and 360px, plus the iPad project (834px) | RM; u:R | yes |
 
 ## 4. Analytics
 

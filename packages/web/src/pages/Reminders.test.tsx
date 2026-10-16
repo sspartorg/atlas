@@ -175,9 +175,14 @@ describe('Reminders page — fire log', () => {
         fireEvent.click(toggle);
         const log = await screen.findByRole('list', { name: 'Fire log' });
         expect(within(log).getAllByRole('listitem')).toHaveLength(2);
-        expect(within(log).getByText('external failed · chat not found')).toBeInTheDocument();
-        expect(within(log).getByText('external held / sending')).toBeInTheDocument();
-        expect(within(log).getByText('push sent')).toBeInTheDocument();
+        expect(within(log).getByText('External failed')).toBeInTheDocument();
+        const reason = within(log).getByRole('button', { name: 'chat not found' });
+        expect(reason).toHaveAttribute('aria-expanded', 'false');
+        fireEvent.click(reason);
+        expect(reason).toHaveAttribute('aria-expanded', 'true');
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        expect(within(log).getByText('External held / sending')).toBeInTheDocument();
+        expect(within(log).getByText('Push sent')).toBeInTheDocument();
         expect(toggle).toHaveAttribute('aria-expanded', 'true');
         fireEvent.click(screen.getByRole('button', { name: /Logged — hide fire log/ }));
         expect(screen.queryByRole('list', { name: 'Fire log' })).toBeNull();
