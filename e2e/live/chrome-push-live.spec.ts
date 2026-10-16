@@ -43,7 +43,7 @@ test('real Chrome + FCM: Send test and a workflow park both pop up', async ({ re
 
         const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'));
         await sw.evaluate(() => {
-            const g = self as unknown as { __shown: Array<{ title: string; body?: string }> };
+            const g = self as unknown as { __shown: Array<{ title: string; body: string | undefined }> };
             g.__shown = [];
             const proto = ServiceWorkerRegistration.prototype;
             const show = proto.showNotification;
@@ -52,7 +52,7 @@ test('real Chrome + FCM: Send test and a workflow park both pop up', async ({ re
                 return show.call(this, title, options);
             };
         });
-        const shown = () => sw.evaluate(() => (self as unknown as { __shown: Array<{ title: string; body?: string }> }).__shown);
+        const shown = () => sw.evaluate(() => (self as unknown as { __shown: Array<{ title: string; body: string | undefined }> }).__shown);
 
         await page.getByRole('button', { name: 'Send test', exact: true }).click();
         await expect(page.getByText(/Test push sent \(1\/1 device\)/)).toBeVisible({ timeout: 30_000 });
