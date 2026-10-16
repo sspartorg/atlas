@@ -12,7 +12,7 @@ test.describe('/analytics/project/:projectId', () => {
         // Strict-mode multi-match is fine here as both occurrences are valid.
         await expect(page.getByText('E2E Terminal').first()).toBeVisible();
         // Analytics breadcrumb link
-        await expect(page.getByRole('link', { name: 'Analytics' })).toBeVisible();
+        await expect(page.getByRole('main').getByRole('link', { name: 'Analytics' })).toBeVisible();
     });
 
     test('KPI strip metric labels are present in the DOM', async ({ page }) => {

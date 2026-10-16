@@ -253,6 +253,7 @@ Abbreviations for the files used most:
 | E5 | Enter / Space activate (tabs, pills, popover, Mark All Read, kebab, menu items, switch, fire log, window buttons) | A11 keyboard tests; NF (Enter / Space on feed cards) | gap |
 | E6 | Escape closes menus, dialogs, the popover and tooltips; focus returns to the trigger | A11; RF; NF | partial |
 | E7 | Sidenav entries are links (keyboard reachable) | A11; u:Sidenav | gap (they were not) |
+| E8 | One `main` landmark holds the page | `e2e/pages/analytics-project.spec.ts`, `e2e/pages/marketplace-workflows.spec.ts` (scope links to `main`) | gap (there was none) |
 
 ## 6. Cannot be tested here
 
