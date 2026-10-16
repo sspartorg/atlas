@@ -13,7 +13,7 @@ What shipped, how fast work moves, how the workflows and agents ran, and what it
 ## UI elements
 
 **Header** — `PageHeader` (`analytics` icon). Subtitle: "What shipped, how fast, how the workflows ran and what it cost, for {October 2026 | the last N days}. Times are in {viewer tz}."
-- **Window** `ToggleButtonGroup` (header actions): `7 days` · `30 days` · `90 days` · `This month`. URL `?window=7d|30d|90d`; `month` (default) clears the param so the first load matches the Dashboard's month spend.
+- **Window** `ToggleButtonGroup` (header actions): `7 days` · `30 days` · `90 days` · `This month`. URL `?window=7d|30d|90d`; `month` (default) clears the param so the first load matches the Dashboard's month spend. On phones the four windows can't fit beside the title, so the group drops to its own line under it (above the subtitle) and stretches full width, the windows sharing it evenly.
 
 **Tabs** (scrollable, `aria-label="Analytics sections"`) — `?tab=overview|delivery|workflows|spend` via `useTabParam`; `overview` clears the param. Each tab is a `lazyNamed` chunk and calls only its own hooks, so a tab never opened never fetches.
 
