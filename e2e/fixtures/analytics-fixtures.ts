@@ -17,6 +17,11 @@ function rng(seed: number) {
     };
 }
 
+/** A tile trend: this window, the one before, and a per-bucket series. */
+function trend(cur: number | null, prev: number | null, series: Array<number | null>) {
+    return { cur, prev, series };
+}
+
 function days(n: number, end = new Date('2026-10-16T12:00:00Z')): string[] {
     return Array.from({ length: n }, (_, i) => {
         const d = new Date(end.getTime() - (n - 1 - i) * 86_400_000);
@@ -27,6 +32,45 @@ function days(n: number, end = new Date('2026-10-16T12:00:00Z')): string[] {
 export function deliveryFixture(projectId = 'e2e-terminal-project') {
     const r = rng(7);
     const buckets = days(16);
+    const base = deliveryBase(projectId, r, buckets);
+    const tp = base.throughput;
+    const wave = (lo: number, hi: number, k: number) => buckets.map((_, i) => lo + ((hi - lo) * ((i * k) % 7)) / 6);
+    return {
+        ...base,
+        buckets,
+        trends: {
+            tasks_shipped: trend(38, 29, tp.map((b) => b.tasks)),
+            lead_p50_s: trend(31.5 * H, 36 * H, wave(20 * H, 48 * H, 3)),
+            cycle_p50_s: trend(7.4 * H, 9.8 * H, tp.map((b) => b.cycle_p50_s)),
+            wip: trend(7, 9, wave(5, 11, 2).map(Math.round)),
+            waiting_s: trend(146 * H, 120 * H, wave(2 * H, 18 * H, 5)),
+            reopen_rate: trend(4 / 129, 6 / 101, wave(0, 0.08, 4)),
+            prs_merged: trend(35, 27, tp.map((b) => Math.max(0, b.tasks - 1))),
+            time_to_pr_s: trend(46 * 60, 58 * 60, wave(30 * 60, 70 * 60, 3)),
+            flow_efficiency: trend(0.31, 0.27, wave(0.2, 0.45, 2)),
+            owner_response_p50_s: trend(2.8 * H, 3.6 * H, wave(H, 6 * H, 5)),
+            weekly_throughput: trend(16.6, 12.7, buckets.map((_, i) => (i < 5 ? 14 : i < 12 ? 19 : 5))),
+            rework_rate: trend(2 / 38, 3 / 29, wave(0, 0.2, 3)),
+            first_attempt_merge_rate: trend(21 / 33, 0.55, wave(0.4, 0.8, 2)),
+        },
+        flow: {
+            efficiency: 0.31,
+            active_s: 9.4 * 38 * H,
+            waiting_s: 22.1 * 38 * H,
+            owner_response: { answered: 21, unanswered: 3, p50_s: 2.8 * H, p90_s: 11.5 * H },
+            weekly_throughput: 16.6,
+            weekly: [
+                { bucket: '2026-09-28', tasks: 9 },
+                { bucket: '2026-10-05', tasks: 19 },
+                { bucket: '2026-10-12', tasks: 10 },
+            ],
+        },
+        rework: { shipped: 38, reopened: 2, rate: 2 / 38 },
+        first_attempt: { merged_runs: 33, clean: 21, rate: 21 / 33 },
+    };
+}
+
+function deliveryBase(projectId: string, r: () => number, buckets: string[]) {
     return {
         period: {
             window: 'month', tz: 'UTC', bucket: 'day',
@@ -99,8 +143,24 @@ export function workflowsFixture() {
         first_pass: { applied, rejected, parked }, loops, gate_catch: gate,
         cost_usd: cost, per_step_usd: cost / steps, p95_s: p95,
     });
+    const d = deliveryFixture();
+    const wave = (lo: number, hi: number, k: number) => d.buckets.map((_, i) => lo + ((hi - lo) * ((i * k) % 7)) / 6);
     return {
-        period: deliveryFixture().period,
+        period: d.period,
+        buckets: d.buckets,
+        trends: {
+            success_rate: trend(37 / 41, 0.81, wave(0.7, 1, 3)),
+            runs: trend(46, 35, wave(1, 5, 2).map(Math.round)),
+            gate_pass_rate: trend(112 / 126, 0.86, wave(0.75, 1, 4)),
+            retries: trend(6, 9, wave(0, 2, 5).map(Math.round)),
+            retries_per_task: trend(6 / 38, 9 / 31, wave(0, 0.5, 3)),
+        },
+        retries_per_task: { retries: 6, tasks: 38, rate: 6 / 38 },
+        gate_failures: [
+            { script_id: 'tests', name: 'Unit tests', failures: 9, runs: 7, last_at: '2026-10-15T16:20:00.000Z' },
+            { script_id: 'lint', name: 'Lint', failures: 4, runs: 4, last_at: '2026-10-14T09:05:00.000Z' },
+            { script_id: 'commit-discipline', name: 'Commit discipline (Co-Authored-By trailer)', failures: 1, runs: 1, last_at: '2026-10-09T11:40:00.000Z' },
+        ],
         runs: { total: 46, completed: 37, cancelled: 3, error: 1, waiting_for_owner: 3, running: 2, success_rate: 37 / 41 },
         by_workflow: [
             { workflow_id: 'wf-build', name: 'Build', runs: 0, completed: 0, success_rate: null, median_duration_s: null, avg_loops: 0, avg_gate_rounds: 0, cost_per_run_usd: null },
@@ -182,6 +242,25 @@ export function spendFixture() {
         cache_savings_usd: 18.42,
         cache_savings_unpriced_tokens: 0,
         shipped_tasks: 38,
+        buckets: ds,
+        trends: {
+            spend: trend(agentic + terminal, (agentic * 1.18) + terminal * 0.7, daily.map((d) => d.total_cost_usd + d.terminal_total_cost_usd)),
+            cost_per_task: trend((agentic + terminal) / 38, ((agentic * 1.18) + terminal * 0.7) / 29, daily.map((d, i) => (i % 6 === 5 ? null : (d.total_cost_usd + d.terminal_total_cost_usd) / 2))),
+            cache_savings: trend(18.42, 15.1, daily.map((d) => Number((d.cache_read_tokens * 1.8e-6).toFixed(4)))),
+            cache_hit_rate: trend(0.91, 0.88, daily.map((d) => d.cache_read_tokens / (d.cache_read_tokens + d.input_tokens))),
+        },
+        cost_efficiency: {
+            by_workflow: [
+                { workflow_id: 'wf-build', name: 'Build', runs: 0, cost_usd: 0, prs: 0, shipped_tasks: 0, per_pr_usd: null, per_task_usd: null },
+                { workflow_id: 'wf-delivery', name: 'Delivery', runs: 29, cost_usd: 119.48, prs: 31, shipped_tasks: 24, per_pr_usd: 119.48 / 31, per_task_usd: 119.48 / 24 },
+                { workflow_id: 'wf-quick', name: 'Quick change', runs: 17, cost_usd: 10.37, prs: 10, shipped_tasks: 14, per_pr_usd: 1.037, per_task_usd: 10.37 / 14 },
+            ],
+            by_model: [
+                { model: 'claude-opus-5-5', cli: 'claude', runs: 29, cost_usd: 74.1, prs: 31, shipped_tasks: 24, per_pr_usd: 74.1 / 31, per_task_usd: 74.1 / 24 },
+                { model: 'claude-sonnet-5-5', cli: 'claude', runs: 46, cost_usd: 51.2, prs: 41, shipped_tasks: 38, per_pr_usd: 51.2 / 41, per_task_usd: 51.2 / 38 },
+                { model: 'gpt-5.4', cli: 'copilot', runs: 8, cost_usd: 4.55, prs: 7, shipped_tasks: 6, per_pr_usd: 4.55 / 7, per_task_usd: 4.55 / 6 },
+            ],
+        },
     };
 }
 
@@ -203,6 +282,17 @@ export function emptyDelivery() {
         source_mix: { jira: 0, native: 0 },
         prs: { opened: 0, merged: 0, merge_rate: null, median_s_to_pr: null },
         previous: { tasks_shipped: 0, cycle_p50_s: null, prs_merged: 0 },
+        trends: Object.fromEntries(Object.keys(d.trends).map((k) => [k, trend(null, null, d.buckets.map(() => null))])),
+        flow: {
+            efficiency: null,
+            active_s: 0,
+            waiting_s: 0,
+            owner_response: { answered: 0, unanswered: 0, p50_s: null, p90_s: null },
+            weekly_throughput: 0,
+            weekly: d.flow.weekly.map((w) => ({ ...w, tasks: 0 })),
+        },
+        rework: { shipped: 0, reopened: 0, rate: null },
+        first_attempt: { merged_runs: 0, clean: 0, rate: null },
     };
 }
 

@@ -14,16 +14,16 @@ import {
     Card,
     CHART_COLORS,
     ChartTitle,
-    Delta,
+    FORMAT,
     formatRate,
     Hero,
     mondayOf,
-    previousLabel,
     StatTile,
     TabSkeleton,
     TileGrid,
     TOOLTIP_STYLE,
     LEGEND_PROPS,
+    trendFor,
     usdTick,
     usdTooltip,
 } from './_chrome.js';
@@ -63,11 +63,8 @@ export function OverviewTab({ window }: { window: AnalyticsWindow }) {
     if (!s || !d || !w) return <TabSkeleton />;
 
     const insight = pickInsight(s, d, w);
-    const vs = previousLabel(window);
     const cur = totalSpend(s);
-    const prevSpend = (s.previous?.total_cost_usd ?? 0) + (s.previous?.terminal_total_cost_usd ?? 0);
     const perTask = d.shipped.tasks > 0 ? cur / d.shipped.tasks : null;
-    const prevPerTask = d.previous.tasks_shipped > 0 ? prevSpend / d.previous.tasks_shipped : null;
     const finished = w.runs.completed + w.runs.cancelled + w.runs.error;
     const unit = d.period.bucket === 'week' ? 'week' : 'day';
 
@@ -88,37 +85,39 @@ export function OverviewTab({ window }: { window: AnalyticsWindow }) {
                     label="Tasks shipped"
                     value={d.shipped.tasks.toLocaleString()}
                     definition="Tasks whose first move into Done falls in this window. Sub-tasks are counted on the Delivery tab; agent-test Tasks are left out."
-                    caption={<><Delta cur={d.shipped.tasks} prev={d.previous.tasks_shipped} goodWhen="up" /> {vs}</>}
+                    trend={trendFor(d.trends.tasks_shipped, 'up', window, unit, FORMAT.count)}
                 />
                 <StatTile
                     label="Median cycle time"
                     value={formatSpan(d.cycle_time.p50_s)}
                     definition="Cycle time = a Task's first move into In progress → its first move into Done. The median over the Tasks shipped in this window."
-                    caption={<><Delta cur={d.cycle_time.p50_s} prev={d.previous.cycle_p50_s} goodWhen="down" /> {vs}</>}
+                    trend={trendFor(d.trends.cycle_p50_s, 'down', window, unit, FORMAT.span)}
                 />
                 <StatTile
                     label="PRs merged"
                     value={d.prs.merged.toLocaleString()}
                     definition="PRs opened by workflow runs that started in this window, merged as last checked on GitHub. Agent tests are left out."
-                    caption={<>of {d.prs.opened.toLocaleString()} opened · <Delta cur={d.prs.merged} prev={d.previous.prs_merged} goodWhen="up" /></>}
+                    caption={`of ${d.prs.opened.toLocaleString()} opened`}
+                    trend={trendFor(d.trends.prs_merged, 'up', window, unit, FORMAT.count)}
                 />
                 <StatTile
                     label="Workflow success rate"
                     value={formatRate(w.runs.success_rate)}
                     definition="Completed ÷ finished workflow runs (completed, cancelled or error) started in this window. Runs still going or waiting for you are left out."
-                    caption={<>{w.runs.completed} of {finished} finished · <Delta cur={w.runs.success_rate} prev={w.previous.success_rate} goodWhen="up" points /></>}
+                    caption={`${w.runs.completed} of ${finished} finished`}
+                    trend={trendFor(w.trends.success_rate, 'up', window, unit, FORMAT.rate, true)}
                 />
                 <StatTile
                     label="Spend"
                     value={formatCostUsd(cur)}
                     definition="Completed agent runs plus closed terminal sessions in this window."
-                    caption={<><Delta cur={cur} prev={prevSpend} goodWhen="down" /> {vs}</>}
+                    trend={trendFor(s.trends.spend, 'down', window, unit, FORMAT.usd)}
                 />
                 <StatTile
                     label="Cost per shipped Task"
                     value={perTask === null ? '—' : formatCostUsd(perTask)}
                     definition="All spend in the window ÷ Tasks shipped in the window. It includes work still in flight, so it is an all-in unit cost rather than one Task's bill."
-                    caption={<><Delta cur={perTask} prev={prevPerTask} goodWhen="down" /> {vs}</>}
+                    trend={trendFor(s.trends.cost_per_task, 'down', window, unit, FORMAT.usd)}
                 />
             </TileGrid>
 

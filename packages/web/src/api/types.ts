@@ -1,4 +1,4 @@
-import type { AgentCli, AnalyticsWindow, IAgent, IssueType, IWorkflowRunSummary } from '@atlas/shared';
+import type { AgentCli, AnalyticsWindow, IAgent, IAnalyticsSpendInsight, IssueType, IWorkflowRunSummary } from '@atlas/shared';
 
 export interface SidenavCounts {
     projects: number;
@@ -245,7 +245,8 @@ interface AnalyticsModelRow {
     count: number;
 }
 
-export interface AnalyticsResponse {
+/** `GET /api/analytics`. The trend and cost-efficiency part is `IAnalyticsSpendInsight` (@atlas/shared). */
+export interface AnalyticsResponse extends IAnalyticsSpendInsight {
     period: {
         start: string;
         end: string;

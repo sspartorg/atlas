@@ -17,6 +17,9 @@ const EMPTY: Record<string, Array<[string, number]>> = {
         ['Nothing shipped in this window', 3],
         ['No cycle times yet', 3],
         ['No project shipped a Task in this window.', 1],
+        ['nothing shipped', 1],
+        ['no parks', 1],
+        ['no merged runs', 1],
     ],
     workflows: [
         ['No workflow runs in this window', 1],
@@ -25,6 +28,9 @@ const EMPTY: Record<string, Array<[string, number]>> = {
         ['No run cost in this window', 1],
         ['No workflow ran in this window.', 1],
         ['No agent took a workflow step in this window.', 1],
+        ['No failed checks in this window', 1],
+        ['No agent steps in this window', 1],
+        ['no Tasks worked', 1],
     ],
     spend: [
         ['No spend in this window', 3],
@@ -33,6 +39,8 @@ const EMPTY: Record<string, Array<[string, number]>> = {
         ['No project spend in this window', 1],
         ['No completed runs in this window', 1],
         ['No spend in the trailing 12 months', 1],
+        ['No cache savings in this window', 1],
+        ['No workflow runs in this window', 1],
     ],
 };
 
@@ -59,6 +67,7 @@ for (const tab of Object.keys(EMPTY)) {
                 await expect(page.getByText(text, { exact: true })).toHaveCount(n);
             }
             await expect(page.getByRole('alert')).toHaveCount(0);
+            if (tab === 'workflows') expect(await tile(page, 'Retries per Task')).toBe('—');
             if (tab === 'overview') {
                 expect(await tile(page, 'Tasks shipped')).toBe('0');
                 expect(await tile(page, 'Median cycle time')).toBe('—');
@@ -66,7 +75,14 @@ for (const tab of Object.keys(EMPTY)) {
                 expect(await tile(page, 'Spend')).toBe('$0.00');
                 expect(await tile(page, 'Cost per shipped Task')).toBe('—');
             }
+            // With nothing earlier to compare, every tile says so (—) and draws no sparkline.
+            await expect(page.getByTitle('No earlier data to compare').first()).toBeVisible();
             if (tab === 'delivery') {
+                expect(await tile(page, 'Flow efficiency')).toBe('—');
+                expect(await tile(page, 'Your response to parks')).toBe('—');
+                expect(await tile(page, 'Weekly throughput')).toBe('0.0');
+                expect(await tile(page, 'Rework after Done')).toBe('—');
+                expect(await tile(page, 'First-attempt merges')).toBe('—');
                 // The seed's one Task in progress is the only work in progress.
                 const wip = page.getByRole('list', { name: 'Oldest work in progress' });
                 await expect(wip.getByRole('listitem')).toHaveCount(1);

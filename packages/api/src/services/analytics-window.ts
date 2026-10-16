@@ -103,7 +103,7 @@ export function bucketKey(at: string | Date, tz: string, unit: 'day' | 'week'): 
 type BucketFacts = Record<string, Array<{ bucket: string }>>;
 
 /** Every fact list cut down to one bucket, so a metric reads per bucket with the same code. */
-export function sliceFacts<F extends BucketFacts>(facts: F, bucket: string): F {
+function sliceFacts<F extends BucketFacts>(facts: F, bucket: string): F {
     return Object.fromEntries(Object.entries(facts).map(([k, rows]) => [k, rows.filter((r) => r.bucket === bucket)])) as F;
 }
 

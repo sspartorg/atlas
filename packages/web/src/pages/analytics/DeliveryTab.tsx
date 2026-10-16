@@ -34,9 +34,9 @@ import {
     CHART_COLORS,
     ChartEmpty,
     ChartTitle,
-    Delta,
+    FORMAT,
     formatRate,
-    previousLabel,
+    trendFor,
     StatTile,
     TableScroll,
     TabSkeleton,
@@ -59,58 +59,114 @@ const HEAD_SX = {
 const NUM_SX = { fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12.5, whiteSpace: 'nowrap' as const };
 
 function Tiles({ d, window }: { d: IAnalyticsDelivery; window: AnalyticsWindow }) {
-    const vs = previousLabel(window);
+    const u = d.period.bucket;
+    const tr = (k: keyof IAnalyticsDelivery['trends'], good: 'up' | 'down', f: (v: number) => string, points = false) =>
+        trendFor(d.trends[k], good, window, u, f, points);
+    const or = d.flow.owner_response;
     return (
-        <TileGrid cols={4}>
-            <StatTile
-                label="Tasks shipped"
-                value={d.shipped.tasks.toLocaleString()}
-                definition="Tasks whose first move into Done falls in this window. Agent-test Tasks are left out."
-                caption={<>+{d.shipped.sub_tasks.toLocaleString()} sub-tasks · <Delta cur={d.shipped.tasks} prev={d.previous.tasks_shipped} goodWhen="up" /> {vs}</>}
-            />
-            <StatTile
-                label="Lead time, median"
-                value={formatSpan(d.lead_time.p50_s)}
-                definition="Lead time = a Task's creation → its first move into Done, over the Tasks shipped in this window. p90 is the time nine in ten of them beat."
-                caption={`p90 ${formatSpan(d.lead_time.p90_s)} · ${d.lead_time.count} Tasks`}
-            />
-            <StatTile
-                label="Cycle time, median"
-                value={formatSpan(d.cycle_time.p50_s)}
-                definition="Cycle time = a Task's first move into In progress → its first move into Done. Tasks that went to Done without entering In progress are left out."
-                caption={<>p90 {formatSpan(d.cycle_time.p90_s)} · <Delta cur={d.cycle_time.p50_s} prev={d.previous.cycle_p50_s} goodWhen="down" /></>}
-            />
-            <StatTile
-                label="Work in progress"
-                value={d.wip.count.toLocaleString()}
-                definition={`Tasks in progress, waiting for info or in review right now, whatever the window. Aging = open more than ${formatSpan(d.wip.aging_after_s)} since its first In progress (since it last left Done, if reopened).`}
-                caption={`${d.wip.aging} aging past ${formatSpan(d.wip.aging_after_s)}`}
-            />
-            <StatTile
-                label="Waiting on you"
-                value={formatSpan(d.waiting.parks === 0 ? null : d.waiting.total_s)}
-                definition="Total time items sat in Waiting for info, over the moves into it that started in this window. A wait still open is counted up to now."
-                caption={`${d.waiting.parks} parks · median ${formatSpan(d.waiting.median_s)}${d.waiting.still_waiting ? ` · ${d.waiting.still_waiting} still waiting` : ''}`}
-            />
-            <StatTile
-                label="Reopen rate"
-                value={formatRate(d.reopens.rate)}
-                definition="Items moved out of Done ÷ items moved into Done in this window, Tasks and sub-tasks alike."
-                caption={`${d.reopens.reopened} reopened of ${d.reopens.done} done`}
-            />
-            <StatTile
-                label="PRs merged"
-                value={d.prs.merged.toLocaleString()}
-                definition="PRs opened by workflow runs that started in this window, merged as last checked on GitHub. Agent tests are left out."
-                caption={`of ${d.prs.opened} opened · ${formatRate(d.prs.merge_rate)} merge rate`}
-            />
-            <StatTile
-                label="Time to PR, median"
-                value={formatSpan(d.prs.median_s_to_pr)}
-                definition="From a workflow run's start to its PR opening, over runs that opened one."
-                caption="from run start"
-            />
-        </TileGrid>
+        <>
+            <TileGrid cols={4}>
+                <StatTile
+                    label="Tasks shipped"
+                    value={d.shipped.tasks.toLocaleString()}
+                    definition="Tasks whose first move into Done falls in this window. Agent-test Tasks are left out."
+                    caption={`+${d.shipped.sub_tasks.toLocaleString()} sub-tasks`}
+                    trend={tr('tasks_shipped', 'up', FORMAT.count)}
+                />
+                <StatTile
+                    label="Lead time, median"
+                    value={formatSpan(d.lead_time.p50_s)}
+                    definition="Lead time = a Task's creation → its first move into Done, over the Tasks shipped in this window. p90 is the time nine in ten of them beat."
+                    caption={`p90 ${formatSpan(d.lead_time.p90_s)} · ${d.lead_time.count} Tasks`}
+                    trend={tr('lead_p50_s', 'down', FORMAT.span)}
+                />
+                <StatTile
+                    label="Cycle time, median"
+                    value={formatSpan(d.cycle_time.p50_s)}
+                    definition="Cycle time = a Task's first move into In progress → its first move into Done. Tasks that went to Done without entering In progress are left out."
+                    caption={`p90 ${formatSpan(d.cycle_time.p90_s)}`}
+                    trend={tr('cycle_p50_s', 'down', FORMAT.span)}
+                />
+                <StatTile
+                    label="Work in progress"
+                    value={d.wip.count.toLocaleString()}
+                    definition={`Tasks in progress, waiting for info or in review right now, whatever the window. Aging = open more than ${formatSpan(d.wip.aging_after_s)} since its first In progress (since it last left Done, if reopened). The trend replays the status history: the count at the end of each ${u}, and at the end of the previous window.`}
+                    caption={`${d.wip.aging} aging past ${formatSpan(d.wip.aging_after_s)}`}
+                    trend={tr('wip', 'down', FORMAT.count)}
+                />
+                <StatTile
+                    label="Waiting on you"
+                    value={formatSpan(d.waiting.parks === 0 ? null : d.waiting.total_s)}
+                    definition="Total time items sat in Waiting for info, over the moves into it that started in this window. A wait still open is counted up to now."
+                    caption={`${d.waiting.parks} parks · median ${formatSpan(d.waiting.median_s)}${d.waiting.still_waiting ? ` · ${d.waiting.still_waiting} still waiting` : ''}`}
+                    trend={tr('waiting_s', 'down', FORMAT.span)}
+                />
+                <StatTile
+                    label="Reopen rate"
+                    value={formatRate(d.reopens.rate)}
+                    definition="Items moved out of Done ÷ items moved into Done in this window, Tasks and sub-tasks alike."
+                    caption={`${d.reopens.reopened} reopened of ${d.reopens.done} done`}
+                    trend={tr('reopen_rate', 'down', FORMAT.rate, true)}
+                />
+                <StatTile
+                    label="PRs merged"
+                    value={d.prs.merged.toLocaleString()}
+                    definition="PRs opened by workflow runs that started in this window, merged as last checked on GitHub. Agent tests are left out."
+                    caption={`of ${d.prs.opened} opened · ${formatRate(d.prs.merge_rate)} merge rate`}
+                    trend={tr('prs_merged', 'up', FORMAT.count)}
+                />
+                <StatTile
+                    label="Time to PR, median"
+                    value={formatSpan(d.prs.median_s_to_pr)}
+                    definition="From a workflow run's start to its PR opening, over runs that opened one."
+                    caption="from run start"
+                    trend={tr('time_to_pr_s', 'down', FORMAT.span)}
+                />
+            </TileGrid>
+
+            <Box component="section" aria-labelledby="delivery-flow-quality" sx={{ display: 'grid', gap: { xs: 1.5, md: 2 } }}>
+                <Typography id="delivery-flow-quality" component="h3" sx={{ fontSize: 14, fontWeight: 700, color: ATLAS_PALETTE.slate }}>
+                    Flow and quality
+                </Typography>
+                <TileGrid cols={5}>
+                    <StatTile
+                        label="Flow efficiency"
+                        value={formatRate(d.flow.efficiency)}
+                        definition="Time the shipped Tasks spent In progress or In review (worked) ÷ all their time from creation to first Done. The rest is waiting: Draft, Ready and Waiting for info."
+                        caption={d.flow.efficiency === null ? 'nothing shipped' : `${formatSpan(d.flow.active_s)} worked · ${formatSpan(d.flow.waiting_s)} waiting`}
+                        trend={tr('flow_efficiency', 'up', FORMAT.rate, true)}
+                    />
+                    <StatTile
+                        label="Your response to parks"
+                        value={formatSpan(or.p50_s)}
+                        definition="From a workflow run parking for you to that run resuming on your answer, over parks that started in this window. Median shown, p90 below. Unanswered parks are counted, not timed; a sub-task's park counts once."
+                        caption={or.answered + or.unanswered === 0 ? 'no parks' : `p90 ${formatSpan(or.p90_s)} · ${or.answered} answered${or.unanswered ? ` · ${or.unanswered} open` : ''}`}
+                        trend={tr('owner_response_p50_s', 'down', FORMAT.span)}
+                    />
+                    <StatTile
+                        label="Weekly throughput"
+                        value={d.flow.weekly_throughput === null ? '—' : d.flow.weekly_throughput.toFixed(1)}
+                        definition="Tasks shipped in this window ÷ the window's length in weeks. The sparkline is Tasks shipped in each Monday week."
+                        caption="Tasks a week"
+                        trend={tr('weekly_throughput', 'up', FORMAT.decimal)}
+                    />
+                    <StatTile
+                        label="Rework after Done"
+                        value={formatRate(d.rework.rate)}
+                        definition="Tasks shipped in this window that were moved out of Done again before the window ended ÷ Tasks shipped."
+                        caption={`${d.rework.reopened} of ${d.rework.shipped} shipped`}
+                        trend={tr('rework_rate', 'down', FORMAT.rate, true)}
+                    />
+                    <StatTile
+                        label="First-attempt merges"
+                        value={formatRate(d.first_attempt.rate)}
+                        definition="Workflow runs started in this window whose every PR merged, and how many got there with no retried agent step and no park in the run (its sub-task runs included). Agent tests are left out."
+                        caption={d.first_attempt.merged_runs === 0 ? 'no merged runs' : `${d.first_attempt.clean} of ${d.first_attempt.merged_runs} merged runs`}
+                        trend={tr('first_attempt_merge_rate', 'up', FORMAT.rate, true)}
+                    />
+                </TileGrid>
+            </Box>
+        </>
     );
 }
 

@@ -35,7 +35,9 @@ Abbreviations for the files used most:
 | u:api-N | `packages/api/src/services/notifications.test.ts`, `.../external-notifications.test.ts`, `packages/api/src/routes/notifications.test.ts` |
 | u:api-R | `packages/api/src/routes/reminders.test.ts`, `.../services/reminders.test.ts`, `.../reminders-lifecycle.test.ts` |
 | u:EventTypeIcon, u:Sidenav, u:NotificationStatusPopover, u:useSSE, u:_chrome | the matching `*.test.ts(x)` beside each component / hook in `packages/web/src` |
-| u:api-A | `packages/api/src/routes/analytics.test.ts`, `.../services/analytics-delivery.test.ts`, `.../analytics-workflows.test.ts` |
+| u:api-A | `packages/api/src/routes/analytics.test.ts`, `.../services/analytics-delivery.test.ts`, `.../analytics-workflows.test.ts`, `.../analytics-spend.test.ts` |
+| u:api-delivery, u:api-workflows, u:api-spend | `packages/api/src/services/analytics-{delivery,workflows,spend}.test.ts` (part of u:api-A) |
+| u:_depth | `packages/web/src/pages/analytics/_depth.test.tsx` |
 
 ## 1. Notifications — data variants
 
@@ -241,6 +243,23 @@ Abbreviations for the files used most:
 | A62 | Workflows 500 → "Could not load workflow analytics: …" | AF | gap |
 | A63 | Spend 500 → "Could not load spend: …"; other tabs still work | AF | gap |
 | A64 | Project 500 / 404, Task 404 / not-a-task | AF "drill-downs…" | gap |
+
+### 4.6 Trends, flow, quality and cost efficiency (2026-10-16)
+
+| # | Item | Tests | Before |
+|---|---|---|---|
+| A70 | Every tile (Overview 6, Delivery 13, Workflows 5, Spend 4): Δ vs the previous equal-length window (▲/▼, green when good news for that metric, points for rates, "—" with no earlier data) and a labelled sparkline of the per-bucket series | AF "every tile compares with the previous window…"; AR "every tile's trend…" (Tasks shipped delta = SQL, all windows); u:_depth (Sparkline, StatTile trend); u:api delivery/workflows/spend `trends` (exact series) | new |
+| A71 | Flow efficiency (In progress + In review ÷ all status time before first Done, shipped Tasks) | AR (SQL, 4 windows); AF definition + value; AB "—"; u:api-delivery 37200/127800 | new |
+| A72 | Your response to parks (park → run's next resume; p50 / p90; sub-task copies and agent tests out; open parks counted) | AR (SQL median, 4 windows); AF; AB "—", "no parks"; u:api-delivery 2h / 18720s | new |
+| A73 | Weekly throughput (Tasks shipped ÷ window weeks; sparkline per Monday week) | AR; AF; AB "0.0"; u:api-delivery 56/13 | new |
+| A74 | Rework after Done (shipped Tasks that left Done again by the window end) | AR; AF; AB "—"; u:api-delivery 1 of 4 | new |
+| A75 | First-attempt merges (runs whose every PR merged with no retried step and no park in the tree) | AR (SQL, 4 windows); AF; AB "—", "no merged runs"; u:api-delivery 1 of 3 | new |
+| A76 | Retries per Task (retries ÷ distinct Tasks worked; a sub-task's run counts for its Task) | AR; AF; AB "—", "no Tasks worked"; u:api-workflows 2 ÷ 2 | new |
+| A77 | Red checks by script table (failures, run trees, last failed; top 10) | AR (rows = SQL); AF; AB "No failed checks in this window"; u:api-workflows, u:_depth | new |
+| A78 | Agents: cost vs first-attempt success scatter (a comparison, not a ranking, ADR 0023) | AF (one dot per agent); AB "No agent steps in this window"; u:_depth | new |
+| A79 | Cost per PR and per shipped Task, by workflow and by model | AR (per-PR column = SQL, 4 windows); AF; AB "No workflow runs in this window"; u:api-spend exact rows; u:_depth | new |
+| A80 | Cache savings per day / week chart | AF; AB "No cache savings in this window"; u:api-spend 5.6 | new |
+| A81 | No sideways page scroll at 390px on any tab | AF "nothing scrolls sideways at 390px" | new |
 
 ## 5. Everywhere (all three pages + Settings → Notifications + drill-downs)
 
