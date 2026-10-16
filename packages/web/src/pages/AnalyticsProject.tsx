@@ -363,7 +363,8 @@ export function AnalyticsProject() {
                     }
                 />
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {data.topTasks.map((task) => {
+                    {/* All-zero bars would read as a ranking of nothing. */}
+                    {topMax > 0 && data.topTasks.map((task) => {
                         const pct = topMax > 0 ? (task.totals.total_cost_usd / topMax) * 100 : 0;
                         return (
                             <Box
@@ -479,7 +480,7 @@ export function AnalyticsProject() {
                             </Box>
                         );
                     })}
-                    {data.topTasks.length === 0 && (
+                    {topMax === 0 && (
                         <Typography sx={{ color: ATLAS_PALETTE.slate60, fontSize: 13, py: 2 }}>
                             No tasks with cost data yet.
                         </Typography>

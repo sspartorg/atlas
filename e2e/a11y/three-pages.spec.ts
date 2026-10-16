@@ -247,7 +247,14 @@ test.describe('keyboard', () => {
         await page.getByRole('button', { name: '7 days', exact: true }).focus();
         await page.keyboard.press('Space');
         await expect(page).toHaveURL(/window=7d/);
-        await page.getByRole('button', { name: 'How Reopen rate is measured' }).focus();
+        // The new window refetches and redraws the tiles; focus a settled one.
+        await expect(page.getByText('for the last 7 days.')).toBeVisible();
+        await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'How Waiting on you is measured' })).toBeVisible();
+        // Reach it with Tab (keyboard focus is what opens a tooltip; a scripted focus may not).
+        await page.getByRole('button', { name: 'How Waiting on you is measured' }).focus();
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('button', { name: 'How Reopen rate is measured' })).toBeFocused();
         await expect(page.getByRole('tooltip')).toBeVisible();
         await page.keyboard.press('Escape');
         await expect(page.getByRole('tooltip')).toHaveCount(0);

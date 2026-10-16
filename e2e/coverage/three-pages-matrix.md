@@ -217,7 +217,7 @@ Abbreviations for the files used most:
 | A41 | Delivery | "Nothing shipped in this window" ×3, "No cycle times yet" ×3, "No project shipped a Task in this window." | AB; AS (fixture) | partial |
 | A42 | Workflows | "No workflow runs…", "No checks ran…", "No parks…", "No run cost…", "No workflow ran…", "No agent took a workflow step…" | AB | gap |
 | A43 | Spend | "No spend in this window" ×3, "No tokens…", "No agent spend…", "No project spend…", "No completed runs…", "No spend in the trailing 12 months" | AB | gap |
-| A44 | Project / Task drill-downs with no runs | AB ("No tasks with cost data yet.", "No completed runs on this Task or its sub-tasks yet.") | gap |
+| A44 | Project / Task drill-downs with no runs ("No tasks with cost data yet."; descendants listed at $0.00; unfiltered empty table "No completed runs on this Task or its sub-tasks yet.") | AB; u:AnalyticsProject, u:AnalyticsTask | gap |
 | A45 | Dashboard "No spend yet this month" | AB | gap |
 
 ### 4.4 Row links and drill-down controls

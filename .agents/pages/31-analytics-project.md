@@ -9,7 +9,7 @@ All-time cost for one project, broken down by item kind (`task` / `sub_task`) an
 - No id in the URL: "No project id in the URL." (`:76`).
 - Loading: three `<Skeleton>` blocks (`:86`).
 - Error: `Failed to load project analytics: <message>` — the real error text, not a generic line (`:96`).
-- No Tasks with cost: "No tasks with cost data yet." (`:487`).
+- No Tasks with cost: "No tasks with cost data yet." — also when Tasks exist but none has spent anything (it used to draw a ladder of $0.00 bars).
 - Populated: totals header → by-kind pie → top-Tasks bars → optional paged Task table.
 
 ## UI elements

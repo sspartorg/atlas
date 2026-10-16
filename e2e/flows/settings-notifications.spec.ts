@@ -117,6 +117,8 @@ test('Telegram: save, Send Test, a bad token, the eye, reveal and a Chat ID edit
 
     // Fix it, test again.
     await page.reload();
+    // Settings must load first: the hydrate effect would wipe a value typed before it.
+    await expect(page.getByPlaceholder(/Stored/).first()).toBeVisible();
     await tokenField(page).fill('good-token');
     await tokenField(page).blur();
     await page.getByRole('button', { name: 'Send Test Message' }).click();
@@ -151,6 +153,8 @@ test('Teams: a good webhook connects, a failing one says why; Telegram settings 
     await expect(pill(page)).toContainText('Connected');
 
     await page.reload();
+    // Settings must load first: the hydrate effect would wipe a value typed before it.
+    await expect(page.getByPlaceholder(/Stored/).first()).toBeVisible();
     await page.getByPlaceholder(/https:\/\/|webhook|Stored/i).first().fill(`http://127.0.0.1:${FAKE_TELEGRAM_PORT}/teams-fail`);
     await page.getByPlaceholder(/https:\/\/|webhook|Stored/i).first().blur();
     await page.getByRole('button', { name: 'Send Test Message' }).click();

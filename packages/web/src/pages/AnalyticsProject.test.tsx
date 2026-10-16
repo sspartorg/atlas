@@ -197,9 +197,7 @@ describe('AnalyticsProject page', () => {
         expect(screen.getAllByText(/1 terminal session/).length).toBeGreaterThan(0);
     });
 
-    it('renders zero-cost tasks (topMax=0) with 0% bar width (pct=0 branch)', async () => {
-        // When all topTasks have total_cost_usd=0, topMax=0 so pct=0 for every bar.
-        // This exercises the `topMax > 0 ? ... : 0` false branch on line 370.
+    it('no task has cost yet (topMax=0): the empty copy, not a ladder of $0.00 bars', async () => {
         server.use(
             http.get(`${BASE}/analytics/project/p1`, () =>
                 HttpResponse.json({
@@ -218,9 +216,8 @@ describe('AnalyticsProject page', () => {
             )
         );
         renderAt('/analytics/project/p1');
-        await waitFor(() => {
-            expect(screen.getByText('Zero Cost Task')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('No tasks with cost data yet.')).toBeInTheDocument();
+        expect(screen.queryByText('Zero Cost Task')).not.toBeInTheDocument();
         // No "View all N tasks" button since remaining = max(0, 1-1) = 0
         expect(screen.queryByRole('button', { name: /View all/i })).not.toBeInTheDocument();
     });

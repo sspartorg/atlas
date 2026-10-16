@@ -81,10 +81,13 @@ test('the drill-downs read empty for a project and Task with no runs', async ({ 
     await expect(page.getByText('No tasks with cost data yet.')).toBeVisible();
     await goto(page, '/analytics/task/ETM-1');
     await expect(page.getByText('E2E linked task').first()).toBeVisible();
-    await expect(page.getByText('No completed runs on this Task or its sub-tasks yet.')).toBeVisible();
+    // Its one descendant is listed, honestly at nothing spent.
+    await expect(page.getByText('1 child item • 0 completed runs')).toBeVisible();
+    await expect(page.getByText('E2E seeded sub-task')).toBeVisible();
+    await expect(page.getByText('1 total')).toBeVisible();
 });
 
 test('the Dashboard reads no spend this month, like Analytics', async ({ page }) => {
     await goto(page, '/');
-    await expect(page.getByText('No spend yet this month')).toBeVisible();
+    await expect(page.getByText('0 runs, 0 tokens')).toBeVisible();
 });

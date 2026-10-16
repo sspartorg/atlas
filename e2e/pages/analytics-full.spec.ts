@@ -107,7 +107,11 @@ test.describe('/analytics — every metric states its definition', () => {
             }
             // The keyboard gets the same tooltip.
             await infos.first().focus();
-            await expect(page.getByRole('tooltip')).toBeVisible();
+            await page.keyboard.press('Tab');
+            await page.keyboard.press('Shift+Tab');
+            await expect(infos.first()).toBeFocused();
+            // The one just left may still be fading out.
+            await expect(page.getByRole('tooltip').last()).toBeVisible();
         });
     }
 
