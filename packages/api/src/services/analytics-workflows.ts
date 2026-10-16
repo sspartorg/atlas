@@ -1,8 +1,15 @@
 import { sql } from 'kysely';
-import { WORKFLOW_PARK_KIND_LABELS, type AnalyticsWindow, type IAnalyticsWorkflows, type WorkflowParkKind } from '@atlas/shared';
+import {
+    WORKFLOW_PARK_KIND_LABELS,
+    type AnalyticsWindow,
+    type AnalyticsWorkflowsTrendKey,
+    type IAnalyticsTrend,
+    type IAnalyticsWorkflows,
+    type WorkflowParkKind,
+} from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
-import { fleetPerformance } from './agent-scorecard.js';
-import { notTestRun, resolveWindow } from './analytics-window.js';
+import { fleetPerformance, iso } from './agent-scorecard.js';
+import { notTestRun, ratio, resolveWindow, trendOf, windowBuckets } from './analytics-window.js';
 
 // Workflow analytics: how the runs went, per workflow, plus each agent's row.
 //
@@ -14,7 +21,68 @@ import { notTestRun, resolveWindow } from './analytics-window.js';
 
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
-const rate = (n: number, d: number): number | null => (d === 0 ? null : n / d);
+
+/** What one window's tiles are computed from. Every list carries its bucket. */
+type Facts = {
+    runs: Array<{ bucket: string; status: string }>;
+    gates: Array<{ bucket: string; verdict: string }>;
+    /** Agent dispatches created in the window; `task` is the Task it worked for (a sub-task's parent). */
+    dispatches: Array<{ bucket: string; retry: boolean; task: string | null }>;
+};
+
+async function windowFacts(start: string, end: string, tz: string, unit: 'day' | 'week'): Promise<Facts> {
+    const bucket = (col: string) => sql<string>`to_char(date_trunc(${unit}, ${sql.ref(col)} AT TIME ZONE ${tz}), 'YYYY-MM-DD')`;
+    const [runs, gates, dispatches] = await Promise.all([
+        sql<{ bucket: string; status: string }>`
+            SELECT ${bucket('r.started_at')} AS bucket, r.status
+              FROM workflow_runs r
+             WHERE r.parent_workflow_run_id IS NULL AND ${notTestRun('r.item_id')}
+               AND r.started_at >= ${start}::timestamptz AND r.started_at < ${end}::timestamptz
+        `.execute(db),
+        sql<{ bucket: string; verdict: string }>`
+            SELECT ${bucket('g.created_at')} AS bucket, g.verdict
+              FROM run_gate_results g
+              JOIN workflow_runs r ON r.id = g.workflow_run_id
+              LEFT JOIN items i ON i.id = r.item_id
+             WHERE NOT COALESCE(i.is_test, false)
+               AND g.created_at >= ${start}::timestamptz AND g.created_at < ${end}::timestamptz
+        `.execute(db),
+        sql<{ bucket: string; retry: boolean; task: string | null }>`
+            SELECT ${bucket('a.created_at')} AS bucket, a.parent_run_id IS NOT NULL AS retry,
+                   CASE WHEN i.type = 'sub_task' THEN i.parent_id ELSE i.id END AS task
+              FROM agent_runs a
+              LEFT JOIN items i ON i.id = a.item_id
+             WHERE NOT COALESCE(i.is_test, false)
+               AND a.created_at >= ${start}::timestamptz AND a.created_at < ${end}::timestamptz
+        `.execute(db),
+    ]);
+    return { runs: runs.rows, gates: gates.rows, dispatches: dispatches.rows };
+}
+
+const count = (f: Facts, status: string) => f.runs.filter((r) => r.status === status).length;
+const verdicts = (f: Facts, v: string) => f.gates.filter((g) => g.verdict === v).length;
+const retriesOf = (f: Facts) => f.dispatches.filter((d) => d.retry).length;
+const tasksOf = (f: Facts) => new Set(f.dispatches.map((d) => d.task).filter((t): t is string => t !== null)).size;
+
+const METRICS: Record<AnalyticsWorkflowsTrendKey, (f: Facts) => number | null> = {
+    success_rate: (f) => ratio(count(f, 'completed'), count(f, 'completed') + count(f, 'cancelled') + count(f, 'error')),
+    runs: (f) => f.runs.length,
+    gate_pass_rate: (f) => ratio(verdicts(f, 'pass'), verdicts(f, 'pass') + verdicts(f, 'fail')),
+    retries: (f) => retriesOf(f),
+    retries_per_task: (f) => ratio(retriesOf(f), tasksOf(f)),
+};
+
+function tally(f: Facts) {
+    return {
+        total: f.runs.length,
+        completed: count(f, 'completed'),
+        cancelled: count(f, 'cancelled'),
+        error: count(f, 'error'),
+        waiting_for_owner: count(f, 'waiting_for_owner'),
+        running: count(f, 'running'),
+        success_rate: METRICS.success_rate(f),
+    };
+}
 
 export async function workflowAnalytics(opts: {
     tz: string;
@@ -22,17 +90,12 @@ export async function workflowAnalytics(opts: {
     now?: Date;
 }): Promise<IAnalyticsWorkflows> {
     const period = await resolveWindow(opts.tz, opts.window, opts.now);
-    const { start, end, previous_start: pStart, previous_end: pEnd } = period;
+    const { tz, start, end, previous_start: pStart, previous_end: pEnd, bucket: unit } = period;
 
-    const [statusRows, perWorkflow, gates, parks, retries, fleet] = await Promise.all([
-        sql<{ cur: boolean; status: string; n: string }>`
-            SELECT r.started_at >= ${start}::timestamptz AS cur, r.status, COUNT(*)::text AS n
-              FROM workflow_runs r
-             WHERE r.parent_workflow_run_id IS NULL AND ${notTestRun('r.item_id')}
-               AND ((r.started_at >= ${start}::timestamptz AND r.started_at < ${end}::timestamptz)
-                 OR (r.started_at >= ${pStart}::timestamptz AND r.started_at < ${pEnd}::timestamptz))
-             GROUP BY 1, 2
-        `.execute(db),
+    const [cur, prev, buckets, perWorkflow, parks, gateFailures, fleet] = await Promise.all([
+        windowFacts(start, end, tz, unit),
+        windowFacts(pStart, pEnd, tz, unit),
+        windowBuckets(period),
         // A run's cost is its whole tree: its own steps plus its sub-task runs'.
         sql<{
             workflow_id: string;
@@ -80,15 +143,6 @@ export async function workflowAnalytics(opts: {
               LEFT JOIN cost ON cost.root = runs.id
              GROUP BY runs.workflow_id, w.name
         `.execute(db),
-        sql<{ verdict: string; n: string }>`
-            SELECT g.verdict, COUNT(*)::text AS n
-              FROM run_gate_results g
-              JOIN workflow_runs r ON r.id = g.workflow_run_id
-              LEFT JOIN items i ON i.id = r.item_id
-             WHERE NOT COALESCE(i.is_test, false)
-               AND g.created_at >= ${start}::timestamptz AND g.created_at < ${end}::timestamptz
-             GROUP BY 1
-        `.execute(db),
         // A sub-task that asks parks its own run AND its Task's (`waitOnChild`),
         // and the Owner answered once: the Task's copy (`subtask_waiting`) is
         // skipped and the sub-task's own park, which carries the real kind, is
@@ -104,44 +158,50 @@ export async function workflowAnalytics(opts: {
                AND ev.created_at >= ${start}::timestamptz AND ev.created_at < ${end}::timestamptz
              GROUP BY 1 ORDER BY COUNT(*) DESC, 1
         `.execute(db),
-        sql<{ retries: string; dispatches: string }>`
-            SELECT COUNT(*) FILTER (WHERE a.parent_run_id IS NOT NULL)::text AS retries,
-                   COUNT(*)::text AS dispatches
-              FROM agent_runs a
-              LEFT JOIN items i ON i.id = a.item_id
-             WHERE NOT COALESCE(i.is_test, false)
-               AND a.created_at >= ${start}::timestamptz AND a.created_at < ${end}::timestamptz
+        // Red checks by script: the guard-rail's name when it is one, else its id.
+        // `runs` counts run trees (a sub-task's run is its Task's run).
+        sql<{ script_id: string; name: string; failures: string; runs: string; last_at: unknown }>`
+            SELECT g.script_id, COALESCE(s.name, g.script_id) AS name,
+                   COUNT(*)::text AS failures,
+                   COUNT(DISTINCT COALESCE(r.parent_workflow_run_id, r.id))::text AS runs,
+                   MAX(g.created_at) AS last_at
+              FROM run_gate_results g
+              JOIN workflow_runs r ON r.id = g.workflow_run_id
+              LEFT JOIN items i ON i.id = r.item_id
+              LEFT JOIN guardrail_scripts s ON s.id = g.script_id
+             WHERE g.verdict = 'fail' AND NOT COALESCE(i.is_test, false)
+               AND g.created_at >= ${start}::timestamptz AND g.created_at < ${end}::timestamptz
+             GROUP BY g.script_id, s.name
+             ORDER BY COUNT(*) DESC, 2
+             LIMIT 10
         `.execute(db),
         fleetPerformance({ since: start, until: end, exclude_test_items: true }),
     ]);
 
-    const tally = (cur: boolean) => {
-        const by = new Map<string, number>();
-        for (const r of statusRows.rows) if (r.cur === cur) by.set(r.status, num(r.n));
-        const get = (s: string) => by.get(s) ?? 0;
-        const total = [...by.values()].reduce((a, b) => a + b, 0);
-        const finished = get('completed') + get('cancelled') + get('error');
-        return {
-            total,
-            completed: get('completed'),
-            cancelled: get('cancelled'),
-            error: get('error'),
-            waiting_for_owner: get('waiting_for_owner'),
-            running: get('running'),
-            success_rate: rate(get('completed'), finished),
-        };
-    };
-    const cur = tally(true);
-    const prev = tally(false);
+    const curTally = tally(cur);
+    const prevTally = tally(prev);
+    const trends = Object.fromEntries(
+        Object.entries(METRICS).map(([k, metric]) => [k, trendOf(cur, prev, buckets, metric)]),
+    ) as Record<AnalyticsWorkflowsTrendKey, IAnalyticsTrend>;
 
-    const g = new Map(gates.rows.map((r) => [r.verdict, num(r.n)]));
-    const pass = g.get('pass') ?? 0;
-    const fail = g.get('fail') ?? 0;
-    const rt = retries.rows[0];
+    const pass = verdicts(cur, 'pass');
+    const fail = verdicts(cur, 'fail');
+    const retries = retriesOf(cur);
+    const tasks = tasksOf(cur);
 
     return {
         period,
-        runs: cur,
+        buckets,
+        trends,
+        retries_per_task: { retries, tasks, rate: ratio(retries, tasks) },
+        gate_failures: gateFailures.rows.map((r) => ({
+            script_id: r.script_id,
+            name: r.name,
+            failures: num(r.failures),
+            runs: num(r.runs),
+            last_at: iso(r.last_at) ?? '',
+        })),
+        runs: curTally,
         by_workflow: perWorkflow.rows
             .map((r) => {
                 const runs = num(r.runs);
@@ -151,7 +211,7 @@ export async function workflowAnalytics(opts: {
                     name: r.name ?? r.workflow_id,
                     runs,
                     completed: num(r.completed),
-                    success_rate: rate(num(r.completed), num(r.finished)),
+                    success_rate: ratio(num(r.completed), num(r.finished)),
                     median_duration_s: numOrNull(r.median_s),
                     avg_loops: num(r.avg_loops),
                     avg_gate_rounds: num(r.avg_gate_rounds),
@@ -162,15 +222,15 @@ export async function workflowAnalytics(opts: {
         gates: {
             pass,
             fail,
-            unavailable: g.get('unavailable') ?? 0,
-            needs_review: g.get('needs_review') ?? 0,
-            pass_rate: rate(pass, pass + fail),
+            unavailable: verdicts(cur, 'unavailable'),
+            needs_review: verdicts(cur, 'needs_review'),
+            pass_rate: ratio(pass, pass + fail),
         },
         park_reasons: parks.rows.map((r) => ({ kind: r.kind, reason: WORKFLOW_PARK_KIND_LABELS[r.kind], count: num(r.n) })),
         retries: {
-            retries: num(rt?.retries),
-            dispatches: num(rt?.dispatches),
-            rate: rate(num(rt?.retries), num(rt?.dispatches)),
+            retries,
+            dispatches: cur.dispatches.length,
+            rate: ratio(retries, cur.dispatches.length),
         },
         // Already in name order (fleetPerformance sorts there, ADR 0023).
         agents: fleet.agents.map((a) => ({
@@ -185,6 +245,6 @@ export async function workflowAnalytics(opts: {
             per_step_usd: a.cost.per_step_usd,
             p95_s: a.latency.p95_s,
         })),
-        previous: { runs: prev.total, success_rate: prev.success_rate },
+        previous: { runs: prevTally.total, success_rate: prevTally.success_rate },
     };
 }

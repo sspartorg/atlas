@@ -75,10 +75,10 @@ async function step(run: string, over: { agent?: string; cost: number; at: strin
     return id;
 }
 
-async function gate(run: string, verdict: string, at = '2026-10-12T00:30:00Z'): Promise<void> {
+async function gate(run: string, verdict: string, at = '2026-10-12T00:30:00Z', script = 's'): Promise<void> {
     await testDb
         .insertInto('run_gate_results')
-        .values({ id: `g-${++seq}`, workflow_run_id: run, script_id: 's', verdict, created_at: at } as never)
+        .values({ id: `g-${++seq}`, workflow_run_id: run, script_id: script, verdict, created_at: at } as never)
         .execute();
 }
 
@@ -114,6 +114,52 @@ describe('workflowAnalytics', () => {
         expect(w.retries).toEqual({ retries: 0, dispatches: 0, rate: null });
         expect(w.agents).toEqual([]);
         expect(w.previous).toEqual({ runs: 0, success_rate: null });
+        expect(w.retries_per_task).toEqual({ retries: 0, tasks: 0, rate: null });
+        expect(w.gate_failures).toEqual([]);
+        expect(w.buckets).toHaveLength(7);
+        expect(w.trends.success_rate).toEqual({ cur: null, prev: null, series: Array(7).fill(null) });
+        expect(w.trends.runs).toEqual({ cur: 0, prev: 0, series: Array(7).fill(0) });
+    });
+
+    it('measures retries per Task, the red checks by script, and every tile trend', async () => {
+        await insertItem({ id: 'ATL-1', type: 'task', project_id: 'p1' });
+        await insertItem({ id: 'ATL-2', type: 'sub_task', project_id: 'p1', parent_id: 'ATL-1', parent_type: 'task' });
+        await insertItem({ id: 'ATL-3', type: 'task', project_id: 'p1' });
+        await run('r1', { status: 'completed', started: '2026-10-12T00:00:00Z', item: 'ATL-1' });
+        await run('r2', { status: 'error', started: '2026-10-13T00:00:00Z', item: 'ATL-3' });
+        await run('p1', { status: 'completed', started: '2026-10-05T00:00:00Z' });
+
+        // ATL-1 is worked twice (once through its sub-task, a retry); ATL-3 retried once.
+        const s1 = await step('r1', { cost: 1, at: '2026-10-12T00:05:00Z', item: 'ATL-1' });
+        await step('r1', { cost: 1, at: '2026-10-12T00:10:00Z', item: 'ATL-2', parent: s1 });
+        const s3 = await step('r2', { cost: 1, at: '2026-10-13T00:05:00Z', item: 'ATL-3' });
+        await step('r2', { cost: 1, at: '2026-10-13T00:10:00Z', item: 'ATL-3', parent: s3 });
+        await step('p1', { cost: 1, at: '2026-10-05T00:05:00Z' });
+
+        await gate('r1', 'fail', '2026-10-12T00:30:00Z', 'tests');
+        await gate('r1', 'fail', '2026-10-12T01:00:00Z', 'tests');
+        await gate('r1', 'pass', '2026-10-12T01:30:00Z', 'tests');
+        await gate('r1', 'fail', '2026-10-13T01:00:00Z', 'lint');
+        await gate('r2', 'fail', '2026-10-13T02:00:00Z', 'tests');
+        await gate('p1', 'fail', '2026-10-05T02:00:00Z', 'tests');
+
+        const w = await workflowAnalytics({ tz: 'UTC', window: '7d', now: NOW });
+
+        expect(w.retries_per_task).toEqual({ retries: 2, tasks: 2, rate: 1 });
+        // Most failures first; `runs` counts the run trees that went red.
+        expect(w.gate_failures).toEqual([
+            { script_id: 'tests', name: 'tests', failures: 3, runs: 2, last_at: '2026-10-13T02:00:00.000Z' },
+            { script_id: 'lint', name: 'lint', failures: 1, runs: 1, last_at: '2026-10-13T01:00:00.000Z' },
+        ]);
+
+        // Buckets Oct 10 … Oct 16 (UTC days). Previous window: p1 (completed), one red check, no retry.
+        expect(w.buckets).toEqual(['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16']);
+        expect(w.trends.runs).toEqual({ cur: 2, prev: 1, series: [0, 0, 1, 1, 0, 0, 0] });
+        expect(w.trends.success_rate).toEqual({ cur: 0.5, prev: 1, series: [null, null, 1, 0, null, null, null] });
+        // Oct 12: 1 pass of 3; Oct 13: 0 of 2.
+        expect(w.trends.gate_pass_rate).toEqual({ cur: 0.2, prev: 0, series: [null, null, 1 / 3, 0, null, null, null] });
+        expect(w.trends.retries).toEqual({ cur: 2, prev: 0, series: [0, 0, 1, 1, 0, 0, 0] });
+        expect(w.trends.retries_per_task).toEqual({ cur: 1, prev: null, series: [null, null, 1, 1, null, null, null] });
     });
 
     it('computes outcomes, per-workflow rows, gates, parks, retries and agent rows', async () => {

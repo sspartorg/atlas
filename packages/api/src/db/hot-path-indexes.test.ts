@@ -401,7 +401,7 @@ const ANALYTICS_INDEXES = [
 // workflow steps on the runs, PR/Jira links and reminders of every status.
 const ANALYTICS_SEED = `
     UPDATE items SET is_test = true WHERE id IN ('pln-5', 'pln-9', 'pln-13', 'pln-17');
-    UPDATE agent_runs SET workflow_run_id = 'plw-' || (1 + substr(id, 5)::int % 4000);
+    UPDATE agent_runs SET workflow_run_id = 'plw-' || (1 + substr(id, 5)::int % 4000) WHERE id LIKE 'plr-%';
     INSERT INTO item_external_links (item_id, link_kind, url)
         SELECT 'pln-' || g, CASE WHEN g % 2 = 0 THEN 'pull_request' ELSE 'jira_issue' END, 'https://git.example/pr/' || g
           FROM generate_series(1, 4000) g;

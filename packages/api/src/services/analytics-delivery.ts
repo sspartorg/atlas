@@ -1,14 +1,16 @@
 import { sql } from 'kysely';
 import type {
+    AnalyticsDeliveryTrendKey,
     AnalyticsWindow,
     IAnalyticsDelivery,
     IAnalyticsSpread,
+    IAnalyticsTrend,
     IssuePriority,
     IssueStatus,
 } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
-import { fleetDelivery, scoreAgents } from './agent-scorecard.js';
-import { resolveWindow } from './analytics-window.js';
+import { fleetDelivery, percentile, runPrs, scoreAgents, type RunPrs } from './agent-scorecard.js';
+import { bucketKey, ratio, resolveWindow, trendOf, windowBuckets } from './analytics-window.js';
 
 // Delivery analytics: how fast work moves, read from the status audit trail.
 //
@@ -19,17 +21,26 @@ import { resolveWindow } from './analytics-window.js';
 // (no FK) and are dropped by the join to `items`.
 //
 // Definitions (the web states each one next to its number):
-//   shipped     — an item's FIRST move into Done falls in the window
-//   lead time   — Task created → first Done
-//   cycle time  — Task's first In progress → first Done (none if it never entered In progress before Done)
-//   WIP         — Tasks in progress / waiting for info / in review right now
+//   shipped         — an item's FIRST move into Done falls in the window
+//   lead time       — Task created → first Done
+//   cycle time      — Task's first In progress → first Done (none if it never entered In progress before Done)
+//   WIP             — Tasks in progress / waiting for info / in review right now
+//   flow efficiency — shipped Tasks' time In progress or In review ÷ all their time before Done
+//   owner response  — a workflow park → that run's next resume, over parks started in the window
+//   rework          — Tasks shipped in the window that left Done again before the window's end
+//   first attempt   — Task runs whose every PR merged with no retried agent step and no park in the run tree
+//
+// Every headline number is computed by one function over a window's facts,
+// for this window, the previous one and each bucket (`trendOf`).
 
 const WIP_STATUSES: IssueStatus[] = ['in_progress', 'waiting_for_info', 'in_review'];
+const ACTIVE_STATUSES: IssueStatus[] = ['in_progress', 'in_review'];
 const STATUS_ORDER: IssueStatus[] = ['draft', 'ready', 'in_progress', 'waiting_for_info', 'in_review'];
 const PRIORITY_ORDER: IssuePriority[] = ['urgent', 'high', 'normal', 'low'];
 const AGING_AFTER_S = 7 * 86_400;
 const H = 3600;
 const D = 86_400;
+const WEEK_S = 7 * D;
 const HISTOGRAM: Array<{ label: string; min_s: number; max_s: number | null }> = [
     { label: '< 1h', min_s: 0, max_s: H },
     { label: '1–4h', min_s: H, max_s: 4 * H },
@@ -58,6 +69,7 @@ function spread(values: Array<number | null>): IAnalyticsSpread {
 
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
+const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 
 /**
  * Each item's first Done (and first In progress before it), for items whose
@@ -105,8 +117,12 @@ interface ShippedRow {
     project_name: string | null;
     jira: boolean;
     bucket: string;
+    /** Monday of the Done's week, whatever the window's bucket. */
+    week: string;
     lead_s: string | null;
     cycle_s: string | null;
+    /** Left Done again after its first Done, before the window's end. */
+    reworked: boolean;
 }
 
 async function shippedRows(start: string, end: string, tz: string, unit: 'day' | 'week'): Promise<ShippedRow[]> {
@@ -115,8 +131,12 @@ async function shippedRows(start: string, end: string, tz: string, unit: 'day' |
                EXISTS (SELECT 1 FROM item_external_links l
                         WHERE l.item_id = i.id AND l.link_kind = 'jira_issue') AS jira,
                to_char(date_trunc(${unit}, f.done_at AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS bucket,
+               to_char(date_trunc('week', f.done_at AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS week,
                EXTRACT(EPOCH FROM f.done_at - i.created_at) AS lead_s,
-               CASE WHEN f.ip_at <= f.done_at THEN EXTRACT(EPOCH FROM f.done_at - f.ip_at) END AS cycle_s
+               CASE WHEN f.ip_at <= f.done_at THEN EXTRACT(EPOCH FROM f.done_at - f.ip_at) END AS cycle_s,
+               EXISTS (SELECT 1 FROM issue_events r
+                        WHERE r.item_id = i.id AND r.field = 'status' AND r.from_value = 'done'
+                          AND r.created_at > f.done_at AND r.created_at < ${end}::timestamptz) AS reworked
           FROM (${firstDoneIn(start, end)}) f
           JOIN items i ON i.id = f.item_id AND NOT i.is_test
           LEFT JOIN projects p ON p.id = i.project_id
@@ -124,29 +144,57 @@ async function shippedRows(start: string, end: string, tz: string, unit: 'day' |
     return r.rows;
 }
 
-export async function deliveryAnalytics(opts: {
-    tz: string;
-    window: AnalyticsWindow;
-    now?: Date;
-}): Promise<IAnalyticsDelivery> {
-    const period = await resolveWindow(opts.tz, opts.window, opts.now);
-    const { tz, start, end, previous_start: pStart, previous_end: pEnd, bucket: unit } = period;
+/** Shipped Tasks in [start, end), bucketed: the Spend tab's cost per shipped Task per bucket. */
+export async function shippedTaskBuckets(
+    start: string,
+    end: string,
+    tz: string,
+    unit: 'day' | 'week',
+): Promise<Array<{ bucket: string; item_id: string }>> {
+    return (await shippedRows(start, end, tz, unit))
+        .filter((r) => r.type === 'task')
+        .map((r) => ({ bucket: r.bucket, item_id: r.item_id }));
+}
 
-    const [rows, prevRows, buckets, inStatus, waits, reopens, wip, prs, prevPrs] = await Promise.all([
+/** What one window's numbers are computed from. Every list carries its bucket. */
+type Facts = {
+    shipped: ShippedRow[];
+    /** Time each shipped Task spent in each status before its first Done. */
+    status: Array<{ bucket: string; item_id: string; status: IssueStatus; total_s: number }>;
+    /** Moves into Waiting for info that started in the window; an open one runs to the window's end. */
+    waits: Array<{ bucket: string; s: number; open: boolean }>;
+    /** Status moves in the window into or out of Done. */
+    moves: Array<{ bucket: string; item_id: string; reopen: boolean; done: boolean }>;
+    /** Workflow parks started in the window; `response_s` null while unanswered at the window's end. */
+    parks: Array<{ bucket: string; response_s: number | null }>;
+    /** Top-level runs started in the window, with their PRs. */
+    runs: Array<RunPrs & { bucket: string; clean: boolean }>;
+};
+
+/** Root runs whose tree retried an agent step or parked: not a first-attempt merge. */
+async function reworkedRunTrees(rootIds: string[]): Promise<Set<string>> {
+    if (rootIds.length === 0) return new Set();
+    const ids = sql.join(rootIds);
+    const r = await sql<{ root: string }>`
+        WITH t AS (
+            SELECT id AS run_id, id AS root FROM workflow_runs WHERE id IN (${ids})
+            UNION ALL
+            SELECT id, parent_workflow_run_id FROM workflow_runs WHERE parent_workflow_run_id IN (${ids})
+        )
+        SELECT DISTINCT t.root FROM t
+         WHERE EXISTS (SELECT 1 FROM agent_runs a WHERE a.workflow_run_id = t.run_id AND a.parent_run_id IS NOT NULL)
+            OR EXISTS (SELECT 1 FROM workflow_run_events ev WHERE ev.workflow_run_id = t.run_id AND ev.kind = 'parked')
+    `.execute(db);
+    return new Set(r.rows.map((x) => x.root));
+}
+
+async function windowFacts(start: string, end: string, tz: string, unit: 'day' | 'week', perRun: RunPrs[]): Promise<Facts> {
+    const [shipped, status, waits, moves, parks] = await Promise.all([
         shippedRows(start, end, tz, unit),
-        shippedRows(pStart, pEnd, tz, unit),
-        // Zero-filled bucket keys, so a quiet day reads as zero rather than a gap.
-        sql<{ bucket: string }>`
-            SELECT to_char(d, 'YYYY-MM-DD') AS bucket
-              FROM generate_series(
-                       date_trunc(${unit}, ${start}::timestamptz AT TIME ZONE ${tz}),
-                       ${end}::timestamptz AT TIME ZONE ${tz},
-                       ('1 ' || ${unit})::interval) d
-        `.execute(db),
         // Time in each status before a shipped Task's first Done. LEAD pairs
         // each status event with the next one; the item's creation opens the
         // first interval in the first event's `from_value`.
-        sql<{ status: IssueStatus; total_s: string; items: string }>`
+        sql<{ item_id: string; status: IssueStatus; total_s: string }>`
             WITH s AS (
                 SELECT f.item_id, f.done_at
                   FROM (${firstDoneIn(start, end)}) f
@@ -169,16 +217,14 @@ export async function deliveryAnalytics(opts: {
                   FROM ev JOIN items i ON i.id = ev.item_id
                  WHERE ev.rn = 1 AND ev.from_value IS NOT NULL
             )
-            SELECT status, SUM(EXTRACT(EPOCH FROM to_at - from_at))::text AS total_s,
-                   COUNT(DISTINCT item_id)::text AS items
+            SELECT item_id, status, SUM(EXTRACT(EPOCH FROM to_at - from_at))::text AS total_s
               FROM iv
              WHERE to_at IS NOT NULL AND to_at > from_at
-             GROUP BY status
+             GROUP BY item_id, status
         `.execute(db),
-        // Every move into Waiting for info that started in the window; one
-        // still open is measured to the window's end. The lower bound is
-        // safe: a wait's next event is never earlier than the wait itself.
-        sql<{ parks: string; total_s: string | null; median_s: string | null; still_waiting: string }>`
+        // A wait's next event is never earlier than the wait itself, so the
+        // window's lower bound leaves LEAD unchanged.
+        sql<{ bucket: string; s: string; open: boolean }>`
             WITH ev AS (
                 SELECT e.to_value, e.created_at,
                        LEAD(e.created_at) OVER (PARTITION BY e.item_id ORDER BY e.created_at, e.id) AS next_at
@@ -186,26 +232,160 @@ export async function deliveryAnalytics(opts: {
                   JOIN items i ON i.id = e.item_id AND NOT i.is_test
                  WHERE e.field = 'status'
                    AND e.created_at >= ${start}::timestamptz AND e.created_at < ${end}::timestamptz
-            ),
-            w AS (
-                SELECT EXTRACT(EPOCH FROM COALESCE(next_at, ${end}::timestamptz) - created_at) AS s,
-                       next_at IS NULL AS open
-                  FROM ev
-                 WHERE to_value = 'waiting_for_info' AND created_at >= ${start}::timestamptz
             )
-            SELECT COUNT(*)::text AS parks, SUM(s)::text AS total_s,
-                   (percentile_cont(0.5) WITHIN GROUP (ORDER BY s))::text AS median_s,
-                   COUNT(*) FILTER (WHERE open)::text AS still_waiting
-              FROM w
+            SELECT to_char(date_trunc(${unit}, created_at AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS bucket,
+                   EXTRACT(EPOCH FROM COALESCE(next_at, ${end}::timestamptz) - created_at)::text AS s,
+                   next_at IS NULL AS open
+              FROM ev
+             WHERE to_value = 'waiting_for_info'
         `.execute(db),
-        sql<{ reopened: string; done: string }>`
-            SELECT COUNT(DISTINCT e.item_id) FILTER (WHERE e.from_value = 'done')::text AS reopened,
-                   COUNT(DISTINCT e.item_id) FILTER (WHERE e.to_value = 'done')::text AS done
+        sql<{ bucket: string; item_id: string; reopen: boolean; done: boolean }>`
+            SELECT to_char(date_trunc(${unit}, e.created_at AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS bucket,
+                   e.item_id, e.from_value = 'done' AS reopen, e.to_value = 'done' AS done
               FROM issue_events e
               JOIN items i ON i.id = e.item_id AND NOT i.is_test
-             WHERE e.field = 'status'
+             WHERE e.field = 'status' AND (e.from_value = 'done' OR e.to_value = 'done')
                AND e.created_at >= ${start}::timestamptz AND e.created_at < ${end}::timestamptz
         `.execute(db),
+        // As on the Workflows tab: a sub-task that asks parks its Task's run
+        // too (subtask_waiting); the Owner answered once, so that copy is
+        // skipped. Agent tests are judged by the Task the run tree belongs to.
+        sql<{ bucket: string; response_s: string | null }>`
+            SELECT to_char(date_trunc(${unit}, ev.created_at AT TIME ZONE ${tz}), 'YYYY-MM-DD') AS bucket,
+                   EXTRACT(EPOCH FROM (
+                       SELECT MIN(r.created_at) FROM workflow_run_events r
+                        WHERE r.workflow_run_id = ev.workflow_run_id AND r.kind = 'resumed'
+                          AND r.created_at >= ev.created_at AND r.created_at < ${end}::timestamptz
+                   ) - ev.created_at)::text AS response_s
+              FROM workflow_run_events ev
+              JOIN workflow_runs wr ON wr.id = ev.workflow_run_id
+              LEFT JOIN workflow_runs pr ON pr.id = wr.parent_workflow_run_id
+              LEFT JOIN items i ON i.id = COALESCE(pr.item_id, wr.item_id)
+             WHERE ev.kind = 'parked' AND ev.park_kind <> 'subtask_waiting'
+               AND NOT COALESCE(i.is_test, false)
+               AND ev.created_at >= ${start}::timestamptz AND ev.created_at < ${end}::timestamptz
+        `.execute(db),
+    ]);
+
+    const bucketOfItem = new Map(shipped.map((r) => [r.item_id, r.bucket]));
+    const merged = perRun.filter((r) => r.opened > 0 && r.merged === r.opened).map((r) => r.run_id);
+    const dirty = await reworkedRunTrees(merged);
+
+    return {
+        shipped,
+        status: status.rows.map((r) => ({
+            bucket: bucketOfItem.get(r.item_id) ?? '',
+            item_id: r.item_id,
+            status: r.status,
+            total_s: Number(r.total_s),
+        })),
+        waits: waits.rows.map((r) => ({ bucket: r.bucket, s: Number(r.s), open: r.open })),
+        moves: moves.rows,
+        parks: parks.rows.map((r) => ({ bucket: r.bucket, response_s: numOrNull(r.response_s) })),
+        runs: perRun.map((r) => ({
+            ...r,
+            bucket: r.started_at ? bucketKey(r.started_at, tz, unit) : '',
+            clean: !dirty.has(r.run_id),
+        })),
+    };
+}
+
+const tasksOf = (f: Facts) => f.shipped.filter((r) => r.type === 'task');
+const mergedRuns = (f: Facts) => f.runs.filter((r) => r.opened > 0 && r.merged === r.opened);
+const answered = (f: Facts) =>
+    f.parks
+        .map((p) => p.response_s)
+        .filter((s): s is number => s !== null)
+        .sort((a, b) => a - b);
+const flowTotals = (f: Facts) => {
+    const active = sum(f.status.filter((s) => ACTIVE_STATUSES.includes(s.status)).map((s) => s.total_s));
+    const all = sum(f.status.map((s) => s.total_s));
+    return { active, waiting: all - active };
+};
+
+/** The metrics with one definition per window; WIP and weekly throughput are not per-bucket sums and are built separately. */
+const METRICS: Record<Exclude<AnalyticsDeliveryTrendKey, 'wip' | 'weekly_throughput'>, (f: Facts) => number | null> = {
+    tasks_shipped: (f) => tasksOf(f).length,
+    lead_p50_s: (f) => spread(tasksOf(f).map((r) => numOrNull(r.lead_s))).p50_s,
+    cycle_p50_s: (f) => spread(tasksOf(f).map((r) => numOrNull(r.cycle_s))).p50_s,
+    waiting_s: (f) => (f.waits.length === 0 ? null : sum(f.waits.map((w) => w.s))),
+    reopen_rate: (f) =>
+        ratio(
+            new Set(f.moves.filter((m) => m.reopen).map((m) => m.item_id)).size,
+            new Set(f.moves.filter((m) => m.done).map((m) => m.item_id)).size,
+        ),
+    prs_merged: (f) => sum(f.runs.map((r) => r.merged)),
+    time_to_pr_s: (f) =>
+        percentile(
+            f.runs
+                .map((r) => r.s_to_pr)
+                .filter((s): s is number => s !== null)
+                .sort((a, b) => a - b),
+            0.5,
+        ),
+    flow_efficiency: (f) => {
+        const t = flowTotals(f);
+        return ratio(t.active, t.active + t.waiting);
+    },
+    owner_response_p50_s: (f) => percentileCont(answered(f), 0.5),
+    rework_rate: (f) => ratio(tasksOf(f).filter((r) => r.reworked).length, tasksOf(f).length),
+    first_attempt_merge_rate: (f) => {
+        const m = mergedRuns(f);
+        return ratio(m.filter((r) => r.clean).length, m.length);
+    },
+};
+
+/**
+ * Tasks in progress, waiting or in review at the end of each bucket (and at
+ * the end of the previous window), replayed from the status history.
+ */
+async function wipHistory(
+    start: string,
+    end: string,
+    prevEnd: string,
+    tz: string,
+    unit: 'day' | 'week',
+): Promise<Map<string, number>> {
+    const r = await sql<{ bucket: string; n: string }>`
+        WITH ends AS (
+            SELECT to_char(d, 'YYYY-MM-DD') AS bucket,
+                   LEAST((d + ('1 ' || ${unit})::interval) AT TIME ZONE ${tz}, ${end}::timestamptz) AS at
+              FROM generate_series(
+                       date_trunc(${unit}, ${start}::timestamptz AT TIME ZONE ${tz}),
+                       ${end}::timestamptz AT TIME ZONE ${tz},
+                       ('1 ' || ${unit})::interval) d
+            UNION ALL
+            SELECT 'previous', ${prevEnd}::timestamptz
+        ),
+        iv AS (
+            SELECT e.to_value, e.created_at AS f,
+                   LEAD(e.created_at) OVER (PARTITION BY e.item_id ORDER BY e.created_at, e.id) AS t
+              FROM issue_events e
+              JOIN items i ON i.id = e.item_id AND NOT i.is_test AND i.type = 'task'
+             WHERE e.field = 'status' AND e.created_at < ${end}::timestamptz
+        )
+        SELECT ends.bucket, COUNT(iv.f)::text AS n
+          FROM ends
+          LEFT JOIN iv ON iv.f <= ends.at AND (iv.t IS NULL OR iv.t > ends.at)
+                      AND iv.to_value IN (${sql.join(WIP_STATUSES)})
+         GROUP BY ends.bucket
+    `.execute(db);
+    return new Map(r.rows.map((x) => [x.bucket, Number(x.n)]));
+}
+
+const spanS = (start: string, end: string) => (new Date(end).getTime() - new Date(start).getTime()) / 1000;
+
+export async function deliveryAnalytics(opts: {
+    tz: string;
+    window: AnalyticsWindow;
+    now?: Date;
+}): Promise<IAnalyticsDelivery> {
+    const period = await resolveWindow(opts.tz, opts.window, opts.now);
+    const { tz, start, end, previous_start: pStart, previous_end: pEnd, bucket: unit } = period;
+
+    const [cards, buckets, wip, wipAt] = await Promise.all([
+        Promise.all([scoreAgents({ since: start, until: end }), scoreAgents({ since: pStart, until: pEnd })]),
+        windowBuckets(period),
         // A WIP Task's age runs from its first In progress since it last left
         // Done, so a reopened Task is not aged by its first life.
         sql<{ id: string; title: string; status: IssueStatus; project_id: string; age_s: string }>`
@@ -225,15 +405,24 @@ export async function deliveryAnalytics(opts: {
                AND i.status IN (${sql.join(WIP_STATUSES)})
              ORDER BY age_s DESC, i.id
         `.execute(db),
-        scoreAgents({ since: start, until: end }).then(fleetDelivery),
-        scoreAgents({ since: pStart, until: pEnd }).then(fleetDelivery),
+        wipHistory(start, end, pEnd, tz, unit),
+    ]);
+    const [card, prevCard] = cards;
+    const [perRun, prevPerRun] = await Promise.all([runPrs(card), runPrs(prevCard)]);
+    const [cur, prev, prs, prevPrs] = await Promise.all([
+        windowFacts(start, end, tz, unit, perRun),
+        windowFacts(pStart, pEnd, tz, unit, prevPerRun),
+        fleetDelivery(card, perRun),
+        fleetDelivery(prevCard, prevPerRun),
     ]);
 
-    const tasks = rows.filter((r) => r.type === 'task');
+    const rows = cur.shipped;
+    const prevRows = prev.shipped;
+    const tasks = tasksOf(cur);
     const cycle = spread(tasks.map((r) => numOrNull(r.cycle_s)));
 
     const perBucket = new Map<string, { tasks: number; sub_tasks: number; cycles: number[] }>();
-    for (const b of buckets.rows) perBucket.set(b.bucket, { tasks: 0, sub_tasks: 0, cycles: [] });
+    for (const b of buckets) perBucket.set(b, { tasks: 0, sub_tasks: 0, cycles: [] });
     for (const r of rows) {
         const b = perBucket.get(r.bucket);
         if (!b) continue;
@@ -244,7 +433,6 @@ export async function deliveryAnalytics(opts: {
     }
 
     const cycleValues = tasks.map((r) => numOrNull(r.cycle_s)).filter((v): v is number => v !== null);
-    const statusTotals = new Map(inStatus.rows.map((r) => [r.status, r]));
 
     const byProject = new Map<string, { name: string; rows: ShippedRow[] }>();
     for (const r of tasks) {
@@ -253,13 +441,60 @@ export async function deliveryAnalytics(opts: {
         byProject.set(r.project_id, e);
     }
 
-    const w = waits.rows[0];
-    const ro = reopens.rows[0];
-    const reopened = num(ro?.reopened);
-    const doneN = num(ro?.done);
+    const reopened = new Set(cur.moves.filter((m) => m.reopen).map((m) => m.item_id)).size;
+    const doneN = new Set(cur.moves.filter((m) => m.done).map((m) => m.item_id)).size;
+
+    // Tasks shipped per Monday week across the window; the tile is their mean per week of window.
+    const weeks = [...new Set(buckets.map((b) => bucketKey(`${b}T12:00:00Z`, 'UTC', 'week')))];
+    const perWeek = new Map(weeks.map((w) => [w, 0]));
+    for (const r of tasks) if (perWeek.has(r.week)) perWeek.set(r.week, (perWeek.get(r.week) ?? 0) + 1);
+    const weeklyOf = (n: number, from: string, to: string) => ratio(n * WEEK_S, spanS(from, to));
+
+    const trends = Object.fromEntries(
+        Object.entries(METRICS).map(([k, metric]) => [k, trendOf(cur, prev, buckets, metric)]),
+    ) as Record<AnalyticsDeliveryTrendKey, IAnalyticsTrend>;
+    trends.wip = {
+        cur: wip.rows.length,
+        prev: wipAt.get('previous') ?? 0,
+        series: buckets.map((b) => wipAt.get(b) ?? 0),
+    };
+    trends.weekly_throughput = {
+        cur: weeklyOf(tasks.length, start, end),
+        prev: weeklyOf(tasksOf(prev).length, pStart, pEnd),
+        series: buckets.map((b) => perWeek.get(bucketKey(`${b}T12:00:00Z`, 'UTC', 'week')) ?? 0),
+    };
+
+    const flow = flowTotals(cur);
+    const replies = answered(cur);
+    const merged = mergedRuns(cur);
 
     return {
         period,
+        buckets,
+        trends,
+        flow: {
+            efficiency: ratio(flow.active, flow.active + flow.waiting),
+            active_s: flow.active,
+            waiting_s: flow.waiting,
+            owner_response: {
+                answered: replies.length,
+                unanswered: cur.parks.length - replies.length,
+                p50_s: percentileCont(replies, 0.5),
+                p90_s: percentileCont(replies, 0.9),
+            },
+            weekly_throughput: trends.weekly_throughput.cur,
+            weekly: weeks.map((bucket) => ({ bucket, tasks: perWeek.get(bucket) ?? 0 })),
+        },
+        rework: {
+            shipped: tasks.length,
+            reopened: tasks.filter((r) => r.reworked).length,
+            rate: ratio(tasks.filter((r) => r.reworked).length, tasks.length),
+        },
+        first_attempt: {
+            merged_runs: merged.length,
+            clean: merged.filter((r) => r.clean).length,
+            rate: ratio(merged.filter((r) => r.clean).length, merged.length),
+        },
         shipped: { tasks: tasks.length, sub_tasks: rows.length - tasks.length },
         throughput: [...perBucket.entries()].map(([key, b]) => ({
             bucket: key,
@@ -274,20 +509,23 @@ export async function deliveryAnalytics(opts: {
             count: cycleValues.filter((v) => v >= h.min_s && (h.max_s === null || v < h.max_s)).length,
         })),
         time_in_status: STATUS_ORDER.map((status) => {
-            const t = statusTotals.get(status);
+            const mine = cur.status.filter((s) => s.status === status);
             return {
                 status,
-                avg_s: tasks.length === 0 ? 0 : num(t?.total_s) / tasks.length,
-                items: num(t?.items),
+                avg_s: tasks.length === 0 ? 0 : sum(mine.map((s) => s.total_s)) / tasks.length,
+                items: mine.length,
             };
         }),
         waiting: {
-            parks: num(w?.parks),
-            total_s: num(w?.total_s),
-            median_s: numOrNull(w?.median_s),
-            still_waiting: num(w?.still_waiting),
+            parks: cur.waits.length,
+            total_s: sum(cur.waits.map((w) => w.s)),
+            median_s: percentileCont(
+                cur.waits.map((w) => w.s).sort((a, b) => a - b),
+                0.5,
+            ),
+            still_waiting: cur.waits.filter((w) => w.open).length,
         },
-        reopens: { reopened, done: doneN, rate: doneN === 0 ? null : reopened / doneN },
+        reopens: { reopened, done: doneN, rate: ratio(reopened, doneN) },
         wip: {
             count: wip.rows.length,
             aging: wip.rows.filter((r) => Number(r.age_s) > AGING_AFTER_S).length,
