@@ -293,6 +293,8 @@ test.describe('/analytics over the realistic seed, against the real API', () => 
             if (red.length === 0) await expect(page.getByText('No failed checks in this window')).toBeVisible();
             else {
                 const rows = page.getByRole('table', { name: 'Red checks by script' }).locator('tbody tr');
+                // evaluateAll does not wait: let the tab's fetch fill the table first.
+                await expect(rows).toHaveCount(red.length);
                 const seen = await rows.evaluateAll((trs) => trs.map((tr) => [tr.children[0]?.textContent ?? '', tr.children[1]?.textContent ?? '']));
                 expect.soft(seen).toEqual(red);
             }
@@ -302,6 +304,7 @@ test.describe('/analytics over the realistic seed, against the real API', () => 
             if (perPr.length === 0) await expect(page.getByText('No workflow runs in this window')).toBeVisible();
             else {
                 const rows = page.getByRole('table', { name: 'Cost per PR and Task by workflow' }).locator('tbody tr');
+                await expect(rows).toHaveCount(perPr.length);
                 const seen = await rows.evaluateAll((trs) => trs.map((tr) => [tr.children[0]?.textContent ?? '', tr.children[4]?.textContent ?? '']));
                 expect.soft(seen).toEqual(perPr);
             }
