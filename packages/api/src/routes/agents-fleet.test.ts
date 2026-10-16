@@ -84,7 +84,7 @@ async function prLink(item: string, url: string, state: 'open' | 'merged' | 'clo
 async function parkedEvent(runId: string, item: string | null): Promise<void> {
     await testDb
         .insertInto('workflow_run_events')
-        .values({ id: `ev-${++seq}`, workflow_run_id: runId, item_id: item, kind: 'parked', reason: 'asked' })
+        .values({ id: `ev-${++seq}`, workflow_run_id: runId, item_id: item, kind: 'parked', park_kind: 'question', reason: 'asked' })
         .execute();
 }
 

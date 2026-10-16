@@ -7,6 +7,7 @@ import type {
     WorkflowInputKind,
     WorkflowRunStatus,
     WorkflowTrigger,
+    WorkflowParkKind,
 } from '@atlas/shared';
 
 // Helper aliases
@@ -845,6 +846,8 @@ export interface WorkflowRunEventsTable {
     kind: 'parked' | 'resumed';
     node_id: StrN;
     reason: StrN;
+    /** Migration 014 — why it parked; set on every park, null on a resume. */
+    park_kind: WorkflowParkKind | null;
     created_at: CreatedAt;
 }
 

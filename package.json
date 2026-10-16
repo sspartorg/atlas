@@ -37,6 +37,7 @@
     "e2e:update-snapshots": "playwright test --update-snapshots",
     "e2e:report": "playwright show-report",
     "e2e:seed": "tsx e2e/fixtures/run-seed.ts",
+    "e2e:seed:analytics": "cross-env DATABASE_URL=postgres://atlas:atlas@localhost:5500/atlas_e2e tsx e2e/fixtures/analytics-seed.ts",
     "e2e:perf": "cross-env PERF=1 ATLAS_PERF=1 VITE_ATLAS_PERF=1 playwright test e2e/perf/",
     "e2e:perf:prod": "pnpm -F @atlas/web build && cross-env PERF=1 ATLAS_PERF=1 ATLAS_E2E_PROD=1 VITE_ATLAS_PERF=1 playwright test e2e/perf/ --project=chromium && node scripts/check-perf-floors.mjs --strict",
     "perf:stack": "bash scripts/perf-stack.sh",

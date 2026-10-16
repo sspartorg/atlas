@@ -132,7 +132,7 @@ export function ProjectCostBars({
                                 display: 'grid',
                                 gridTemplateColumns: {
                                     xs: 'minmax(0, 1fr) auto',
-                                    sm: '160px 1fr 110px 110px',
+                                    sm: '160px minmax(0, 1fr) 110px 160px',
                                 },
                                 gridTemplateAreas: {
                                     xs: `"name cost" "bar bar" "runs runs"`,
@@ -228,10 +228,11 @@ export function ProjectCostBars({
                                     fontSize: 11,
                                     color: ATLAS_PALETTE.slate60,
                                     textAlign: 'right',
+                                    whiteSpace: 'nowrap',
                                 }}
                             >
                                 {p.run_count} run{p.run_count === 1 ? '' : 's'}
-                                {p.session_count > 0 && <> · {p.session_count} term</>}
+                                {p.session_count > 0 && <> · {p.session_count} session{p.session_count === 1 ? '' : 's'}</>}
                             </Typography>
                         </Box>
                     );

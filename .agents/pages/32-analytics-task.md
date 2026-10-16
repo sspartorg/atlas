@@ -20,7 +20,8 @@ All-time cost for one Task and its sub-tasks, filterable by item kind.
 **Descendant table**
 - Sub-caption: `Every descendant of this task. Sorted by cost. Filtered to <label> only.` (`:335`)
 - **`Showing only: <label>` chip** (`:340`) — deletable; clearing it resets `page` (`:342-343`).
-- **Rows-per-page** select — resets `page` (`:524`). **Pagination** over the filtered total.
+- **Rows-per-page** select (25 / 50 / 100, labelled by its caption) — resets `page`. **Pagination** over the filtered total.
+- On a phone the table shows Title, Runs and Total cost; Type and Last run return from `sm` up.
 
 ## Modals / drawers
 None.

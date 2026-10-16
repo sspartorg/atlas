@@ -18,12 +18,13 @@ All-time cost for one project, broken down by item kind (`task` / `sub_task`) an
 
 **By kind** — pie over `data.byKind`, filtered to `total_cost_usd > 0` so zero-cost kinds don't render a 0° slice (`:106`).
 
-**Top tasks by total cost** — horizontal bars over `data.topTasks` (top 25 Tasks from the summary endpoint), scaled to the max in the set; row → `/analytics/task/:taskId`.
+**Top tasks by total cost** — horizontal bars (each with `N runs · N sub-tasks`) over `data.topTasks` (top 25 Tasks from the summary endpoint), scaled to the max in the set; row → `/analytics/task/:taskId`.
 - Caption: `Showing top N of {task_count} tasks — sorted by descendant-rolled cost.` (`:363`)
 - **View all {task_count} tasks** (`:513`) → flips `showAll`, which is what `enabled` on the paged query keys off. Nothing is fetched until the Owner asks.
 
 **Paged Task table** (only when `showAll`; row → `/analytics/task/:taskId`)
-- **Rows-per-page** select (`:651`) — changing it resets `page` to 1, so the Owner can't land on an out-of-range page.
+- **Rows-per-page** select (25 / 50 / 100, labelled by its "Rows per page" caption) — changing it resets `page` to 1, so the Owner can't land on an out-of-range page.
+- On a phone the table shows Title, Runs and Total cost; Descendants and Last run return from `sm` up (`PHONE_HIDDEN`), so cost is never behind a sideways scroll.
 - **Pagination** (`:663`) — `count` = `ceil(total / limit)`, floored at 1.
 - Sub-caption names the page and the total (`:525`).
 

@@ -2,7 +2,9 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
+import type { WorkflowParkKind } from '@atlas/shared';
 import { workflowAnalytics } from './analytics-workflows.js';
+import { fleetPerformance } from './agent-scorecard.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
 
@@ -50,7 +52,7 @@ async function run(
         .execute();
 }
 
-async function step(run: string, over: { agent?: string; cost: number; at: string; parent?: string }): Promise<string> {
+async function step(run: string, over: { agent?: string; cost: number; at: string; parent?: string; item?: string }): Promise<string> {
     const id = `ar-${++seq}`;
     await testDb
         .insertInto('agent_runs')
@@ -58,6 +60,7 @@ async function step(run: string, over: { agent?: string; cost: number; at: strin
             id,
             agent_id: over.agent ?? 'agent-coder',
             project_id: 'p1',
+            item_id: over.item ?? null,
             status: 'completed',
             workflow_run_id: run,
             node_id: `n${seq}`,
@@ -79,10 +82,10 @@ async function gate(run: string, verdict: string, at = '2026-10-12T00:30:00Z'): 
         .execute();
 }
 
-async function parked(run: string, reason: string, at = '2026-10-12T00:20:00Z'): Promise<void> {
+async function parked(run: string, kind: WorkflowParkKind, reason = 'prose', at = '2026-10-12T00:20:00Z'): Promise<void> {
     await testDb
         .insertInto('workflow_run_events')
-        .values({ id: `ev-${++seq}`, workflow_run_id: run, kind: 'parked', reason, created_at: at } as never)
+        .values({ id: `ev-${++seq}`, workflow_run_id: run, kind: 'parked', park_kind: kind, reason, created_at: at } as never)
         .execute();
 }
 
@@ -92,6 +95,7 @@ beforeEach(async () => {
     await insertProject('p1', 'ATL');
     await insertAgent({ id: 'agent-coder', name: 'Coder', status: 'active' });
     await insertAgent({ id: 'agent-reviewer', name: 'Anna Reviewer', status: 'active' });
+    await insertAgent({ id: 'agent-tester', name: 'Tester', status: 'active' });
     await workflow('wf-d', 'Delivery');
     await workflow('wf-b', 'Build');
 });
@@ -143,12 +147,17 @@ describe('workflowAnalytics', () => {
         await gate('rt', 'fail');
         await gate('r1', 'fail', '2026-10-05T00:00:00Z');
 
-        await parked('r4', 'checklist_failed: tests added');
-        await parked('r1', 'Loop limit reached (3): still red');
-        await parked('c1', 'What colour?');
-        await parked('r1', 'Sub-task ATL-9 is waiting for you: What colour?');
-        await parked('r4', 'Should README.md stay in this change?');
-        await parked('rt', 'checklist_failed: ignored, a test');
+        // A sub-task's park (c1) and the Task run's copy of it (r1); the copy
+        // is skipped. A project-level run (r4, no item) counts; the test's doesn't.
+        await parked('r4', 'checklist_failed');
+        await parked('r1', 'loop_limit');
+        await parked('c1', 'question', 'What colour?');
+        await parked('r1', 'subtask_waiting', 'Sub-task ATL-9 is waiting for you: What colour?');
+        await parked('r4', 'question', 'Should README.md stay in this change?');
+        await parked('rt', 'checklist_failed');
+        await parked('r2', 'delivery_failed', 'x', '2026-10-05T00:00:00Z');
+        // The agent test's own step: out of the analytics agent rows, still on the fleet page.
+        await step('rt', { agent: 'agent-tester', cost: 9, at: '2026-10-12T00:01:00Z', item: 'TST-1' });
 
         const w = await workflowAnalytics({ tz: 'UTC', window: '7d', now: NOW });
 
@@ -173,9 +182,9 @@ describe('workflowAnalytics', () => {
 
         // c1's own park is the child's copy; the Task run's carries it behind a prefix.
         expect(w.park_reasons).toEqual([
-            { reason: 'Agent asked you', count: 2 },
-            { reason: 'Loop limit reached', count: 1 },
-            { reason: 'Required checklist failed', count: 1 },
+            { kind: 'question', reason: 'Agent asked you', count: 2 },
+            { kind: 'checklist_failed', reason: 'Required checklist failed', count: 1 },
+            { kind: 'loop_limit', reason: 'Loop limit reached', count: 1 },
         ]);
 
         expect(w.retries).toEqual({ retries: 1, dispatches: 3, rate: 1 / 3 });
@@ -186,5 +195,9 @@ describe('workflowAnalytics', () => {
             ['Coder', 2],
         ]);
         expect(w.agents[1]).toMatchObject({ cost_usd: 1.5, per_step_usd: 0.75, first_pass: { applied: 2, rejected: 0, parked: 0 } });
+
+        // The Fleet performance page keeps agent-test runs (its documented default).
+        const fleet = await fleetPerformance({ since: w.period.start, until: w.period.end });
+        expect(fleet.agents.map((a) => a.name)).toEqual(['Anna Reviewer', 'Coder', 'Tester']);
     });
 });

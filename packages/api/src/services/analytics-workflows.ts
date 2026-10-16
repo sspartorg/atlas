@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import type { AnalyticsWindow, IAnalyticsWorkflows } from '@atlas/shared';
+import { WORKFLOW_PARK_KIND_LABELS, type AnalyticsWindow, type IAnalyticsWorkflows, type WorkflowParkKind } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { fleetPerformance } from './agent-scorecard.js';
 import { resolveWindow } from './analytics-window.js';
@@ -9,27 +9,12 @@ import { resolveWindow } from './analytics-window.js';
 // Runs are top-level `workflow_runs` started in the window (a sub-task's run
 // is part of its Task's run, ADR 0015), with agent-test items left out. The
 // agent rows are the fleet page's (`shapeAgent`), in name order — a
-// comparison, not a leaderboard (ADR 0023).
+// comparison, not a leaderboard (ADR 0023) — with agent tests left out too,
+// unlike the Fleet performance page.
 
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const rate = (n: number, d: number): number | null => (d === 0 ? null : n / d);
-
-// ponytail: park reasons are prose, bucketed by the phrases the engine writes
-// (`workflow-engine.ts` park sites, `decideRunRouting`'s `checklist_failed:`).
-// Anything else is an agent's own question. Add a `kind` column to
-// `workflow_run_events` when a bucket needs to be exact.
-const PARK_BUCKET = sql<string>`
-    CASE
-        WHEN r ~* '^checklist_failed' THEN 'Required checklist failed'
-        WHEN r ~* '^(Loop limit reached|Sent back for late sub-tasks)' THEN 'Loop limit reached'
-        WHEN r ~* '(could not run|had no repo to run in|has no command)' THEN 'A check could not run'
-        WHEN r ~* '^(Sent back to you|The workflow reached an Owner step)' THEN 'Owner review step'
-        WHEN r ~* '^(No pass connection|Workflow graph has no node|No Sub-tasks step runs)' THEN 'Workflow wiring gap'
-        WHEN r ~* '^Could not' THEN 'Setup or git error'
-        ELSE 'Agent asked you'
-    END
-`;
 
 export async function workflowAnalytics(opts: {
     tz: string;
@@ -98,21 +83,20 @@ export async function workflowAnalytics(opts: {
                AND g.created_at >= ${start}::timestamptz AND g.created_at < ${end}::timestamptz
              GROUP BY 1
         `.execute(db),
-        // Top-level runs only: a sub-task that asks parks its own run AND its
-        // Task's (`waitOnChild`), and the Owner answered once. The Task run's
-        // copy carries the child's reason behind a prefix, stripped here.
-        sql<{ reason: string; n: string }>`
-            WITH e AS (
-                SELECT regexp_replace(COALESCE(ev.reason, ''), '^Sub-task \\S+ is waiting for you: ', '') AS r
-                  FROM workflow_run_events ev
-                  JOIN workflow_runs wr ON wr.id = ev.workflow_run_id
-                  LEFT JOIN items i ON i.id = wr.item_id
-                 WHERE ev.kind = 'parked' AND wr.parent_workflow_run_id IS NULL
-                   AND NOT COALESCE(i.is_test, false)
-                   AND ev.created_at >= ${start}::timestamptz AND ev.created_at < ${end}::timestamptz
-            )
-            SELECT ${PARK_BUCKET} AS reason, COUNT(*)::text AS n
-              FROM e GROUP BY 1 ORDER BY COUNT(*) DESC, 1
+        // A sub-task that asks parks its own run AND its Task's (`waitOnChild`),
+        // and the Owner answered once: the Task's copy (`subtask_waiting`) is
+        // skipped and the sub-task's own park, which carries the real kind, is
+        // counted. Agent tests are judged by the Task the run tree belongs to.
+        sql<{ kind: WorkflowParkKind; n: string }>`
+            SELECT ev.park_kind AS kind, COUNT(*)::text AS n
+              FROM workflow_run_events ev
+              JOIN workflow_runs wr ON wr.id = ev.workflow_run_id
+              LEFT JOIN workflow_runs pr ON pr.id = wr.parent_workflow_run_id
+              LEFT JOIN items i ON i.id = COALESCE(pr.item_id, wr.item_id)
+             WHERE ev.kind = 'parked' AND ev.park_kind <> 'subtask_waiting'
+               AND NOT COALESCE(i.is_test, false)
+               AND ev.created_at >= ${start}::timestamptz AND ev.created_at < ${end}::timestamptz
+             GROUP BY 1 ORDER BY COUNT(*) DESC, 1
         `.execute(db),
         sql<{ retries: string; dispatches: string }>`
             SELECT COUNT(*) FILTER (WHERE a.parent_run_id IS NOT NULL)::text AS retries,
@@ -122,7 +106,7 @@ export async function workflowAnalytics(opts: {
              WHERE NOT COALESCE(i.is_test, false)
                AND a.created_at >= ${start}::timestamptz AND a.created_at < ${end}::timestamptz
         `.execute(db),
-        fleetPerformance({ since: start, until: end }),
+        fleetPerformance({ since: start, until: end, exclude_test_items: true }),
     ]);
 
     const tally = (cur: boolean) => {
@@ -176,7 +160,7 @@ export async function workflowAnalytics(opts: {
             needs_review: g.get('needs_review') ?? 0,
             pass_rate: rate(pass, pass + fail),
         },
-        park_reasons: parks.rows.map((r) => ({ reason: r.reason, count: num(r.n) })),
+        park_reasons: parks.rows.map((r) => ({ kind: r.kind, reason: WORKFLOW_PARK_KIND_LABELS[r.kind], count: num(r.n) })),
         retries: {
             retries: num(rt?.retries),
             dispatches: num(rt?.dispatches),

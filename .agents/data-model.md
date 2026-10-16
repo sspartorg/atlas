@@ -451,7 +451,20 @@ Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_wo
 ### Workflow run event (migration 024)
 **Why this entity exists**: `workflow_runs.park_reason` holds only the current wait and every resume nulls it, so a finished run kept no trace of having stopped for the Owner. The fleet page's "Owner interventions per Task" needs that history.
 
-Table `workflow_run_events`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), item_id, kind, node_id, reason, created_at`.
+Table `workflow_run_events`: `id, workflow_run_id (FK → workflow_runs, ON DELETE CASCADE), item_id, kind, node_id, reason, park_kind, created_at`.
+
+- `park_kind` (migration 014) — why it parked, set on every `parked` row and null on every `resumed` one (CHECK). Values (`WORKFLOW_PARK_KINDS`, labels in `WORKFLOW_PARK_KIND_LABELS`, @atlas/shared) and the park sites that write them (`services/workflow-engine.ts`):
+  - `question` — an agent ended `asked_question`; `no_outcome` — it ended with no `atlas-outcome` block
+  - `review_requested` — the run reached an Owner node
+  - `rejected` / `checklist_failed` — a step routed to fail (rejected, or `done` with a required checklist unticked) with no fail connection
+  - `gate_failed` — a Script check failed with no fail connection; `check_unavailable` — a check could not run or had no repo
+  - `loop_limit` — `max_loops` passed (fail loop, Script loop, or End's late-sub-task send-backs)
+  - `step_error` — an agent step errored (after its one retry); `lost_step` — reconcile found a run whose step stopped reporting
+  - `setup_failed` — project setup script, or preparing / refreshing the worktree
+  - `delivery_failed` — push or PR at End failed; `missing_agent` — the node's agent is missing or inactive; `dispatch_failed` — spawning a step or starting a sub-task's run threw
+  - `wiring_gap` — no node, no pass connection, a Script step with no command, or open sub-tasks no Sub-tasks step claims
+  - `subtask_waiting` — the Task run held by a parked sub-task (`waitOnChild`); analytics counts the sub-task's own park instead
+  - `other` — only rows the migration's backfill could not classify
 
 - `kind` ∈ `parked | resumed` (CHECK). `parked` is written by `park()` (with its reason) and `waitOnChild()` (the Task run held by a parked sub-task, reason `Sub-task <id> is waiting for you: …`); `resumed` by `resumeWorkflowRun`, `continueResumedRun` (parent reopen, Sub-tasks child resume) and an Owner reply (`comments.ts`, after its transaction commits).
 - `item_id` / `node_id` are copied from the run at the moment of the event (`node_id` = `COALESCE(parked_node_id, current_node_id)`). `item_id` is deliberately not an FK so the row outlives a deleted item.

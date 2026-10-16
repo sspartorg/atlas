@@ -109,10 +109,10 @@ export function workflowsFixture() {
         ],
         gates: { pass: 112, fail: 14, unavailable: 3, needs_review: 1, pass_rate: 112 / 126 },
         park_reasons: [
-            { reason: 'Agent asked you', count: 13 },
-            { reason: 'Required checklist failed', count: 6 },
-            { reason: 'Loop limit reached', count: 3 },
-            { reason: 'A check could not run', count: 2 },
+            { kind: 'question', reason: 'Agent asked you', count: 13 },
+            { kind: 'checklist_failed', reason: 'Required checklist failed', count: 6 },
+            { kind: 'loop_limit', reason: 'Loop limit reached', count: 3 },
+            { kind: 'check_unavailable', reason: 'A check could not run', count: 2 },
         ],
         retries: { retries: 6, dispatches: 214, rate: 6 / 214 },
         agents: [

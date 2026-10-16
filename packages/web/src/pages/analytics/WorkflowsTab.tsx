@@ -72,73 +72,78 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
                 />
             </TileGrid>
 
+            {/* The park list grows with every kind; the two short cards stack beside it
+                rather than one of them stretching to its height. */}
             <CardGrid>
-                <Card>
-                    <ChartTitle title="How runs ended" sub="Top-level runs started in this window, by where they are now." />
-                    {w.runs.total === 0 ? (
-                        <ChartEmpty label="No workflow runs in this window" sub="Runs appear here once a workflow starts on a Task." />
-                    ) : (
-                        <BarList
-                            label="Runs by outcome"
-                            rows={[
-                                { key: 'completed', label: 'Completed', value: w.runs.completed, display: String(w.runs.completed), color: ATLAS_PALETTE.success },
-                                { key: 'waiting', label: 'Waiting for you', value: w.runs.waiting_for_owner, display: String(w.runs.waiting_for_owner), color: ATLAS_PALETTE.warning },
-                                { key: 'running', label: 'Running', value: w.runs.running, display: String(w.runs.running), color: ATLAS_PALETTE.brandBlue },
-                                { key: 'cancelled', label: 'Cancelled', value: w.runs.cancelled, display: String(w.runs.cancelled), color: ATLAS_PALETTE.slate40 },
-                                { key: 'error', label: 'Error', value: w.runs.error, display: String(w.runs.error), color: ATLAS_PALETTE.error },
-                            ]}
-                        />
-                    )}
-                </Card>
+                <Box sx={{ display: 'grid', gap: { xs: 2, md: 3 }, alignContent: 'start' }}>
+                    <Card>
+                        <ChartTitle title="How runs ended" sub="Top-level runs started in this window, by where they are now." />
+                        {w.runs.total === 0 ? (
+                            <ChartEmpty label="No workflow runs in this window" sub="Runs appear here once a workflow starts on a Task." />
+                        ) : (
+                            <BarList
+                                label="Runs by outcome"
+                                rows={[
+                                    { key: 'completed', label: 'Completed', value: w.runs.completed, display: String(w.runs.completed), color: ATLAS_PALETTE.success },
+                                    { key: 'waiting', label: 'Waiting for you', value: w.runs.waiting_for_owner, display: String(w.runs.waiting_for_owner), color: ATLAS_PALETTE.warning },
+                                    { key: 'running', label: 'Running', value: w.runs.running, display: String(w.runs.running), color: ATLAS_PALETTE.brandBlue },
+                                    { key: 'cancelled', label: 'Cancelled', value: w.runs.cancelled, display: String(w.runs.cancelled), color: ATLAS_PALETTE.slate40 },
+                                    { key: 'error', label: 'Error', value: w.runs.error, display: String(w.runs.error), color: ATLAS_PALETTE.error },
+                                ]}
+                            />
+                        )}
+                    </Card>
 
+                    <Card>
+                        <ChartTitle title="Gate verdicts" sub="Every Script-step check Atlas ran in this window." />
+                        {gateTotal === 0 ? (
+                            <ChartEmpty label="No checks ran in this window" sub="A workflow's Script steps record a verdict each time they run." />
+                        ) : (
+                            <BarList
+                                label="Gate verdicts"
+                                rows={[
+                                    { key: 'pass', label: 'Passed', value: w.gates.pass, display: String(w.gates.pass), color: ATLAS_PALETTE.success },
+                                    { key: 'fail', label: 'Failed', value: w.gates.fail, display: String(w.gates.fail), color: ATLAS_PALETTE.error },
+                                    { key: 'needs_review', label: 'Needs review', value: w.gates.needs_review, display: String(w.gates.needs_review), color: ATLAS_PALETTE.warning },
+                                    { key: 'unavailable', label: 'Could not run', value: w.gates.unavailable, display: String(w.gates.unavailable), color: ATLAS_PALETTE.slate40 },
+                                ]}
+                            />
+                        )}
+                    </Card>
+
+                </Box>
                 <Card>
-                    <ChartTitle title="Why runs stopped for you" sub="Times a run parked and waited for you in this window, grouped by the reason it gave. A question an agent wrote itself counts as “Agent asked you”." />
+                    <ChartTitle title="Why runs stopped for you" sub="Times a run parked and waited for you in this window, by why it stopped. A sub-task that waits holds its Task too; that counts once." />
                     {w.park_reasons.length === 0 ? (
                         <ChartEmpty label="No parks in this window" sub="When a run stops to ask you something, the reason is counted here." />
                     ) : (
                         <BarList
                             label="Park reasons"
                             color={ATLAS_PALETTE.warning}
-                            rows={w.park_reasons.map((p) => ({ key: p.reason, label: p.reason, value: p.count, display: String(p.count) }))}
+                            rows={w.park_reasons.map((p) => ({ key: p.kind, label: p.reason, value: p.count, display: String(p.count) }))}
                         />
                     )}
                 </Card>
 
-                <Card>
-                    <ChartTitle title="Gate verdicts" sub="Every Script-step check Atlas ran in this window." />
-                    {gateTotal === 0 ? (
-                        <ChartEmpty label="No checks ran in this window" sub="A workflow's Script steps record a verdict each time they run." />
-                    ) : (
-                        <BarList
-                            label="Gate verdicts"
-                            rows={[
-                                { key: 'pass', label: 'Passed', value: w.gates.pass, display: String(w.gates.pass), color: ATLAS_PALETTE.success },
-                                { key: 'fail', label: 'Failed', value: w.gates.fail, display: String(w.gates.fail), color: ATLAS_PALETTE.error },
-                                { key: 'needs_review', label: 'Needs review', value: w.gates.needs_review, display: String(w.gates.needs_review), color: ATLAS_PALETTE.warning },
-                                { key: 'unavailable', label: 'Could not run', value: w.gates.unavailable, display: String(w.gates.unavailable), color: ATLAS_PALETTE.slate40 },
-                            ]}
-                        />
-                    )}
-                </Card>
-
-                <Card>
-                    <ChartTitle title="Cost per run" sub="What each workflow's runs cost on average, every step of the run and its sub-task runs included." />
-                    {w.by_workflow.every((r) => r.cost_per_run_usd === null) ? (
-                        <ChartEmpty label="No run cost in this window" sub="Cost appears once a run's agent steps complete." />
-                    ) : (
-                        <BarList
-                            label="Cost per run by workflow"
-                            rows={w.by_workflow.map((r) => ({
-                                key: r.workflow_id,
-                                label: r.name,
-                                value: r.cost_per_run_usd ?? 0,
-                                display: r.cost_per_run_usd === null ? '—' : formatCostUsd(r.cost_per_run_usd),
-                                note: `${r.runs} run${r.runs === 1 ? '' : 's'}`,
-                            }))}
-                        />
-                    )}
-                </Card>
             </CardGrid>
+
+            <Card>
+                <ChartTitle title="Cost per run" sub="What each workflow's runs cost on average, every step of the run and its sub-task runs included." />
+                {w.by_workflow.every((r) => r.cost_per_run_usd === null) ? (
+                    <ChartEmpty label="No run cost in this window" sub="Cost appears once a run's agent steps complete." />
+                ) : (
+                    <BarList
+                        label="Cost per run by workflow"
+                        rows={w.by_workflow.map((r) => ({
+                            key: r.workflow_id,
+                            label: r.name,
+                            value: r.cost_per_run_usd ?? 0,
+                            display: r.cost_per_run_usd === null ? '—' : formatCostUsd(r.cost_per_run_usd),
+                            note: `${r.runs} run${r.runs === 1 ? '' : 's'}`,
+                        }))}
+                    />
+                )}
+            </Card>
 
             <Card>
                 <ChartTitle title="Workflows" sub="Each workflow's runs started in this window. Duration is the median of completed runs; loops and gate rounds are averages per run." />
@@ -190,6 +195,15 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
                         Fleet performance
                     </Button>
                 </Box>
+                <Box component="ul" aria-label="First attempt legend" sx={{ listStyle: 'none', m: 0, mb: 1, p: 0, display: 'flex', gap: 1.5, flexWrap: 'wrap', fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                    <Box component="li" sx={{ fontWeight: 600 }}>First attempt:</Box>
+                    {OUTCOMES.map((o) => (
+                        <Box component="li" key={o.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Box sx={{ width: 8, height: 8, borderRadius: '2px', background: o.color }} />
+                            {o.label}
+                        </Box>
+                    ))}
+                </Box>
                 {w.agents.length === 0 ? (
                     <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>No agent took a workflow step in this window.</Typography>
                 ) : (
@@ -199,17 +213,7 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
                                 <TableRow>
                                     <TableCell sx={HEAD_SX}>Agent</TableCell>
                                     <TableCell sx={HEAD_SX} align="right">Steps</TableCell>
-                                    <TableCell sx={HEAD_SX}>
-                                        <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'center', flexWrap: 'wrap' }}>
-                                            First attempt
-                                            {OUTCOMES.map((o) => (
-                                                <Box key={o.key} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontWeight: 500 }}>
-                                                    <Box sx={{ width: 8, height: 8, borderRadius: '2px', background: o.color }} />
-                                                    {o.label}
-                                                </Box>
-                                            ))}
-                                        </Box>
-                                    </TableCell>
+                                    <TableCell sx={HEAD_SX}>First attempt</TableCell>
                                     <TableCell sx={HEAD_SX} align="right">Loops</TableCell>
                                     <TableCell sx={HEAD_SX} align="right">Gate catches</TableCell>
                                     <TableCell sx={HEAD_SX} align="right">Cost / step</TableCell>

@@ -89,7 +89,7 @@ export function workflowsFixture(over: Partial<IAnalyticsWorkflows> = {}): IAnal
             { workflow_id: 'wf-q', name: 'Quick change', runs: 4, completed: 3, success_rate: 1, median_duration_s: 8 * 60, avg_loops: 0, avg_gate_rounds: 0, cost_per_run_usd: null },
         ],
         gates: { pass: 20, fail: 2, unavailable: 1, needs_review: 0, pass_rate: 20 / 22 },
-        park_reasons: [{ reason: 'Agent asked you', count: 3 }],
+        park_reasons: [{ kind: 'question', reason: 'Agent asked you', count: 3 }],
         retries: { retries: 2, dispatches: 40, rate: 0.05 },
         agents: [
             { agent_id: 'a-anna', name: 'Anna Reviewer', accent_color: '#123456', steps: 4, first_pass: { applied: 2, rejected: 2, parked: 0 }, loops: 0, gate_catch: 0, cost_usd: 1, per_step_usd: 0.25, p95_s: 30 },

@@ -45,7 +45,7 @@ Every agent that took a workflow step in the window, side by side, plus what the
 - Post-onboarding only.
 
 ## Edge cases / quirks
-- Agent-test items (`items.is_test`) are excluded from the delivery tiles but not from the agent rows — the same scope as the Performance tab, which counts any workflow step.
+- Agent-test items (`items.is_test`) are excluded from the delivery tiles but not from the agent rows — the same scope as the Performance tab, which counts any workflow step. (Analytics → Workflows leaves them out of its agent rows via `exclude_test_items`; this page does not.)
 - `pr_state` is whatever the PR poller last saw; a merge GitHub has not been asked about yet counts as opened, not merged.
 - No sidenav entry: the page sits under **Agents**, which stays highlighted (`/agents/…` prefix match).
 
