@@ -487,3 +487,35 @@ describe('formatSchedule', () => {
         expect(formatSchedule({ schedule_kind: 'bogus' as never, schedule_value: 'raw' })).toBe('raw');
     });
 });
+
+describe('Reminders page — honest states and the Owner zone', () => {
+    it('a failed load is an error, not the empty hero', async () => {
+        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json({ error: 'db down' }, { status: 500 })));
+        renderWithProviders(<Reminders />);
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not load reminders');
+        expect(screen.queryByText('No active reminders')).not.toBeInTheDocument();
+    });
+
+    it('history on with nothing finished says so', async () => {
+        serveLists([makeReminder()], []);
+        renderWithProviders(<Reminders />);
+        const region = await openHistory();
+        expect(await within(region).findByText(/No finished reminders yet/)).toBeInTheDocument();
+    });
+
+    it('"Once on" and the tooltip are in the Owner zone (Asia/Kolkata), not the browser zone', async () => {
+        serveLists([makeReminder({ schedule_kind: 'once', schedule_value: '2099-07-01T00:30:00.000Z', next_fire_at: '2099-07-01T00:30:00.000Z' })]);
+        renderWithProviders(<Reminders />);
+        const expected = new Date('2099-07-01T00:30:00.000Z').toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
+        expect(await screen.findByText(`Once on ${expected}`)).toBeInTheDocument();
+    });
+});
+
+describe('formatSchedule — zone', () => {
+    it('formats a Once in the given zone and falls back for an unknown one', () => {
+        const at = '2099-07-01T00:30:00.000Z';
+        const tokyo = new Date(at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Tokyo' });
+        expect(formatSchedule({ schedule_kind: 'once', schedule_value: at }, 'Asia/Tokyo')).toBe(`Once on ${tokyo}`);
+        expect(formatSchedule({ schedule_kind: 'once', schedule_value: at }, 'Not/AZone')).toMatch(/^Once on /);
+    });
+});

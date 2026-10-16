@@ -96,11 +96,15 @@ export function computeNextFire(schedule: ReminderSchedule, from: Date = new Dat
     let next: Date | null;
     try {
         next = new Cron(expr, { paused: true, ...(timezone ? { timezone } : {}) }).nextRun(from);
-    } catch (e) {
-        if (!timezone) throw e;
-        next = new Cron(expr, { paused: true }).nextRun(from);
+    } catch {
+        try {
+            next = new Cron(expr, { paused: true }).nextRun(from);
+        } catch (e) {
+            // A bad expression is the caller's input, not a server fault.
+            throw new ApiError('validation_error', `Invalid cron expression "${expr}": ${(e as Error).message}`, 400);
+        }
     }
-    if (!next) throw new Error(`Schedule "${expr}" has no future fire`);
+    if (!next) throw new ApiError('validation_error', `Schedule "${expr}" has no future fire`, 400);
     return next;
 }
 
@@ -191,7 +195,7 @@ export const remindersService = {
         const existing = await this.get(id);
         if (!existing) return undefined;
         if (existing.status !== 'active' && existing.status !== 'paused') {
-            throw new Error(`Cannot edit reminder ${id} in status '${existing.status}'`);
+            throw new ApiError('conflict', `Cannot edit reminder ${id} in status '${existing.status}'`, 409);
         }
 
         const update: Record<string, unknown> = {};

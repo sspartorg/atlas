@@ -18,6 +18,7 @@ import MenuItem from '@mui/material/MenuItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import Divider from '@mui/material/Divider';
 import Skeleton from '@mui/material/Skeleton';
+import Alert from '@mui/material/Alert';
 import AddRounded from '@mui/icons-material/AddRounded';
 import CancelRounded from '@mui/icons-material/CancelRounded';
 import EditRounded from '@mui/icons-material/EditRounded';
@@ -43,6 +44,7 @@ import {
 import { useSettings } from '../hooks/useSettings.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { useToast } from '../hooks/useToast.js';
+import { useNow } from '../hooks/useNow.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { HeroEmptyState } from '../components/HeroEmptyState.js';
 import { RefreshButton } from '../components/index.js';
@@ -73,7 +75,9 @@ export function Reminders() {
     const [pendingCancel, setPendingCancel] = useState<IReminder | null>(null);
     const [pendingDelete, setPendingDelete] = useState<IReminder | null>(null);
 
-    const { data: active = [], isLoading, isFetching, refetch } = useReminders();
+    const { data: active = [], isLoading, isFetching, error, refetch } = useReminders();
+    // "Next in 3m" ages without a refetch.
+    useNow();
     const historyQuery = useReminderHistory(showHistory);
     const history = historyQuery.data?.pages.flat() ?? [];
     const timeZone = useSettings().data?.quiet_hours_timezone ?? null;
@@ -163,8 +167,8 @@ export function Reminders() {
                 subtitle={
                     <>
                         Reminders fire as in-app notifications and (optionally) external
-                        notifications, on the same per-minute scheduler as agents. Daily and
-                        weekly times are in{' '}
+                        notifications, on the same per-minute scheduler as agents. Schedules
+                        and times are in{' '}
                         <Box component="span" sx={{ fontFamily: MONO }}>
                             {timeZone ?? 'server time'}
                         </Box>
@@ -209,7 +213,15 @@ export function Reminders() {
                 }
             />
 
-            {!isLoading && active.length === 0 ? (
+            {error ? (
+                <Alert severity="error">Could not load reminders: {error.message}</Alert>
+            ) : isLoading ? (
+                <Box aria-busy="true" aria-label="Loading reminders" sx={{ display: 'grid', gap: 1.5 }}>
+                    {[0, 1].map((i) => (
+                        <Skeleton key={i} variant="rounded" height={64} />
+                    ))}
+                </Box>
+            ) : active.length === 0 ? (
                 <HeroEmptyState
                     icon={<AlarmRounded sx={{ fontSize: 30, color: ATLAS_PALETTE.slate60 }} />}
                     title="No active reminders"
@@ -219,7 +231,7 @@ export function Reminders() {
                 <ReminderList rows={active} actions={actions} />
             )}
 
-            {showHistory && (history.length > 0 || historyQuery.isLoading) && (
+            {showHistory && (
                 <Box component="section" aria-labelledby="reminders-history" sx={{ mt: 8 }}>
                     <Typography
                         id="reminders-history"
@@ -228,8 +240,14 @@ export function Reminders() {
                     >
                         History
                     </Typography>
-                    {historyQuery.isLoading ? (
+                    {historyQuery.error ? (
+                        <Alert severity="error">Could not load history: {historyQuery.error.message}</Alert>
+                    ) : historyQuery.isLoading ? (
                         <Skeleton variant="rounded" height={72} />
+                    ) : history.length === 0 ? (
+                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
+                            No finished reminders yet. Cancelled and completed ones land here.
+                        </Typography>
                     ) : (
                         <ReminderList rows={history} actions={actions} />
                     )}
@@ -404,11 +422,11 @@ function ReminderRow({ reminder, actions }: { reminder: IReminder; actions: RowA
                     whiteSpace: 'nowrap',
                 }}
             >
-                {formatSchedule(reminder)}
+                {formatSchedule(reminder, actions.timeZone)}
             </Typography>
         </Box>
     );
-    const time = <TimeLine reminder={reminder} />;
+    const time = <TimeLine reminder={reminder} timeZone={actions.timeZone} />;
     const status = <StatusChip status={reminder.status} />;
     const expandIcon = history ? (
         <ExpandMoreRounded
@@ -514,7 +532,7 @@ function ReminderRow({ reminder, actions }: { reminder: IReminder; actions: RowA
                     <RowMenu reminder={reminder} actions={actions} />
                 </Box>
             </Box>
-            {history && open && <FireLog id={logId} reminderId={reminder.id} />}
+            {history && open && <FireLog id={logId} reminderId={reminder.id} timeZone={actions.timeZone} />}
         </Box>
     );
 }
@@ -608,7 +626,7 @@ function RowMenu({ reminder, actions }: { reminder: IReminder; actions: RowActio
 }
 
 /** What the Owner needs to know about when: next fire for live rows, when it ended for history. */
-function TimeLine({ reminder }: { reminder: IReminder }) {
+function TimeLine({ reminder, timeZone }: { reminder: IReminder; timeZone: string | null }) {
     const { status, next_fire_at, last_fired_at, updated_at, fire_count } = reminder;
     let text: string;
     let at: string;
@@ -625,7 +643,7 @@ function TimeLine({ reminder }: { reminder: IReminder }) {
         at = updated_at;
     }
     return (
-        <Tooltip title={new Date(at).toLocaleString()} arrow placement="top">
+        <Tooltip title={formatAt(at, timeZone)} arrow placement="top">
             <Typography
                 component="span"
                 sx={{
@@ -652,7 +670,7 @@ const DELIVERY_TEXT: Record<IReminderFire['external_status'], string> = {
     failed: 'failed',
 };
 
-function FireLog({ id, reminderId }: { id: string; reminderId: number }) {
+function FireLog({ id, reminderId, timeZone }: { id: string; reminderId: number; timeZone: string | null }) {
     const { data, isLoading, isError } = useReminderFires(reminderId, true);
     return (
         <Box
@@ -684,7 +702,7 @@ function FireLog({ id, reminderId }: { id: string; reminderId: number }) {
                             }}
                         >
                             <Box component="span" sx={{ color: ATLAS_PALETTE.slate }}>
-                                {new Date(f.fired_at).toLocaleString()}
+                                {formatAt(f.fired_at, timeZone)}
                             </Box>
                             <Box component="span">push {DELIVERY_TEXT[f.push_status]}</Box>
                             <Box
@@ -771,12 +789,30 @@ function StatusChip({ status }: { status: ReminderStatus }) {
     );
 }
 
-export function formatSchedule(r: Pick<IReminder, 'schedule_kind' | 'schedule_value'>): string {
+/**
+ * An instant as the Owner reads it: in the Owner zone (the one daily / weekly
+ * schedules run in), not the browser's. Unknown zone → browser zone.
+ */
+function formatAt(iso: string, timeZone: string | null | undefined): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    const opts: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' };
+    try {
+        return d.toLocaleString(undefined, timeZone ? { ...opts, timeZone } : opts);
+    } catch {
+        return d.toLocaleString(undefined, opts);
+    }
+}
+
+export function formatSchedule(
+    r: Pick<IReminder, 'schedule_kind' | 'schedule_value'>,
+    timeZone: string | null = null,
+): string {
     switch (r.schedule_kind) {
         case 'once': {
             const d = new Date(r.schedule_value);
             if (Number.isNaN(d.getTime())) return r.schedule_value;
-            return `Once on ${d.toLocaleString()}`;
+            return `Once on ${formatAt(r.schedule_value, timeZone)}`;
         }
         case 'daily':
             return `Daily at ${r.schedule_value}`;

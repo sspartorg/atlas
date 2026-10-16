@@ -42,3 +42,18 @@ describe('snoozedToast', () => {
         expect(snoozedToast('2026-10-16T03:30:00Z', null)).toMatch(/^Snoozed until /);
     });
 });
+
+describe('Owner-zone datetime-local round trip', () => {
+    it('reads and writes wall time in the zone, across DST, and refuses junk', async () => {
+        const { toZonedInput, fromZonedInput, resolveZone } = await import('./snooze.js');
+        expect(fromZonedInput('2099-07-01T09:30', 'Asia/Tokyo')?.toISOString()).toBe('2099-07-01T00:30:00.000Z');
+        expect(toZonedInput(new Date('2099-07-01T00:30:00Z'), 'Asia/Tokyo')).toBe('2099-07-01T09:30');
+        // New York: EDT in July (UTC-4), EST in January (UTC-5).
+        expect(fromZonedInput('2026-07-01T09:00', 'America/New_York')?.toISOString()).toBe('2026-07-01T13:00:00.000Z');
+        expect(fromZonedInput('2026-01-01T09:00', 'America/New_York')?.toISOString()).toBe('2026-01-01T14:00:00.000Z');
+        expect(fromZonedInput('not-a-date', 'UTC')).toBeNull();
+        expect(resolveZone('Not/AZone')).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+        expect(resolveZone(null)).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+        expect(resolveZone('Asia/Tokyo')).toBe('Asia/Tokyo');
+    });
+});

@@ -77,13 +77,9 @@ export async function remindersRoutes(app: FastifyInstance): Promise<void> {
         const id = Number((req.params as { id: string }).id);
         if (!Number.isFinite(id)) return reply.status(400).send({ error: 'invalid id' });
         const patch = UpdateReminderSchema.parse(req.body);
-        try {
-            const row = await remindersService.update(id, patch);
-            if (!row) return reply.status(404).send({ error: 'reminder not found' });
-            return row;
-        } catch (e) {
-            return reply.status(409).send({ error: (e as Error).message });
-        }
+        const row = await remindersService.update(id, patch);
+        if (!row) return reply.status(404).send({ error: 'reminder not found' });
+        return row;
     });
 
     app.delete('/api/reminders/:id', { preHandler: requireMcpToken }, async (req, reply) => {

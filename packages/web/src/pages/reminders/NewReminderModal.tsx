@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -20,6 +20,8 @@ import {
     type IReminder,
 } from '@atlas/shared';
 import { useCreateReminder, useUpdateReminder } from '../../hooks/useReminders.js';
+import { useSettings } from '../../hooks/useSettings.js';
+import { fromZonedInput, resolveZone, toZonedInput } from './snooze.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
@@ -30,6 +32,8 @@ interface Props {
      *  of a POST on submit. */
     editing?: IReminder | null;
 }
+
+const LABEL_MAX = 200;
 
 const WEEKDAYS: { value: number; label: string }[] = [
     { value: 1, label: 'Mon' },
@@ -47,11 +51,15 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
     const updateReminder = useUpdateReminder();
     const isEdit = !!editing;
     const mutation = isEdit ? updateReminder : createReminder;
+    // Every schedule kind is in the Owner's zone: the server runs daily /
+    // weekly / cron there, so "Once at 09:00" means 09:00 there too.
+    const zone = resolveZone(useSettings().data?.quiet_hours_timezone);
 
+    const labelRef = useRef<HTMLInputElement | null>(null);
     const [label, setLabel] = useState('');
     const [body, setBody] = useState('');
     const [kind, setKind] = useState<ReminderScheduleKind>('once');
-    const [once, setOnce] = useState(() => defaultOnceValue());
+    const [once, setOnce] = useState(() => defaultOnceValue(zone));
     const [daily, setDaily] = useState('09:00');
     const [weeklyTime, setWeeklyTime] = useState('09:00');
     const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -63,7 +71,7 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
         setLabel('');
         setBody('');
         setKind('once');
-        setOnce(defaultOnceValue());
+        setOnce(defaultOnceValue(zone));
         setDaily('09:00');
         setWeeklyTime('09:00');
         setWeekdays([1, 2, 3, 4, 5]);
@@ -81,7 +89,7 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
             setLabel(editing.label);
             setBody(editing.body ?? '');
             setChannel(editing.channel);
-            hydrateScheduleFromRow(editing, {
+            hydrateScheduleFromRow(editing, zone, {
                 setKind,
                 setOnce,
                 setDaily,
@@ -110,11 +118,12 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
 
     function handleSubmit() {
         setError(null);
-        const schedule = buildSchedule(kind, { once, daily, weeklyTime, weekdays, cron });
-        if (!schedule) {
-            setError('Schedule is incomplete or invalid.');
+        const built = buildSchedule(kind, { once, daily, weeklyTime, weekdays, cron }, zone);
+        if ('error' in built) {
+            setError(built.error);
             return;
         }
+        const schedule = built.schedule;
         const candidate: SetReminderInput = {
             label: label.trim(),
             body: body.trim(),
@@ -151,7 +160,15 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
     }
 
     return (
-        <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
+        <Dialog
+            open={open}
+            onClose={handleClose}
+            fullWidth
+            maxWidth="sm"
+            // The dialog's focus trap takes focus to its paper after `autoFocus`
+            // ran, so a keyboard user landed nowhere; put it on Label once open.
+            slotProps={{ transition: { onEntered: () => labelRef.current?.focus() } }}
+        >
             <DialogTitle sx={{ fontSize: 18, fontWeight: 600 }}>
                 {isEdit ? 'Edit reminder' : 'New reminder'}
             </DialogTitle>
@@ -163,7 +180,9 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                         onChange={(e) => setLabel(e.target.value)}
                         required
                         size="small"
-                        inputProps={{ maxLength: 200 }}
+                        inputRef={labelRef}
+                        inputProps={{ maxLength: LABEL_MAX }}
+                        helperText={`${label.length}/${LABEL_MAX}`}
                         autoFocus
                     />
                     <TextField
@@ -217,7 +236,8 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                                 onChange={(e) => setOnce(e.target.value)}
                                 size="small"
                                 InputLabelProps={{ shrink: true }}
-                                sx={{ mt: 2, width: 280 }}
+                                helperText={`In ${zone}`}
+                                sx={{ mt: 2, width: 280, maxWidth: '100%' }}
                             />
                         )}
                         {kind === 'daily' && (
@@ -307,7 +327,7 @@ export function NewReminderModal({ open, onClose, editing }: Props) {
                     </Box>
 
                     {error && (
-                        <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.error }}>
+                        <Typography role="alert" sx={{ fontSize: 13, color: ATLAS_PALETTE.error }}>
                             {error}
                         </Typography>
                     )}
@@ -348,29 +368,31 @@ interface ScheduleFields {
     cron: string;
 }
 
-function buildSchedule(
-    kind: ReminderScheduleKind,
-    f: ScheduleFields
-): SetReminderInput['schedule'] | null {
+type Built = { schedule: SetReminderInput['schedule'] } | { error: string };
+
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function buildSchedule(kind: ReminderScheduleKind, f: ScheduleFields, zone: string, now: Date = new Date()): Built {
     switch (kind) {
         case 'once': {
-            if (!f.once) return null;
-            const d = new Date(f.once);
-            if (Number.isNaN(d.getTime())) return null;
-            return { kind: 'once', at: d.toISOString() };
+            const at = fromZonedInput(f.once, zone);
+            if (!at || Number.isNaN(at.getTime())) return { error: 'Pick a date and time.' };
+            if (at.getTime() <= now.getTime()) return { error: 'Pick a time in the future.' };
+            return { schedule: { kind: 'once', at: at.toISOString() } };
         }
         case 'daily':
-            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(f.daily)) return null;
-            return { kind: 'daily', time_of_day: f.daily };
+            if (!HHMM.test(f.daily)) return { error: 'Pick a time.' };
+            return { schedule: { kind: 'daily', time_of_day: f.daily } };
         case 'weekly':
-            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(f.weeklyTime)) return null;
-            if (f.weekdays.length === 0) return null;
-            return { kind: 'weekly', weekdays: f.weekdays, time_of_day: f.weeklyTime };
+            if (!HHMM.test(f.weeklyTime)) return { error: 'Pick a time.' };
+            if (f.weekdays.length === 0) return { error: 'Pick at least one weekday.' };
+            return { schedule: { kind: 'weekly', weekdays: f.weekdays, time_of_day: f.weeklyTime } };
         case 'cron':
-            if (f.cron.trim() === '') return null;
-            return { kind: 'cron', expr: f.cron.trim() };
+            if (f.cron.trim() === '') return { error: 'Enter a cron expression.' };
+            return { schedule: { kind: 'cron', expr: f.cron.trim() } };
+        /* v8 ignore next 2 */
         default:
-            return null;
+            return { error: 'Pick a schedule.' };
     }
 }
 
@@ -385,19 +407,13 @@ interface ScheduleSetters {
 
 // Reverse of `buildSchedule` — given a reminder row, populate the form
 // fields so the edit modal renders the user's existing schedule.
-function hydrateScheduleFromRow(r: IReminder, s: ScheduleSetters): void {
+function hydrateScheduleFromRow(r: IReminder, zone: string, s: ScheduleSetters): void {
     s.setKind(r.schedule_kind);
     switch (r.schedule_kind) {
         case 'once': {
-            // schedule_value is an ISO datetime; convert to the YYYY-MM-DDTHH:MM
-            // local format that <input type="datetime-local"> expects.
+            // schedule_value is an ISO instant; the input shows its wall clock in the Owner zone.
             const d = new Date(r.schedule_value);
-            if (!Number.isNaN(d.getTime())) {
-                const pad = (n: number) => String(n).padStart(2, '0');
-                s.setOnce(
-                    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-                );
-            }
+            if (!Number.isNaN(d.getTime())) s.setOnce(toZonedInput(d, zone));
             return;
         }
         case 'daily':
@@ -420,9 +436,6 @@ function hydrateScheduleFromRow(r: IReminder, s: ScheduleSetters): void {
     }
 }
 
-function defaultOnceValue(): string {
-    // Native datetime-local expects YYYY-MM-DDTHH:MM in local time
-    const d = new Date(Date.now() + 60 * 60 * 1000);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function defaultOnceValue(zone: string): string {
+    return toZonedInput(new Date(Date.now() + 60 * 60 * 1000), zone);
 }
