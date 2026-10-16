@@ -72,15 +72,14 @@ export function MetricMarquee({
     label,
     value,
     sub,
-    accent,
 }: {
     label: string;
     value: ReactNode;
     sub?: ReactNode;
-    accent: string;
 }) {
+    // One accent for every marquee, the app's indigo: the numbers are a set, not a legend.
     return (
-        <Box sx={{ pl: 2, borderLeft: `2px solid ${accent}`, minWidth: 0 }}>
+        <Box sx={{ pl: 2, borderLeft: `2px solid ${ATLAS_PALETTE.brandBlue}`, minWidth: 0 }}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, fontWeight: 500 }}>{label}</Typography>
             <Typography
                 sx={{
@@ -169,8 +168,8 @@ export function ChartTitle({
     );
 }
 
-// Hero band — a tinted accent surface (the sidenav's active-row family), so
-// it reads as part of the app in both modes instead of a contrasting slab.
+// Hero — a plain card like every other card in the app (white, slate10
+// border); the indigo accent is kept for the insight label and the marquees.
 export function Hero({
     breadcrumb,
     title,
@@ -188,9 +187,9 @@ export function Hero({
     return (
         <Box
             sx={{
-                background: ATLAS_PALETTE.accentSoft,
+                background: ATLAS_PALETTE.white,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                borderRadius: '16px',
+                borderRadius: '14px',
                 color: ATLAS_PALETTE.slate,
                 p: { xs: 2.5, md: 4 },
                 mb: { xs: 3, md: 4 },

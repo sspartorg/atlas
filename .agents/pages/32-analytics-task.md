@@ -14,7 +14,7 @@ All-time cost for one Task and its sub-tasks, filterable by item kind.
 
 ## UI elements
 
-**Header** — project link (→ `/analytics/project/:projectId`), Task id, Task title + all-time rolled totals.
+**Header** — project link (→ `/analytics/project/:projectId`), Task id, Task title + all-time rolled totals, in the shared `Hero` card (white, `slate10` border, one indigo marquee rule).
 
 **Per-kind cards** (`:252`) — one per descendant kind (`task`, `sub_task`). Each is a **filter toggle**: clicking sets `typeFilter` and resets `page` to 1 (`:259-260`). `byKindPie` filters to `total_cost_usd > 0` (`:105`), so a kind with no spend shows no card.
 

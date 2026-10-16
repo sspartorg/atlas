@@ -99,18 +99,20 @@ export function Analytics() {
                     variant="scrollable"
                     scrollButtons={false}
                     aria-label="Analytics sections"
+                    // The app's tab style (Notifications): ink indicator and ink selected label.
                     sx={{
-                        minHeight: 42,
-                        '& .MuiTabs-indicator': { backgroundColor: ATLAS_PALETTE.brandBlue, height: 2 },
+                        minHeight: 44,
+                        '& .MuiTabs-indicator': { backgroundColor: ATLAS_PALETTE.slate, height: 2 },
                         '& .MuiTab-root': {
-                            minHeight: 42,
+                            minHeight: 44,
                             textTransform: 'none',
                             fontWeight: 500,
-                            fontSize: 13.5,
+                            fontSize: 13,
                             color: ATLAS_PALETTE.slate60,
                             px: { xs: 1.5, md: 2 },
-                            '&.Mui-selected': { color: ATLAS_PALETTE.brandBlue, fontWeight: 600 },
+                            '&.Mui-selected': { color: ATLAS_PALETTE.slate, fontWeight: 600 },
                         },
+                        '& .MuiTab-iconWrapper': { mb: '0 !important', mr: 1 },
                     }}
                 >
                     {TABS.map((t) => (

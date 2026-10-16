@@ -15,12 +15,12 @@ What shipped, how fast work moves, how the workflows and agents ran, and what it
 **Header** — `PageHeader` (`analytics` icon). Subtitle: "What shipped, how fast, how the workflows ran and what it cost, for {October 2026 | the last N days}. Times are in {viewer tz}."
 - **Window** `ToggleButtonGroup` (header actions): `7 days` · `30 days` · `90 days` · `This month`. URL `?window=7d|30d|90d`; `month` (default) clears the param so the first load matches the Dashboard's month spend.
 
-**Tabs** (scrollable, `aria-label="Analytics sections"`) — `?tab=overview|delivery|workflows|spend` via `useTabParam`; `overview` clears the param. Each tab is a `lazyNamed` chunk and calls only its own hooks, so a tab never opened never fetches.
+**Tabs** (scrollable, `aria-label="Analytics sections"`, styled like the Notifications tabs: ink indicator, ink selected label) — `?tab=overview|delivery|workflows|spend` via `useTabParam`; `overview` clears the param. Each tab is a `lazyNamed` chunk and calls only its own hooks, so a tab never opened never fetches.
 
 **Every metric states its definition**: tiles are `StatTile` with an info button (`aria-label="How {label} is measured"`) whose tooltip is the definition; charts state theirs in the `ChartTitle` sub line. Deltas (`Delta`) compare with the previous window ("vs the 7 days before" / "vs the same days last month"), green when the move is good news, red when not; rates move in points (`pts`).
 
 ### Overview
-- **Hero** (`_chrome.tsx` `Hero`, tinted `accentSoft` surface — the sidenav active-row family, so it follows light and dark) carrying one computed insight (`_insight.ts` `pickInsight`), in priority order: share of shipped Tasks' time spent **waiting on you** (≥30%, ≥3 shipped) → **cycle time** swing (≥25%) → **throughput** swing (≥25%) → **aging work** (oldest WIP id) → **spend** swing → **cache leverage** → plain activity.
+- **Hero** (`_chrome.tsx` `Hero`: a plain card like every other — white surface, `slate10` border; the insight label is the one indigo accent, `accentFg`) carrying one computed insight (`_insight.ts` `pickInsight`), in priority order: share of shipped Tasks' time spent **waiting on you** (≥30%, ≥3 shipped) → **cycle time** swing (≥25%) → **throughput** swing (≥25%) → **aging work** (oldest WIP id) → **spend** swing → **cache leverage** → plain activity.
 - Six tiles: Tasks shipped · Median cycle time · PRs merged · Workflow success rate · Spend · Cost per shipped Task (spend ÷ Tasks shipped).
 - **Shipped and spent, per day|week** — two charts on one time axis (`syncId`), each with its own y-axis (never a dual axis): Tasks shipped bars, then agent-run + terminal spend stacked.
 
@@ -65,7 +65,7 @@ None.
 - Agent names come from the API (`agent_name` join), so a deleted agent's spend keeps its name.
 
 ## Related pages
-- [`31-analytics-project.md`](31-analytics-project.md), [`32-analytics-task.md`](32-analytics-task.md) — drill-downs (same themed `Hero`)
+- [`31-analytics-project.md`](31-analytics-project.md), [`32-analytics-task.md`](32-analytics-task.md) — drill-downs (same `Hero` card)
 - [`36-fleet-performance.md`](36-fleet-performance.md) — the agent comparison the Workflows tab links to
 - [`01-dashboard.md`](01-dashboard.md) — the month-spend figure that must agree with this page
 
