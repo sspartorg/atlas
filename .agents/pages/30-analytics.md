@@ -32,9 +32,9 @@ What shipped, how fast work moves, how the workflows and agents ran, and what it
 
 ### Workflows & agents (`GET /api/analytics/workflows`)
 - Tiles: Success rate, Workflow runs, Gate pass rate, Retries.
-- How runs ended (status colours with labels), Why runs stopped for you (park reasons), Gate verdicts, Cost per run.
+- How runs ended (status colours with labels) and Gate verdicts stacked on the left, **Why runs stopped for you** beside them (parks grouped by `park_kind`, labels from `WORKFLOW_PARK_KIND_LABELS`; a sub-task that waits holds its Task too and counts once), then Cost per run full width.
 - **Workflows** table — runs, success, median duration, loops/run, gate rounds/run, cost/run; row → `/workflows/:id`.
-- **Agents** table — the fleet page's `shapeAgent` rows **in name order, no ranking** (ADR 0023; "Sent back" is never the failure colour); row → `/agents/:id?tab=performance`; **Fleet performance** button → `/agents/performance`.
+- **Agents** table — the fleet page's `shapeAgent` rows, **agent tests left out**, **in name order, no ranking** (ADR 0023; "Sent back" is never the failure colour); row → `/agents/:id?tab=performance`; **Fleet performance** button → `/agents/performance`. The First attempt colour key (Applied · Sent back · Asked you) sits above the table, not inside its header.
 
 ### Spend (`GET /api/analytics?window=`)
 - Tiles: Spend, Cost per shipped Task, Cache savings ($, with unpriced cached tokens stated), Cache hit rate.
@@ -55,10 +55,12 @@ None.
 
 ## Edge cases / quirks
 - **The month boundary is local, and the timestamp column is UTC.** On 2026-09-12, all-time project cost read `$8.12` while September read `$2.28`; five runs completed 18:32–20:32Z on Aug 31, i.e. Sept 1 in Asia/Calcutta. Verify against the same `tz` the page sent before filing a mismatch.
-- `window=month` is exactly the old month-start rule, so the Dashboard's month spend still reconciles.
+- `window=month` is the month start in the viewer's zone. The Dashboard sends the same zone (`GET /api/dashboard?tz=`) and resolves the month with the same `resolveWindow`, so its "this month" spend equals this page's month Spend to the cent (`routes/analytics.test.ts` "the Dashboard month agrees with Analytics"). Before 2026-10-16 the Dashboard used the server's local month start and could disagree across a month boundary.
 - 90 days buckets by Monday weeks (`date_trunc('week')`); the web rolls daily spend into the same weeks (`mondayOf`).
-- Agent-test items (`items.is_test`) are left out of delivery and workflow numbers, not out of the agent rows (same as Fleet performance).
-- Park reasons are bucketed from prose the engine writes; a question an agent wrote itself is "Agent asked you".
+- Agent-test items (`items.is_test`) are left out of delivery and workflow numbers **and of the Agents rows** (`exclude_test_items`). The Fleet performance page still counts them in its agent rows — its documented scope.
+- **Spend leaves agent tests out too** (2026-10-16, `notTestRun` in `services/analytics-window.ts`): every agent-run spend figure — summary, daily, by agent, by project, by model, top runs, the 12-month ladder and the previous-window delta — skips runs whose item is `is_test`. A run with no item (a standalone agent run) is real spend and stays. **Decision:** an agent test is a qualification probe on a throwaway item, not work; counting it made "Cost per shipped Task" charge test probes to shipped work and put a spend bar under a project no Task shipped from. The Dashboard's month spend leaves them out the same way so the two still agree. Their cost stays visible where it belongs: the agent's Tests tab (`TestsTabContent`). The drill-downs (`/analytics/project/:id`, `/analytics/task/:id`) are all-time per item and unchanged: the agent-test sandbox project's own page still shows what its probes cost.
+- Park reasons are exact: the engine writes `workflow_run_events.park_kind` at each park site (migration 014; see `data-model.md`). Parks from before 014 were backfilled from their prose; what could not be classified reads "Other".
+- **Realistic-data check**: `e2e/pages/analytics-real.spec.ts` seeds ~6 months of work (`e2e/fixtures/analytics-seed.ts`, `pnpm e2e:seed:analytics` for a hand look) and asserts, for every window, that Tasks shipped, median cycle time, workflow success rate, spend, reopen rate and every park-kind bar equal plain SQL over the seed; it also walks both drill-downs (paging, rows per page, kind filter, links).
 - Chart colours come from `CHART_PALETTE` (`theme/tokens.ts`, `--atlas-chart-1..8` in `theme-vars.css`), validated for colour-blind separation in both modes.
 - Agent names come from the API (`agent_name` join), so a deleted agent's spend keeps its name.
 

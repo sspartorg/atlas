@@ -91,6 +91,11 @@ export interface ScorecardScope {
     until?: string | null;
     project_id?: string | null;
     run_ids?: string[];
+    /**
+     * Leave out runs whose Task is an agent test (`items.is_test`). Analytics
+     * sets it; the Fleet performance page keeps them (its documented default).
+     */
+    exclude_test_items?: boolean;
 }
 
 export type RoutedStep = {
@@ -174,6 +179,14 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
     if (args.since) q = q.where('started_at', '>=', args.since);
     if (args.until) q = q.where('started_at', '<=', args.until);
     if (args.project) q = q.where('project_id', '=', args.project);
+    if (scope.exclude_test_items) {
+        q = q.where((eb) =>
+            eb.or([
+                eb('item_id', 'is', null),
+                eb('item_id', 'not in', eb.selectFrom('items').select('id').where('is_test', '=', true)),
+            ]),
+        );
+    }
     const roots = await q.orderBy('started_at', 'asc').execute();
 
     // Nothing in scope is an answer, not an error: a brand-new agent has no

@@ -7,23 +7,9 @@ import { ANALYTICS_WINDOWS, AnalyticsQuerySchema, asAgentCli, ISSUE_TYPES } from
 import { costRollupForRoot, costRowsForRoot } from '../services/item-cost-tree.js';
 import { countShippedTasks, deliveryAnalytics } from '../services/analytics-delivery.js';
 import { workflowAnalytics } from '../services/analytics-workflows.js';
-import { resolveWindow } from '../services/analytics-window.js';
+import { normalizeTz, notTestRun, resolveWindow } from '../services/analytics-window.js';
 import { lookupClaudePrices } from '../services/claude-model-pricing.js';
 import type { ItemType } from '../db/types.js';
-
-// Allow `Area/Location` style IANA names plus UTC. Anything else falls back to UTC.
-const TZ_RE = /^[A-Za-z_+\-/]{1,64}$/;
-
-function normalizeTz(raw: unknown): string {
-    if (typeof raw !== 'string' || !TZ_RE.test(raw)) return 'UTC';
-    // A well-formed but unknown zone would otherwise reach Postgres as a 500.
-    try {
-        new Intl.DateTimeFormat('en-GB', { timeZone: raw });
-        return raw;
-    } catch {
-        return 'UTC';
-    }
-}
 
 // Cost data changes only when a run completes, which fires an SSE event that
 // invalidates the React Query cache on the client. A 30s freshness window with
@@ -278,6 +264,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         fn.countAll<string>().as('run_count'),
                     ])
                     .where('status', '=', 'completed')
+                    .where(notTestRun('agent_runs.item_id'))
                     .where(sql`completed_at`, '>=', monthStartSql)
                     .executeTakeFirst(),
 
@@ -295,6 +282,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         fn.countAll<string>().as('run_count'),
                     ])
                     .where('status', '=', 'completed')
+                    .where(notTestRun('agent_runs.item_id'))
                     .where(sql`completed_at`, '>=', monthStartSql)
                     .groupBy(sql`1`)
                     .orderBy(sql`1`, 'asc')
@@ -313,6 +301,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         fn.countAll<string>().as('run_count'),
                     ])
                     .where('r.status', '=', 'completed')
+                    .where(notTestRun('r.item_id'))
                     .where(sql`r.completed_at`, '>=', monthStartSql)
                     .groupBy(['r.agent_id', 'a.name'])
                     .orderBy(sql`SUM(r.total_cost_usd)`, 'desc')
@@ -332,6 +321,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         fn.countAll<string>().as('run_count'),
                     ])
                     .where('r.status', '=', 'completed')
+                    .where(notTestRun('r.item_id'))
                     .where(sql`r.completed_at`, '>=', monthStartSql)
                     .groupBy(sql`COALESCE(r.project_id, i.project_id), p.name`)
                     .orderBy(sql`SUM(r.total_cost_usd)`, 'desc')
@@ -355,6 +345,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         'r.created_at as created_at',
                     ])
                     .where('r.status', '=', 'completed')
+                    .where(notTestRun('r.item_id'))
                     .where(sql`r.completed_at`, '>=', monthStartSql)
                     .where('r.total_cost_usd', 'is not', null)
                     .orderBy('r.total_cost_usd', 'desc')
@@ -373,6 +364,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                         fn.countAll<string>().as('run_count'),
                     ])
                     .where('status', '=', 'completed')
+                    .where(notTestRun('agent_runs.item_id'))
                     .where(sql`completed_at`, '>=', twelveStartSql)
                     .groupBy(sql`1`)
                     .orderBy(sql`1`, 'asc')
@@ -501,6 +493,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 .selectFrom('agent_runs')
                 .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
                 .where('status', '=', 'completed')
+                .where(notTestRun('agent_runs.item_id'))
                 .where(sql`completed_at`, '>=', sql`${win.previous_start}::timestamptz`)
                 .where(sql`completed_at`, '<', sql`${win.previous_end}::timestamptz`)
                 .executeTakeFirst(),
@@ -521,6 +514,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                     fn.countAll<string>().as('count'),
                 ])
                 .where('status', '=', 'completed')
+                .where(notTestRun('agent_runs.item_id'))
                 .where(sql`completed_at`, '>=', monthStartSql)
                 .groupBy(['cli', 'model'])
                 .execute(),

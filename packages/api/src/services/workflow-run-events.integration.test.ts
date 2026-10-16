@@ -47,7 +47,8 @@ vi.mock('../routes/events.js', () => ({ eventsRoutes: async () => undefined, bro
 
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertItem, insertProject } from '../../tests/_items.js';
-import { onStepFinished, resumeWorkflowRun, startWorkflowRun } from './workflow-engine.js';
+import { onStepFinished, reconcileWorkflowRuns, resumeWorkflowRun, startWorkflowRun } from './workflow-engine.js';
+import { spawnAgentRun } from './agent-runner.js';
 import { commentsService } from './comments.js';
 import { recordRunEvent } from './workflow-run-events.js';
 
@@ -87,7 +88,7 @@ async function finishStep(outcome: RunOutcomeKind, reason: string): Promise<void
 const eventsOf = (runId: string) =>
     testDb
         .selectFrom('workflow_run_events')
-        .select(['kind', 'item_id', 'node_id', 'reason'])
+        .select(['kind', 'item_id', 'node_id', 'reason', 'park_kind'])
         .where('workflow_run_id', '=', runId)
         .orderBy('created_at', 'asc')
         .execute();
@@ -109,7 +110,7 @@ describe('workflow run events', () => {
         await finishStep('rejected', 'cannot start'); // coder fail → owner
 
         expect(await eventsOf(runId)).toEqual([
-            { kind: 'parked', item_id: 'ATL-2', node_id: 'owner', reason: 'Sent back to you: rejected: cannot start' },
+            { kind: 'parked', item_id: 'ATL-2', node_id: 'owner', reason: 'Sent back to you: rejected: cannot start', park_kind: 'review_requested' },
         ]);
 
         await resumeWorkflowRun(runId);
@@ -127,7 +128,56 @@ describe('workflow run events', () => {
         await finishStep('asked_question', 'Which API version?');
         await commentsService.create({ author: 'owner', issue_type: 'task', issue_id: 'ATL-2', body: 'v2' });
         await vi.waitFor(async () => expect(spawned).toHaveLength(2));
-        expect((await eventsOf(runId)).map((e) => e.kind)).toEqual(['parked', 'resumed']);
+        expect((await eventsOf(runId)).map((e) => [e.kind, e.park_kind])).toEqual([
+            ['parked', 'question'],
+            ['resumed', null],
+        ]);
+    });
+
+    // Migration 014 — every park site names its kind. (The rest are pinned in
+    // `workflow-engine.integration.test.ts` next to each site's park reason.)
+    describe('park kinds', () => {
+        const kindOf = async (runId: string) => (await eventsOf(runId)).find((e) => e.kind === 'parked')?.park_kind;
+        // Start → Coder → End, with no fail connection.
+        const straight = {
+            nodes: [node('start', 'start'), node('coder', 'agent', { agent_id: 'agent-coder' }), node('end', 'end')],
+            edges: [edge('start', 'coder'), edge('coder', 'end')],
+        } as unknown as IWorkflowGraph;
+
+        it('a rejection with nowhere to go is rejected', async () => {
+            await insertWorkflow('wf-straight', straight, 'item');
+            const runId = await startWorkflowRun('wf-straight', 'ATL-2');
+            await finishStep('rejected', 'out of scope');
+            expect(await kindOf(runId)).toBe('rejected');
+        });
+
+        it('a done with a required checklist left unticked is checklist_failed', async () => {
+            await insertWorkflow('wf-straight', straight, 'item');
+            await testDb.insertInto('agent_checklists').values({ agent_id: 'agent-coder', label: 'Tests added', required: true } as never).execute();
+            const runId = await startWorkflowRun('wf-straight', 'ATL-2');
+            await finishStep('done', 'shipped');
+            expect(await kindOf(runId)).toBe('checklist_failed');
+        });
+
+        it('an inactive agent is missing_agent', async () => {
+            await testDb.updateTable('agents').set({ status: 'inactive' } as never).where('id', '=', 'agent-coder').execute();
+            const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+            expect(await kindOf(runId)).toBe('missing_agent');
+        });
+
+        it('a spawn that throws is dispatch_failed', async () => {
+            vi.mocked(spawnAgentRun).mockRejectedValueOnce(new Error('no slot'));
+            const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+            expect(await kindOf(runId)).toBe('dispatch_failed');
+        });
+
+        it('a run whose step stopped reporting is lost_step', async () => {
+            const runId = await startWorkflowRun('wf-dev', 'ATL-2');
+            const step = spawned.at(-1);
+            await testDb.updateTable('agent_runs').set({ status: 'completed' }).where('id', '=', step?.runId ?? '').execute();
+            expect(await reconcileWorkflowRuns(new Date(Date.now() + 7 * 86_400_000))).toBe(1);
+            expect(await kindOf(runId)).toBe('lost_step');
+        });
     });
 
     describe('a sub-task that asks', () => {
@@ -146,9 +196,17 @@ describe('workflow run events', () => {
 
         it('writes a park for the sub-task run and for the Task run it holds', async () => {
             const { taskRun, childRun } = await parkedSubtask();
-            expect(await eventsOf(childRun)).toEqual([{ kind: 'parked', item_id: 'ATL-11', node_id: 'coder', reason: 'Which database?' }]);
+            expect(await eventsOf(childRun)).toEqual([
+                { kind: 'parked', item_id: 'ATL-11', node_id: 'coder', reason: 'Which database?', park_kind: 'question' },
+            ]);
             expect(await eventsOf(taskRun)).toEqual([
-                { kind: 'parked', item_id: 'ATL-2', node_id: 'build', reason: 'Sub-task ATL-11 is waiting for you: Which database?' },
+                {
+                    kind: 'parked',
+                    item_id: 'ATL-2',
+                    node_id: 'build',
+                    reason: 'Sub-task ATL-11 is waiting for you: Which database?',
+                    park_kind: 'subtask_waiting',
+                },
             ]);
         });
 
@@ -178,7 +236,7 @@ describe('workflow run events', () => {
     it('swallows a failed write instead of throwing into the engine', async () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await expect(recordRunEvent(runId, 'bogus' as never)).resolves.toBeUndefined();
-        await expect(recordRunEvent('no-such-run', 'parked')).resolves.toBeUndefined();
+        await expect(recordRunEvent('no-such-run', 'parked', 'x', 'question')).resolves.toBeUndefined();
         expect(await eventsOf(runId)).toEqual([]);
     });
 });

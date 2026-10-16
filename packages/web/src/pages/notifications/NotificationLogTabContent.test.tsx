@@ -651,6 +651,48 @@ describe('NotificationLogTabContent', () => {
         });
     });
 
+    describe('skipped while held (event turned off before the window ended)', () => {
+        const skipped = makeNotification({
+            id: 90,
+            external_status: 'none',
+            failure_reason: 'Skipped: event turned off while held',
+            message: 'Run failed overnight',
+        });
+        const cancelled = makeNotification({ id: 91, external_status: 'none', message: 'Cancelled one' });
+
+        it('stays in the log with a Skipped chip, its reason and Send now; a cancelled row does not', () => {
+            renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[skipped, cancelled]} />);
+            expect(screen.getByText('Run failed overnight')).toBeInTheDocument();
+            // The chip, plus the Skipped filter pill.
+            expect(screen.getAllByText('Skipped')).toHaveLength(2);
+            expect(screen.getByText(/Skipped: event turned off while held/)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
+            expect(screen.queryByText('Cancelled one')).not.toBeInTheDocument();
+        });
+
+        it('mobile: the card shows the chip and the reason', () => {
+            const restore = mockMobileViewport();
+            try {
+                renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[skipped]} />);
+                const card = screen.getByTestId('notification-card');
+                expect(card).toHaveTextContent('Skipped');
+                expect(card).toHaveTextContent('Skipped: event turned off while held');
+                expect(screen.getAllByRole('button', { name: 'Send now' })).toHaveLength(1);
+            } finally {
+                restore();
+            }
+        });
+    });
+
+    it('lists log-only rows (in_app=false) like any other send', () => {
+        const rows = [
+            makeNotification({ id: 95, event_type: 'mcp_external', external_status: 'sent', in_app: false, message: 'Digest from Claude' }),
+        ];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        expect(screen.getByText('Digest from Claude')).toBeInTheDocument();
+        expect(screen.getByText('Sent by Claude')).toBeInTheDocument();
+    });
+
     it('mobile: each status gets exactly one action in the fixed zone', () => {
         const restore = mockMobileViewport();
         try {
@@ -684,5 +726,61 @@ describe('NotificationLogTabContent', () => {
             flexWrap: 'nowrap',
             overflowX: 'auto',
         });
+    });
+});
+
+describe('NotificationLogTabContent — cancelled rows and refusals', () => {
+    it('a cancelled row stays, chip Cancelled, reason shown, Send now offered', () => {
+        const rows = [makeNotification({ id: 7, message: 'Stopped one', external_status: 'none', failure_reason: 'Cancelled by you' })];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        expect(screen.getByText('Cancelled', { exact: true })).toBeInTheDocument();
+        expect(screen.getByText('Cancelled by you')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
+    });
+
+    it('a refused cancel toasts the reason', async () => {
+        server.use(http.post(`${BASE}/notifications/9/cancel`, () => HttpResponse.json({ error: 'Only pending deliveries can be cancelled' }, { status: 409 })));
+        const rows = [makeNotification({ id: 9, message: 'In flight', external_status: 'pending' })];
+        renderWithProviders(
+            <>
+                <NotificationLogTabContent settings={settings} allRows={rows} />
+                <Toast />
+            </>
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(await screen.findByText('Cancel failed')).toBeInTheDocument();
+    });
+
+    it('Send a Test Message is enabled for a connected Teams channel and toasts a network error', async () => {
+        vi.spyOn(apiModule.api.settings, 'testExternalNotification').mockRejectedValueOnce(new Error('offline'));
+        renderWithProviders(
+            <>
+                <NotificationLogTabContent
+                    settings={{ ...settings, external_notification_provider: 'teams', external_notification_token_set: false, external_notification_webhook_url_set: true, external_notification_chat_id: null, external_notification_endpoint_label: null }}
+                    allRows={[]}
+                />
+                <Toast />
+            </>
+        );
+        const btn = screen.getByRole('button', { name: 'Send a Test Message' });
+        expect(btn).toBeEnabled();
+        fireEvent.click(btn);
+        expect(await screen.findByText('Test failed')).toBeInTheDocument();
+    });
+});
+
+describe('NotificationLogTabContent — the pills add up to All', () => {
+    it('Skipped counts skipped and cancelled rows and filters to them', () => {
+        const rows = [
+            makeNotification({ id: 1, message: 'S', external_status: 'sent' }),
+            makeNotification({ id: 2, message: 'K', external_status: 'none', failure_reason: 'Skipped: event turned off while held' }),
+            makeNotification({ id: 3, message: 'C', external_status: 'none', failure_reason: 'Cancelled by you' }),
+        ];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        const pill = screen.getByRole('button', { name: /^Skipped/ });
+        expect(pill).toHaveTextContent('2');
+        fireEvent.click(pill);
+        expect(screen.queryByText('S', { exact: true })).not.toBeInTheDocument();
+        expect(screen.getByText('C', { exact: true })).toBeInTheDocument();
     });
 });

@@ -10,6 +10,7 @@ import type {
     PushDeliveryStatus,
     SdlcRole,
     AgentStatus,
+    WorkflowParkKind,
 } from '../types/index.js';
 
 export const ISSUE_STATUSES: IssueStatus[] = [
@@ -170,6 +171,29 @@ export const GUARDRAIL_SEVERITY_META: Record<GuardrailSeverity, GuardrailSeverit
         description: 'Agent pauses, awaits reply.',
     },
     warn: { label: 'WARN', shortLabel: 'Warn', description: 'Recorded on run; continues.' },
+};
+
+// ---- Workflow parks -----------------------------------------------------
+
+/** What the Owner reads for each `park_kind` (Analytics → Workflows "Why runs stopped for you"). */
+export const WORKFLOW_PARK_KIND_LABELS: Record<WorkflowParkKind, string> = {
+    question: 'Agent asked you',
+    no_outcome: 'Agent gave no outcome',
+    review_requested: 'Owner review step',
+    rejected: 'Agent rejected the work',
+    checklist_failed: 'Required checklist failed',
+    gate_failed: 'Check failed',
+    check_unavailable: 'A check could not run',
+    loop_limit: 'Loop limit reached',
+    step_error: 'Agent step errored',
+    setup_failed: 'Setup or worktree failed',
+    delivery_failed: 'Delivery failed',
+    lost_step: 'Step stopped reporting',
+    missing_agent: 'Agent missing or inactive',
+    dispatch_failed: 'Could not start a step',
+    wiring_gap: 'Workflow wiring gap',
+    subtask_waiting: 'Sub-task waiting for you',
+    other: 'Other',
 };
 
 // ---- Notifications ------------------------------------------------------

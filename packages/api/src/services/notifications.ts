@@ -27,6 +27,9 @@ interface CreateInput {
     link_url?: string | null;
     /** Set by reminder fires — the fire log (`GET /api/reminders/:id/fires`). */
     reminder_id?: number | null;
+    /** False = log-only (external-only reminder, MCP send): no feed row, no
+     *  unread count, no web push. Defaults to true. */
+    in_app?: boolean;
 }
 
 interface ListFilter {
@@ -35,6 +38,32 @@ interface ListFilter {
     limit?: number | undefined;
     // Keyset cursor: rows strictly older than this notification id's row.
     before?: number | undefined;
+    in_app?: boolean | undefined;
+}
+
+export const SKIPPED_WHILE_HELD = 'Skipped: event turned off while held';
+export const INTERRUPTED_TWICE = 'Send interrupted twice (the server stopped mid-send). Press Retry to send it.';
+// A cancelled send stays in the Notification Log (`none` + this reason) with
+// Send now, instead of vanishing. The web keys its "Cancelled" chip off the
+// leading word.
+export const CANCELLED_BY_OWNER = 'Cancelled by you';
+export const SKIPPED_NO_CHANNEL = 'Skipped: no channel was connected when it was due';
+
+interface ClaimedRow {
+    id: number;
+    message: string;
+    created_at: string;
+    external_event_key: string | null;
+}
+
+function toClaimed(r: { id: number; message: string; created_at: unknown; external_event_key: string | null }): ClaimedRow {
+    return {
+        id: Number(r.id),
+        message: r.message,
+        // timestamptz arrives as a Date from node-postgres whatever the column type says.
+        created_at: new Date(r.created_at as string | Date).toISOString(),
+        external_event_key: r.external_event_key,
+    };
 }
 
 // One row of the notifications-with-item-type join. Avoids the previous N+1
@@ -65,6 +94,7 @@ function rowToNotification(row: Record<string, unknown>): INotification {
         link_url: (row['link_url'] as string | null) ?? null,
         external_deferred_at: (row['external_deferred_at'] as string | null) ?? null,
         reminder_id: row['reminder_id'] == null ? null : Number(row['reminder_id']),
+        in_app: row['in_app'] !== false,
         created_at: row['created_at'] as string,
     };
 }
@@ -141,6 +171,7 @@ function selectNotificationsWithItemType() {
             'n.link_url as link_url',
             'n.external_deferred_at as external_deferred_at',
             'n.reminder_id as reminder_id',
+            'n.in_app as in_app',
             'n.created_at as created_at',
             'i.type as item_type',
         ]);
@@ -151,6 +182,7 @@ export const notificationsService = {
         let q = selectNotificationsWithItemType().where(notStaleNeedsYou);
         if (filter.kind) q = q.where('n.kind', '=', filter.kind);
         if (filter.external_status) q = q.where('n.external_status', '=', filter.external_status);
+        if (filter.in_app !== undefined) q = q.where('n.in_app', '=', filter.in_app);
         if (filter.before !== undefined) {
             q = q.where(
                 sql<boolean>`(n.created_at, n.id) < (SELECT c.created_at, c.id FROM notifications c WHERE c.id = ${filter.before})`,
@@ -200,6 +232,7 @@ export const notificationsService = {
                 failure_reason: data.failure_reason ?? null,
                 link_url: linkUrl,
                 reminder_id: data.reminder_id ?? null,
+                in_app: data.in_app ?? true,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -214,6 +247,8 @@ export const notificationsService = {
             notificationId: created.id,
             notificationKind: created.kind,
         });
+        // A log-only row changes no badge and has nothing to push to the browser.
+        if (!created.in_app) return created;
         broadcastSSE({ type: 'counts_changed' });
         // Web push fan-out runs after the row + SSE broadcast so an outbound
         // delivery hiccup can never wedge the in-app feed. The push service
@@ -229,6 +264,12 @@ export const notificationsService = {
         failureReason: string | null = null,
     ): Promise<void> {
         const sentFlag = status === 'sent' ? 1 : 0;
+        // `pending` here means "in flight": stamp the claim the stuck-send
+        // sweep reads. Any settled status clears it.
+        const claim =
+            status === 'pending'
+                ? { external_claimed_at: new Date().toISOString() }
+                : { external_claimed_at: null, external_reclaimed: false };
         await db
             .updateTable('notifications')
             .set({
@@ -236,17 +277,27 @@ export const notificationsService = {
                 failure_reason: failureReason,
                 sent_external: sentFlag,
                 external_deferred_at: null,
+                ...claim,
             })
             .where('id', '=', id)
             .execute();
         broadcastSSE({ type: 'notification_updated', notificationId: id });
     },
 
-    /** Quiet hours: hold the outward send until `flushDeferredExternal`. */
-    async holdExternal(id: number, at: Date): Promise<void> {
+    /** Quiet hours: hold the outward send until `flushDeferredExternal`. The
+     *  event key is kept so the flush can re-check its toggle. */
+    async holdExternal(id: number, at: Date, eventKey: string | null = null): Promise<void> {
         await db
             .updateTable('notifications')
-            .set({ external_status: 'pending', failure_reason: null, sent_external: 0, external_deferred_at: at.toISOString() })
+            .set({
+                external_status: 'pending',
+                failure_reason: null,
+                sent_external: 0,
+                external_deferred_at: at.toISOString(),
+                external_event_key: eventKey,
+                external_claimed_at: null,
+                external_reclaimed: false,
+            })
             .where('id', '=', id)
             .execute();
         broadcastSSE({ type: 'notification_updated', notificationId: id });
@@ -254,25 +305,58 @@ export const notificationsService = {
 
     /**
      * Claim every held send (CAS: only rows still held and pending), oldest
-     * first. The claim clears `external_deferred_at`, so a concurrent tick or a
-     * Cancel that lands first wins and the row is never sent twice.
+     * first. The claim clears `external_deferred_at` and stamps
+     * `external_claimed_at`, so a concurrent tick or a Cancel that lands first
+     * wins, the row is never sent twice, and a process that dies before
+     * reaching it leaves a claim the stuck-send sweep can see.
      */
-    async claimDeferred(): Promise<Array<{ id: number; message: string; created_at: string }>> {
+    async claimDeferred(now: Date = new Date()): Promise<ClaimedRow[]> {
         const rows = await db
             .updateTable('notifications')
-            .set({ external_deferred_at: null })
+            .set({ external_deferred_at: null, external_claimed_at: now.toISOString() })
             .where('external_deferred_at', 'is not', null)
             .where('external_status', '=', 'pending')
-            .returning(['id', 'message', 'created_at'])
+            .returning(['id', 'message', 'created_at', 'external_event_key'])
             .execute();
         return rows
-            .map((r) => ({
-                id: Number(r.id),
-                message: r.message,
-                // timestamptz arrives as a Date from node-postgres whatever the column type says.
-                created_at: new Date(r.created_at as unknown as string | Date).toISOString(),
-            }))
+            .map(toClaimed)
             .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+    },
+
+    /**
+     * Sends stuck in flight (claimed before `cutoff`, still `pending`): the
+     * process died mid-send. A row already re-claimed once is marked failed;
+     * the rest are re-claimed (CAS on the old claim) and returned to retry.
+     */
+    async reclaimStuck(cutoff: Date, now: Date = new Date()): Promise<ClaimedRow[]> {
+        const stuck = (eb: ExpressionBuilder<DB, 'notifications'>) =>
+            eb.and([
+                eb('external_status', '=', 'pending'),
+                eb('external_deferred_at', 'is', null),
+                eb('external_claimed_at', '<', cutoff.toISOString()),
+            ]);
+        const failed = await db
+            .updateTable('notifications')
+            .set({
+                external_status: 'failed',
+                failure_reason: INTERRUPTED_TWICE,
+                sent_external: 0,
+                external_claimed_at: null,
+                external_reclaimed: false,
+            })
+            .where(stuck)
+            .where('external_reclaimed', '=', true)
+            .returning('id')
+            .execute();
+        for (const r of failed) broadcastSSE({ type: 'notification_updated', notificationId: Number(r.id) });
+        const rows = await db
+            .updateTable('notifications')
+            .set({ external_claimed_at: now.toISOString(), external_reclaimed: true })
+            .where(stuck)
+            .where('external_reclaimed', '=', false)
+            .returning(['id', 'message', 'created_at', 'external_event_key'])
+            .execute();
+        return rows.map(toClaimed).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
     },
 
     async updatePushStatus(
@@ -295,10 +379,24 @@ export const notificationsService = {
         await this.updateExternalStatus(id, 'sent', null);
     },
 
+    /** CAS on `pending`, so a flush that claimed the row first is never undone. */
     async cancel(id: number): Promise<boolean> {
-        const row = await this.get(id);
-        if (!row || row.external_status !== 'pending') return false;
-        await this.updateExternalStatus(id, 'none', null);
+        const r = await db
+            .updateTable('notifications')
+            .set({
+                external_status: 'none',
+                failure_reason: CANCELLED_BY_OWNER,
+                sent_external: 0,
+                external_deferred_at: null,
+                external_claimed_at: null,
+                external_reclaimed: false,
+            })
+            .where('id', '=', id)
+            .where('external_status', '=', 'pending')
+            .executeTakeFirst();
+        /* v8 ignore next */
+        if (Number(r.numUpdatedRows ?? 0) === 0) return false;
+        broadcastSSE({ type: 'notification_updated', notificationId: id });
         return true;
     },
 
@@ -307,6 +405,7 @@ export const notificationsService = {
             .updateTable('notifications')
             .set({ read_at: new Date().toISOString() })
             .where('read_at', 'is', null)
+            .where('in_app', '=', true)
             .executeTakeFirst();
         // Kysely's UpdateResult always carries numUpdatedRows (0n when no
         // rows matched, never undefined) — defensive fallback for the type.
@@ -343,6 +442,7 @@ export const notificationsService = {
             .leftJoin('items as i', 'i.id', 'n.item_id')
             .select(({ fn }) => fn.countAll<string>().as('n'))
             .where('n.read_at', 'is', null)
+            .where('n.in_app', '=', true)
             .where(notStaleNeedsYou)
             .executeTakeFirst();
         // countAll() + executeTakeFirst() always returns exactly one row.

@@ -45,6 +45,20 @@ describe('InAppFeedTabContent', () => {
         expect(screen.getByText('System ping')).toBeInTheDocument();
     });
 
+    it('leaves log-only rows (in_app=false) out of the feed and its counts', () => {
+        const rows = [
+            makeNotification({ id: 1, kind: 'system', event_type: 'reminder', message: 'In the feed' }),
+            makeNotification({ id: 2, kind: 'system', event_type: 'reminder', message: 'External only', in_app: false }),
+            makeNotification({ id: 3, kind: 'system', event_type: 'mcp_external', message: 'Sent by Claude', in_app: false }),
+        ];
+        renderWithProviders(<InAppFeedTabContent allRows={rows} agents={[]} />);
+        expect(screen.getByText('In the feed')).toBeInTheDocument();
+        expect(screen.queryByText('External only')).not.toBeInTheDocument();
+        expect(screen.queryByText('Sent by Claude')).not.toBeInTheDocument();
+        const pills = screen.getByRole('group', { name: 'Filter notifications' });
+        expect(within(pills).getByRole('button', { name: /All/ })).toHaveTextContent('1');
+    });
+
     it('shows a needs_you alert banner when any row is needs_you', () => {
         const rows = [
             makeNotification({

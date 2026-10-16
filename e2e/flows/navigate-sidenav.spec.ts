@@ -5,9 +5,8 @@ import { goto } from '../helpers/nav.js';
 // routes without triggering any backend mutations. Catches missing
 // page components / broken navigation early.
 //
-// W5 fix: The Sidenav renders <Box onClick> items (not <a role="link">)
-// so getByRole('link') never matches. We added data-testid="nav-item-<key>"
-// to each nav item in Sidenav.tsx and locate by that instead.
+// Each nav item carries data-testid="nav-item-<key>" (they are real links
+// since 2026-10-16; the testid stays the stable handle).
 
 test('sidenav: walk every workspace destination', async ({ page }) => {
     await goto(page, '/');

@@ -40,8 +40,10 @@ interface CardProps {
     message: string;
     /** Item id · relative time — set in mono. */
     meta: ReactNode;
-    /** Shown under the meta line in the error colour (failed deliveries). */
+    /** Shown under the meta line in the error colour (failed deliveries), or
+     *  muted for a note that is not an error (a skipped send). */
     alert?: string | null;
+    alertMuted?: boolean;
     /** Fixed 40px zone on the right: a button, or a chevron for a link card. */
     action?: ReactNode;
     tone?: 'default' | 'held' | 'unread';
@@ -62,6 +64,7 @@ export function NotificationCard({
     message,
     meta,
     alert,
+    alertMuted = false,
     action,
     tone = 'default',
     onOpen,
@@ -174,7 +177,7 @@ export function NotificationCard({
                             mt: 0.5,
                             fontFamily: MONO,
                             fontSize: 11,
-                            color: ATLAS_PALETTE.error,
+                            color: alertMuted ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.error,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',

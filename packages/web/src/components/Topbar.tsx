@@ -207,7 +207,6 @@ export function Topbar({ onShortcutsOpen, onMenuClick }: Props) {
                 anchorEl={notificationsAnchor}
                 open={Boolean(notificationsAnchor)}
                 onClose={() => setNotificationsAnchor(null)}
-                connected={notificationsConnected}
             />
 
             {/* Shortcuts pill — opens Keyboard Shortcuts dialog (Cmd+K spotlight removed) */}

@@ -154,6 +154,17 @@ async function finishStep(status: RunStatus, outcome: RunOutcomeKind | null = 'd
 }
 
 const runOf = (id: string) => testDb.selectFrom('workflow_runs').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+// The kind of the run's latest park (migration 014).
+const parkKind = async (id: string) =>
+    (
+        await testDb
+            .selectFrom('workflow_run_events')
+            .select('park_kind')
+            .where('workflow_run_id', '=', id)
+            .where('kind', '=', 'parked')
+            .orderBy('created_at', 'desc')
+            .executeTakeFirst()
+    )?.park_kind;
 const parkComments = async (type: 'task' | 'sub_task' = 'task', id = 'ATL-2') =>
     (await commentsService.list(type, id)).filter((c) => c.body.includes('is waiting for you'));
 const itemOf = (id: string) =>
@@ -210,6 +221,7 @@ describe('workflow engine — happy path', () => {
             parked_node_id: 'end',
             park_reason: 'Push failed: no credential. Resume the run to retry delivery.',
         });
+        expect(await parkKind(runId)).toBe('delivery_failed');
         expect(git.cleanupWorktreeAfterPush).not.toHaveBeenCalled();
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'waiting_for_info' });
 
@@ -254,6 +266,7 @@ describe('workflow engine — loops and parking', () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', null);
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'coder', park_reason: 'agent_did_not_signal_outcome' });
+        expect(await parkKind(runId)).toBe('no_outcome');
         const parked = await parkComments();
         expect(parked).toHaveLength(1);
         expect(parked[0]).toMatchObject({ author: 'agent', agent_id: null });
@@ -281,6 +294,7 @@ describe('workflow engine — loops and parking', () => {
         const runId = await startWorkflowRun('wf-dev', 'ATL-2');
         await finishStep('completed', 'rejected', 'cannot start'); // coder fail → owner
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'owner', park_reason: 'Sent back to you: rejected: cannot start' });
+        expect(await parkKind(runId)).toBe('review_requested');
 
         await resumeWorkflowRun(runId);
         expect(spawned.map((s) => s.nodeId)).toEqual(['coder', 'coder']);
@@ -299,6 +313,7 @@ describe('workflow engine — loops and parking', () => {
             parked_node_id: 'coder',
             park_reason: 'Could not refresh the worktree onto the latest default branch: rebase conflict on abc1234',
         });
+        expect(await parkKind(runId)).toBe('setup_failed');
     });
 
     it('parks when a step errors or its setup fails', async () => {
@@ -359,6 +374,7 @@ describe('workflow engine — a crashed step is retried once', () => {
             parked_node_id: 'coder',
             park_reason: 'The agent step errored again after an automatic retry: CLI exited with code 1',
         });
+        expect(await parkKind(runId)).toBe('step_error');
         expect(await parkComments()).toHaveLength(1);
     });
 
@@ -852,6 +868,7 @@ describe('workflow engine — script steps', () => {
         const run = await runOf(runId);
         expect(run).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'build' });
         expect(String(run?.park_reason)).toContain('has no command');
+        expect(await parkKind(runId)).toBe('wiring_gap');
     });
 
     it('parks — and does NOT fail — when the command could not run at all', async () => {
@@ -868,6 +885,7 @@ describe('workflow engine — script steps', () => {
         expect(run).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'build' });
         expect(String(run?.park_reason)).toContain('could not run');
         expect(String(run?.park_reason)).toContain('not a failure');
+        expect(await parkKind(runId)).toBe('check_unavailable');
         expect((await buildRows(runId))[0]).toMatchObject({ verdict: 'unavailable' });
     });
 
@@ -895,6 +913,7 @@ describe('workflow engine — script steps', () => {
         const run = await runOf(runId);
         expect(run).toMatchObject({ status: 'waiting_for_owner' });
         expect(String(run?.park_reason)).toContain('Loop limit reached');
+        expect(await parkKind(runId)).toBe('loop_limit');
     });
 
     it('parks rather than passing when a red command has nowhere to route', async () => {
@@ -907,6 +926,7 @@ describe('workflow engine — script steps', () => {
         const run = await runOf(runId);
         expect(run).toMatchObject({ status: 'waiting_for_owner' });
         expect(String(run?.park_reason)).toContain('red with no fixer');
+        expect(await parkKind(runId)).toBe('gate_failed');
     });
 });
 
@@ -997,6 +1017,7 @@ describe('workflow engine — Sub-tasks steps', () => {
             parked_node_id: 'build',
             park_reason: 'Sub-task ATL-11 is waiting for you: Which database?',
         });
+        expect(await parkKind(runId)).toBe('subtask_waiting');
         expect(await itemOf('ATL-11')).toMatchObject({ status: 'waiting_for_info' });
         expect(await itemOf('ATL-2')).toMatchObject({ status: 'waiting_for_info' });
         expect(await parkComments('task', 'ATL-2')).toHaveLength(0);
@@ -1120,6 +1141,7 @@ describe('workflow engine — Sub-tasks steps', () => {
 
         expect(await runOf(runId)).toMatchObject({ status: 'waiting_for_owner', parked_node_id: 'end' });
         expect((await runOf(runId)).park_reason).toContain('ATL-12');
+        expect(await parkKind(runId)).toBe('wiring_gap');
         expect(git.pushWorktree).not.toHaveBeenCalled();
     });
 
@@ -1156,6 +1178,7 @@ describe('workflow engine — Sub-tasks steps', () => {
 
         expect(await childOf('ATL-11')).toMatchObject({ status: 'waiting_for_owner', loop_count: 1 });
         expect((await runOf(runId)).park_reason).toContain('Loop limit reached');
+        expect(await parkKind(runId)).toBe('subtask_waiting');
         expect(git.openPullRequest).not.toHaveBeenCalled();
     });
 

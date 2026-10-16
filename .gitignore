@@ -18,6 +18,8 @@ coverage/
 # Theme 12 — `tools/coverage/` helpers are source scripts, not
 # vitest output. Negate the `coverage/` rule for that path.
 !tools/coverage/
+# `e2e/coverage/` holds the tracked coverage contract (three-pages-matrix.md).
+!e2e/coverage/
 .vite/
 # Playwright MCP scratch
 .playwright-mcp/

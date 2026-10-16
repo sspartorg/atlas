@@ -129,3 +129,18 @@ describe('useUpdateExternalNotification + useUpdateNotifications', () => {
         expect(nr.id).toBe(1);
     });
 });
+
+describe('isExternalChannelConnected — the active provider only', async () => {
+    const { isExternalChannelConnected } = await import('./useSettings.js');
+    const base = { external_notification_token_set: false, external_notification_chat_id: null, external_notification_webhook_url_set: false } as const;
+    it.each([
+        ['telegram', { external_notification_token_set: true, external_notification_chat_id: '42' }, true],
+        ['telegram', { external_notification_token_set: true }, false],
+        ['telegram', { external_notification_webhook_url_set: true }, false],
+        ['teams', { external_notification_webhook_url_set: true }, true],
+        ['teams', { external_notification_token_set: true, external_notification_chat_id: '42' }, false],
+    ])('%s + %o → %s', (provider, extra, want) => {
+        expect(isExternalChannelConnected({ ...base, external_notification_provider: provider, ...extra } as never)).toBe(want);
+    });
+    it('nothing loaded yet → false', () => expect(isExternalChannelConnected(undefined)).toBe(false));
+});

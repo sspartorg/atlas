@@ -10,20 +10,23 @@ function toToolResult(payload: unknown): CallToolResult {
     };
 }
 
-// A09 — one-shot external-notification passthrough. The daily AI-news scout
-// calls this to deliver its digest; future agents can use the same channel
-// without having to plumb a notifications row through the items model. Quiet
-// hours + event-key toggles are honored when event_key is provided —
-// `services/external-notifications.ts:sendExternalNotification` does the
-// gating + dispatch under the hood (Telegram or Teams, by Owner's selection).
+// A09 — one-shot external notification. The daily AI-news scout calls this
+// to deliver its digest. The API logs it as a notification row that stays out
+// of the in-app feed but shows in the Notification Log, so quiet hours HOLD it
+// (sent when the window ends) and the event-key toggle applies when event_key
+// is set — `services/external-notifications.ts:sendOwnerExternalMessage`
+// (Telegram or Teams, by the Owner's selection).
 export const NOTIFICATION_TOOLS: ToolRegistration[] = [
     {
         name: 'sendExternalNotification',
         title: 'Send an external notification',
         description:
             'Send a single external notification to the Owner. Markdown allowed. ' +
-            "When `event_key` is set (e.g. 'agent.daily-digest'), quiet hours " +
-            'and the per-event toggle in Settings → Notifications apply.',
+            'During quiet hours it is held and sent when the window ends ' +
+            '(`held: true`); it is listed in the Notification Log, not the in-app feed. ' +
+            "When `event_key` is set (e.g. 'agent.daily-digest'), the per-event " +
+            'toggle in Settings → Notifications applies, also to a held message. ' +
+            'Returns `sent`, `held`, `external_status` and `notification_id`.',
         group_name: 'NOTIFICATIONS',
         sort_order: 70,
         inputSchema: {

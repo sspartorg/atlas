@@ -11,6 +11,7 @@ import {
     ISSUE_STATUSES,
     ISSUE_TYPES,
     NOTIFICATION_KIND_LABELS,
+    WORKFLOW_PARK_KIND_LABELS,
     NOTIFICATION_KINDS,
     notificationLinkUrl,
     RUNNABLE_ISSUE_TYPES,
@@ -21,7 +22,7 @@ import {
     SUB_TASK_STATUS_LABELS,
     NOTIFICATION_DELIVERY_STATUSES,
 } from './index.js';
-import { SDLC_ROLES } from '../types/index.js';
+import { SDLC_ROLES, WORKFLOW_PARK_KINDS } from '../types/index.js';
 
 // These tests are intentionally light: the constants file has no branching
 // logic beyond the RUNNABLE_ISSUE_TYPES filter, so the assertions below are
@@ -204,6 +205,13 @@ describe('notifications', () => {
         for (const kind of NOTIFICATION_KINDS) {
             expect(NOTIFICATION_KIND_LABELS[kind]).not.toBe('');
         }
+    });
+
+    it('WORKFLOW_PARK_KIND_LABELS labels every park kind once, with distinct labels', () => {
+        const labels = WORKFLOW_PARK_KINDS.map((k) => WORKFLOW_PARK_KIND_LABELS[k]);
+        expect(labels.every((l) => l.length > 0)).toBe(true);
+        expect(new Set(labels).size).toBe(WORKFLOW_PARK_KINDS.length);
+        expect(Object.keys(WORKFLOW_PARK_KIND_LABELS).sort()).toEqual([...WORKFLOW_PARK_KINDS].sort());
     });
 
     it('NOTIFICATION_DELIVERY_STATUSES enumerates the 4 delivery states', () => {

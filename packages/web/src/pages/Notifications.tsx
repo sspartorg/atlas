@@ -1,11 +1,13 @@
 import { useCallback, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
 import { useTabParam } from '../hooks/useTabParam.js';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
+import Alert from '@mui/material/Alert';
+import Skeleton from '@mui/material/Skeleton';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import TuneRounded from '@mui/icons-material/TuneRounded';
@@ -105,6 +107,7 @@ export function Notifications() {
                 toast.show({
                     message: `Marked ${r.changed} notification${r.changed === 1 ? '' : 's'} read`,
                 }),
+            onError: (err) => toast.show({ message: 'Could not mark notifications read', detail: err.message }),
         });
     }
 
@@ -121,15 +124,22 @@ export function Notifications() {
                 subtitle={
                     <>
                         External notifications are the outbound channel
-                        {externalConnected && endpointLabel ? (
+                        {externalConnected ? (
                             <>
-                                {' · connected to '}
-                                <Box
-                                    component="span"
-                                    sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}
-                                >
-                                    {endpointLabel}
-                                </Box>
+                                {endpointLabel ? (
+                                    <>
+                                        {' · connected to '}
+                                        <Box
+                                            component="span"
+                                            sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}
+                                        >
+                                            {endpointLabel}
+                                        </Box>
+                                    </>
+                                ) : (
+                                    // Credentials saved but never tested: not "not connected".
+                                    ` · ${settings?.external_notification_provider === 'teams' ? 'Teams' : 'Telegram'} set up, not tested yet`
+                                )}
                                 {' · last delivery '}
                                 <Box
                                     component="span"
@@ -149,11 +159,8 @@ export function Notifications() {
                                 </Box>
                                 {' — visit '}
                                 <Box
-                                    component="a"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        navigate('/settings?tab=notifications');
-                                    }}
+                                    component={RouterLink}
+                                    to="/settings?tab=notifications"
                                     sx={{
                                         color: ATLAS_PALETTE.brandBlue,
                                         cursor: 'pointer',
@@ -271,8 +278,22 @@ export function Notifications() {
                 </Tabs>
             </Box>
 
-            {tab === 'external' && <NotificationLogTab settings={settings} allRows={allRows} />}
-            {tab === 'in-app' && <InAppFeedTab allRows={allRows} agents={agents} />}
+            {feed.error ? (
+                <Alert severity="error">
+                    Could not load notifications: {feed.error.message}
+                </Alert>
+            ) : feed.isLoading ? (
+                <Box aria-busy="true" aria-label="Loading notifications" sx={{ display: 'grid', gap: 2 }}>
+                    {[0, 1, 2].map((i) => (
+                        <Skeleton key={i} variant="rounded" height={72} />
+                    ))}
+                </Box>
+            ) : (
+                <>
+                    {tab === 'external' && <NotificationLogTab settings={settings} allRows={allRows} />}
+                    {tab === 'in-app' && <InAppFeedTab allRows={allRows} agents={agents} />}
+                </>
+            )}
             {feed.hasNextPage && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
                     <Button

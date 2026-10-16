@@ -25,6 +25,13 @@ import {
     MetricMarquee,
 } from './analytics/_chrome.js';
 
+// On a phone the table keeps title, runs and cost; the other two columns
+// (`PHONE_HIDDEN`) come back from sm up, so cost is never behind a sideways scroll.
+const CHILD_COLUMNS_SX = {
+    gridTemplateColumns: { xs: 'minmax(0, 1fr) 44px 84px', sm: '1.6fr 90px 70px 110px 100px' },
+} as const;
+const PHONE_HIDDEN = { display: { xs: 'none', sm: 'block' } } as const;
+
 type Kind = IssueType;
 
 function fmtRelativeOrDash(iso: string | null): string {
@@ -366,16 +373,17 @@ export function AnalyticsTask() {
                     <Box
                         sx={{
                             display: 'grid',
-                            gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
+                            ...CHILD_COLUMNS_SX,
                             gap: 2,
                             py: 1,
                             borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
                             mb: 1,
-                            minWidth: { xs: 560, sm: 'auto' },
                         }}
                     >
                         {['Title', 'Type', 'Runs', 'Total cost', 'Last run'].map((h, i) => (
-                            <Eyebrow key={i}>{h}</Eyebrow>
+                            <Box key={i} sx={i === 1 || i === 4 ? PHONE_HIDDEN : {}}>
+                                <Eyebrow>{h}</Eyebrow>
+                            </Box>
                         ))}
                     </Box>
                     <Box
@@ -383,7 +391,6 @@ export function AnalyticsTask() {
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 0.5,
-                            minWidth: { xs: 560, sm: 'auto' },
                         }}
                     >
                         {children.data?.rows.map((row) => (
@@ -391,7 +398,7 @@ export function AnalyticsTask() {
                                 key={row.id}
                                 sx={{
                                     display: 'grid',
-                                    gridTemplateColumns: '1.6fr 90px 70px 110px 100px',
+                                    ...CHILD_COLUMNS_SX,
                                     gap: 2,
                                     py: 1.25,
                                     px: 1.5,
@@ -429,7 +436,7 @@ export function AnalyticsTask() {
                                         {row.id}
                                     </Typography>
                                 </Box>
-                                <Box>
+                                <Box sx={PHONE_HIDDEN}>
                                     <Box
                                         sx={{
                                             display: 'inline-flex',
@@ -439,8 +446,8 @@ export function AnalyticsTask() {
                                             py: 0.25,
                                             borderRadius: '999px',
                                             background: `${ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate40}1a`,
-                                            color:
-                                                ITEM_TYPE_COLORS[row.type] ?? ATLAS_PALETTE.slate60,
+                                            // The tint carries the kind; chart hues as 10px text miss AA.
+                                            color: ATLAS_PALETTE.slate,
                                             fontFamily: MONO,
                                             fontSize: 10,
                                             fontWeight: 700,
@@ -479,6 +486,7 @@ export function AnalyticsTask() {
                                         fontSize: 11,
                                         color: ATLAS_PALETTE.slate60,
                                         textAlign: 'right',
+                                        ...PHONE_HIDDEN,
                                     }}
                                 >
                                     {fmtRelativeOrDash(row.last_run_at)}
@@ -497,7 +505,9 @@ export function AnalyticsTask() {
                                     textAlign: 'center',
                                 }}
                             >
-                                No items match the current filter.
+                                {typeFilter
+                                    ? 'No items match the current filter.'
+                                    : 'No completed runs on this Task or its sub-tasks yet.'}
                             </Typography>
                         )}
                     </Box>
@@ -513,11 +523,12 @@ export function AnalyticsTask() {
                     }}
                 >
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                        <Typography id="analytics-task-rows-label" sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                             Rows per page
                         </Typography>
                         <Select
                             size="small"
+                            labelId="analytics-task-rows-label"
                             value={limit}
                             onChange={(e) => {
                                 setLimit(Number(e.target.value));

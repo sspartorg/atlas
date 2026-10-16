@@ -1090,6 +1090,10 @@ export interface INotification {
     /** The reminder whose fire produced this row; null for every other
      *  producer, and for reminder fires from before the fire log. */
     reminder_id: number | null;
+    /** False for rows that only track an outward send (an external-only
+     *  reminder, an MCP `send-external`): they show in the Notification Log,
+     *  never in the In-App Feed or the unread count. */
+    in_app: boolean;
     created_at: string;
 }
 
@@ -1872,6 +1876,34 @@ export const ANALYTICS_WINDOWS = ['7d', '30d', '90d', 'month'] as const;
 export type AnalyticsWindow = (typeof ANALYTICS_WINDOWS)[number];
 
 /**
+ * Why a workflow run parked (`workflow_run_events.park_kind`, migration 014).
+ * Set by the engine at every park site, so analytics groups exactly instead of
+ * reading prose. `subtask_waiting` is a Task run held by its parked sub-task:
+ * the sub-task's own park carries the real kind, so analytics skips the copy.
+ * `other` only labels rows the migration's backfill could not classify.
+ */
+export const WORKFLOW_PARK_KINDS = [
+    'question',
+    'no_outcome',
+    'review_requested',
+    'rejected',
+    'checklist_failed',
+    'gate_failed',
+    'check_unavailable',
+    'loop_limit',
+    'step_error',
+    'setup_failed',
+    'delivery_failed',
+    'lost_step',
+    'missing_agent',
+    'dispatch_failed',
+    'wiring_gap',
+    'subtask_waiting',
+    'other',
+] as const;
+export type WorkflowParkKind = (typeof WORKFLOW_PARK_KINDS)[number];
+
+/**
  * The span a response covers, resolved in the viewer's tz. `previous_*` is the
  * span its deltas compare against: the N days before for a rolling window, the
  * same number of days into last month for `month`.
@@ -1976,7 +2008,8 @@ export interface IAnalyticsWorkflows {
     by_workflow: IAnalyticsWorkflowRow[];
     /** Script-step verdicts in the window. `pass_rate` = pass ÷ (pass + fail). */
     gates: { pass: number; fail: number; unavailable: number; needs_review: number; pass_rate: number | null };
-    park_reasons: Array<{ reason: string; count: number }>;
+    /** Parks in the window by `park_kind`; `reason` is its label (`WORKFLOW_PARK_KIND_LABELS`). */
+    park_reasons: Array<{ kind: WorkflowParkKind; reason: string; count: number }>;
     /** Agent dispatches that retried an earlier run (`agent_runs.parent_run_id`). */
     retries: { retries: number; dispatches: number; rate: number | null };
     agents: IAnalyticsAgentRow[];

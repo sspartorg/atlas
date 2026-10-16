@@ -1,6 +1,6 @@
 import { db } from '../db/kysely-client.js';
 import { settingsService } from './settings.js';
-import { notificationsService } from './notifications.js';
+import { notificationsService, SKIPPED_NO_CHANNEL, SKIPPED_WHILE_HELD } from './notifications.js';
 import { telegramTransport } from './transports/telegram.js';
 import { teamsTransport } from './transports/teams.js';
 import type {
@@ -77,7 +77,7 @@ const DEFAULT_OFF_EVENT_KEYS = new Set<ExternalNotificationEventKey>([
     'terminal.waiting_for_input',
 ]);
 
-function isEventEnabled(eventKey: ExternalNotificationEventKey, settings: GatingSettings): boolean {
+function isEventEnabled(eventKey: string, settings: GatingSettings): boolean {
     let toggles: Record<string, boolean> = {};
     try {
         toggles = JSON.parse(settings.external_notification_event_toggles || '{}');
@@ -86,7 +86,7 @@ function isEventEnabled(eventKey: ExternalNotificationEventKey, settings: Gating
     }
     if (toggles[eventKey] === false) return false;
     // Default-off events require an explicit `true` toggle.
-    if (toggles[eventKey] !== true && DEFAULT_OFF_EVENT_KEYS.has(eventKey)) return false;
+    if (toggles[eventKey] !== true && DEFAULT_OFF_EVENT_KEYS.has(eventKey as ExternalNotificationEventKey)) return false;
     return true;
 }
 
@@ -132,37 +132,34 @@ async function transportSend(message: string): Promise<boolean> {
     return true;
 }
 
-async function channelConfigured(): Promise<boolean> {
+export async function channelConfigured(): Promise<boolean> {
     const settings = await settingsService.getWithSecrets();
     return transports[settings.external_notification_provider].isConfigured(settings);
-}
-
-/**
- * Row-less send (the MCP `send-external` passthrough). There is no row to
- * hold, so quiet hours still drop it here — callers get `false` back.
- */
-export async function sendExternalNotification(
-    message: string,
-    eventKey?: ExternalNotificationEventKey,
-): Promise<boolean> {
-    const gating = await loadGatingSettings();
-    if (isInQuietHours(gating)) return false;
-    if (eventKey && !isEventEnabled(eventKey, gating)) return false;
-    return transportSend(message);
 }
 
 /**
  * Deliver a notification row now, ignoring quiet hours — Resend/Retry (the
  * Owner pressed it) and the deferred flush. pending → sent | none | failed.
  */
-export async function deliverExternalNow(notificationId: number, message: string): Promise<void> {
+export async function deliverExternalNow(
+    notificationId: number,
+    message: string,
+    // Why the row ends at `none` when no channel is connected. A held row
+    // keeps a reason so the log shows it Skipped (with Send now) instead of
+    // the hold silently vanishing.
+    noChannelReason: string | null = null,
+): Promise<void> {
     await notificationsService.updateExternalStatus(notificationId, 'pending');
     try {
         // An unconfigured skip is not a delivery — revert to 'none' (the
-        // schema's "no external delivery" value, same as cancel) so the
-        // Notification Log never claims "Sent" with no channel connected.
+        // schema's "no external delivery" value) so the Notification Log
+        // never claims "Sent" with no channel connected.
         const delivered = await transportSend(message);
-        await notificationsService.updateExternalStatus(notificationId, delivered ? 'sent' : 'none');
+        await notificationsService.updateExternalStatus(
+            notificationId,
+            delivered ? 'sent' : 'none',
+            delivered ? null : noChannelReason,
+        );
     } catch (err) {
         await notificationsService.updateExternalStatus(
             notificationId,
@@ -182,7 +179,9 @@ export async function deliverExternalNow(notificationId: number, message: string
 export async function sendExternalForNotification(
     notificationId: number,
     message: string,
-    eventKey?: ExternalNotificationEventKey,
+    // A free-form key from an MCP caller (e.g. 'agent.daily-digest') gates on
+    // its own toggle the same way.
+    eventKey?: ExternalNotificationEventKey | string,
     now: Date = new Date(),
 ): Promise<void> {
     const gating = await loadGatingSettings();
@@ -190,34 +189,79 @@ export async function sendExternalForNotification(
     if (isInQuietHours(gating, now)) {
         // Holding for a channel that isn't there would show "Held" for a send
         // that can never happen.
-        if (await channelConfigured()) await notificationsService.holdExternal(notificationId, now);
+        if (await channelConfigured()) {
+            await notificationsService.holdExternal(notificationId, now, eventKey ?? null);
+        }
         return;
     }
     await deliverExternalNow(notificationId, message);
 }
 
+/** A claim older than this is a send whose process died mid-flight. */
+export const STUCK_SEND_MS = 10 * 60_000;
+
 /**
- * Minute tick: once quiet hours are over, send every held row oldest first,
- * each prefixed with when it was originally raised. Returns how many were
- * claimed. A failed send marks its row `failed` (Retry is on the log) and the
- * sweep carries on.
+ * Minute tick, once quiet hours are over:
+ * - every held row goes out oldest first, prefixed with when it was raised —
+ *   unless its event was toggled off while it was held (→ `none`, "Skipped");
+ * - a send stuck in flight for 10 minutes (the process died mid-send) is
+ *   retried once more; stuck again, it is marked failed.
+ * Returns how many rows were claimed. A failed send marks its row `failed`
+ * (Retry is on the log) and the sweep carries on.
  */
 export async function flushDeferredExternal(now: Date = new Date()): Promise<number> {
     const gating = await loadGatingSettings();
     if (isInQuietHours(gating, now)) return 0;
-    // ponytail: claimed rows that die mid-send (process exit) stay `pending`
-    // with no hold mark; Cancel clears them. A claim timestamp would let a
-    // later tick re-claim them if that ever matters.
-    const rows = await notificationsService.claimDeferred();
-    for (const row of rows) {
-        const at = localHHMM(new Date(row.created_at), gating.quiet_hours_timezone);
+    const held = await notificationsService.claimDeferred(now);
+    const stuck = await notificationsService.reclaimStuck(new Date(now.getTime() - STUCK_SEND_MS), now);
+    const jobs = [
+        ...held.map((row) => ({
+            row,
+            text: `Held during quiet hours · ${localHHMM(new Date(row.created_at), gating.quiet_hours_timezone)}\n${row.message}`,
+        })),
+        ...stuck.map((row) => ({ row, text: row.message })),
+    ];
+    for (const { row, text } of jobs) {
+        if (row.external_event_key && !isEventEnabled(row.external_event_key, gating)) {
+            await notificationsService.updateExternalStatus(row.id, 'none', SKIPPED_WHILE_HELD);
+            continue;
+        }
         try {
-            await deliverExternalNow(row.id, `Held during quiet hours · ${at}\n${row.message}`);
+            await deliverExternalNow(row.id, text, SKIPPED_NO_CHANNEL);
         } catch {
             /* row is marked failed; keep flushing the rest */
         }
     }
-    return rows.length;
+    return jobs.length;
+}
+
+/**
+ * An outward message Claude sends on the Owner's behalf (MCP
+ * `sendExternalNotification`). It gets a log-only row (`in_app: false`) so it
+ * is held through quiet hours, gated by its event toggle and tracked in the
+ * Notification Log like every other send — but never lands in the feed.
+ */
+export async function sendOwnerExternalMessage(
+    message: string,
+    eventKey?: string,
+): Promise<{ notification_id: number; external_status: string; held: boolean }> {
+    const n = await notificationsService.create({
+        event_type: 'mcp_external',
+        message,
+        kind: 'system',
+        agent_id: null,
+        link_url: '/notifications?tab=external',
+        in_app: false,
+    });
+    try {
+        await sendExternalForNotification(n.id, message, eventKey);
+    } catch {
+        /* the row is marked failed with the reason; the caller reads it below */
+    }
+    const row = await notificationsService.get(n.id);
+    /* v8 ignore next */
+    const status = row?.external_status ?? 'none';
+    return { notification_id: n.id, external_status: status, held: status === 'pending' && row?.external_deferred_at != null };
 }
 
 export async function testExternalNotification(): Promise<{
@@ -225,7 +269,7 @@ export async function testExternalNotification(): Promise<{
     error?: string;
     endpoint_label?: string | null;
 }> {
-    // Use `getWithSecrets` for consistency with `sendExternalNotification`
+    // Use `getWithSecrets` for consistency with `transportSend`
     // above — this helper currently only reads `external_notification_provider`
     // (which is present on both accessors), so the switch is defensive.
     // The 2026-07-03 audit flagged the redacted-accessor call as a

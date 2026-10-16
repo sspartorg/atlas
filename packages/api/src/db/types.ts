@@ -7,6 +7,7 @@ import type {
     WorkflowInputKind,
     WorkflowRunStatus,
     WorkflowTrigger,
+    WorkflowParkKind,
 } from '@atlas/shared';
 
 // Helper aliases
@@ -696,6 +697,11 @@ export interface NotificationsTable {
     link_url: StrN;
     external_deferred_at: TSn;
     reminder_id: ColumnType<number | null, number | null | undefined, number | null>;
+    // Migration 013.
+    external_event_key: StrN;
+    external_claimed_at: TSn;
+    external_reclaimed: ColumnType<boolean, boolean | undefined, boolean>;
+    in_app: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: CreatedAt;
 }
 
@@ -840,6 +846,8 @@ export interface WorkflowRunEventsTable {
     kind: 'parked' | 'resumed';
     node_id: StrN;
     reason: StrN;
+    /** Migration 014 — why it parked; set on every park, null on a resume. */
+    park_kind: WorkflowParkKind | null;
     created_at: CreatedAt;
 }
 

@@ -198,7 +198,7 @@ describe('NewReminderModal', () => {
         const cronInput = screen.getByLabelText(/cron expression/i) as HTMLInputElement;
         fireEvent.change(cronInput, { target: { value: '   ' } });
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Enter a cron expression.');
     });
 
     it('sets schedule error when no weekdays are selected (weekly empty branch)', () => {
@@ -212,7 +212,7 @@ describe('NewReminderModal', () => {
             if (cb) fireEvent.click(cb);
         }
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick at least one weekday.');
     });
 
     it('create-mode onSuccess: onClose called after successful mutation', async () => {
@@ -303,7 +303,7 @@ describe('NewReminderModal', () => {
             fireEvent.change(datetimeInput, { target: { value: '' } });
         }
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick a date and time.');
     });
 
     it('buildSchedule daily branch — invalid time string shows schedule error', () => {
@@ -315,7 +315,7 @@ describe('NewReminderModal', () => {
             fireEvent.change(timeInput, { target: { value: 'notavalidtime' } });
         }
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick a time.');
     });
 
     it('create-mode onError: shows error message on network failure', async () => {
@@ -597,7 +597,7 @@ describe('NewReminderModal', () => {
             fireEvent.change(timeInput, { target: { value: 'invalid' } });
         }
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick a time.');
     });
 
     it('buildSchedule once — NaN date returns null (invalid datetime-local value)', () => {
@@ -611,7 +611,7 @@ describe('NewReminderModal', () => {
             fireEvent.change(dateInput, { target: { value: 'not-a-datetime' } });
         }
         fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
-        expect(screen.getByText(/schedule is incomplete or invalid/i)).toBeInTheDocument();
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick a date and time.');
     });
 
     it('create-mode Saving/Creating label: button shows "Creating…" while in-flight', async () => {
@@ -652,3 +652,36 @@ describe('NewReminderModal', () => {
         resolvePost();
     });
 }, 15000);
+
+describe('NewReminderModal — validation the Owner sees', () => {
+    it('refuses a "once" time in the past', () => {
+        renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
+        fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Too late' } });
+        const dateInput = document.querySelector('input[type="datetime-local"]') as HTMLInputElement;
+        fireEvent.change(dateInput, { target: { value: '2001-01-01T09:00' } });
+        fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
+        expect(screen.getByRole('alert')).toHaveTextContent('Pick a time in the future.');
+    });
+
+    it('counts the label toward its 200-character limit', () => {
+        renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
+        const input = screen.getByLabelText(/label/i) as HTMLInputElement;
+        expect(input.maxLength).toBe(200);
+        fireEvent.change(input, { target: { value: 'abc' } });
+        expect(screen.getByText('3/200')).toBeInTheDocument();
+    });
+
+    it('shows the API reason when the server refuses (a bad cron)', async () => {
+        server.use(
+            http.post(`${BASE}/reminders`, () =>
+                HttpResponse.json({ error: 'Invalid cron expression "nope": bad', kind: 'validation_error' }, { status: 400 })
+            )
+        );
+        renderWithProviders(<NewReminderModal open onClose={vi.fn()} />);
+        fireEvent.change(screen.getByLabelText(/label/i), { target: { value: 'Cron' } });
+        fireEvent.click(screen.getByRole('radio', { name: /^cron$/i }));
+        fireEvent.change(screen.getByLabelText(/cron expression/i), { target: { value: 'nope' } });
+        fireEvent.click(screen.getByRole('button', { name: /create reminder/i }));
+        expect(await screen.findByRole('alert')).toHaveTextContent(/Invalid cron expression "nope"/);
+    });
+});

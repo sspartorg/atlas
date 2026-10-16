@@ -154,6 +154,8 @@ function AppShell() {
                         )}
                         <Box
                             ref={scrollRef}
+                            // The page's landmark: screen readers jump here past the nav.
+                            component="main"
                             sx={{
                                 flex: 1,
                                 overflow: 'auto',

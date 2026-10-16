@@ -19,9 +19,10 @@ vi.mock('../services/notifications.js', () => ({
     },
 }));
 
+import { sql } from 'kysely';
 import { buildApp } from '../server.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
-import { seedFullTree, insertItem, insertProject } from '../../tests/_items.js';
+import { seedFullTree, insertItem, insertProject, insertAgent } from '../../tests/_items.js';
 
 let app: FastifyInstance;
 
@@ -1082,4 +1083,50 @@ describe('GET /api/analytics/delivery and /workflows — params', () => {
             });
         }
     }
+});
+
+describe('agent-test runs are not spend, and the Dashboard month agrees with Analytics', () => {
+    it('leaves is_test runs out of every spend figure; standalone runs stay in', async () => {
+        await insertProject('p1');
+        await insertAgent({ id: 'agent-coder' });
+        const real = await insertItem({ type: 'task', project_id: 'p1', title: 'Real' });
+        const probe = await insertItem({ type: 'task', project_id: 'p1', title: 'Agent test' });
+        await testDb.updateTable('items').set({ is_test: true } as never).where('id', '=', probe).execute();
+        await insertRun({ id: 'r-real', item_id: real, total_cost_usd: 2, input_tokens: 10 });
+        await insertRun({ id: 'r-test', item_id: probe, total_cost_usd: 5, input_tokens: 1000 });
+        await testDb
+            .insertInto('agent_runs')
+            .values({ id: 'r-free', agent_id: 'agent-coder', item_id: null, status: 'completed', total_cost_usd: 1, completed_at: new Date().toISOString() } as never)
+            .execute();
+
+        const tz = 'Asia/Kolkata';
+        const a = JSON.parse((await app.inject({ method: 'GET', url: `/api/analytics?tz=${tz}&window=month` })).body);
+        expect(a.summary.total_cost_usd).toBeCloseTo(3, 5);
+        expect(a.summary.run_count).toBe(2);
+        expect(a.summary.input_tokens).toBe(10);
+        expect(a.daily.reduce((n: number, d: { total_cost_usd: number }) => n + d.total_cost_usd, 0)).toBeCloseTo(3, 5);
+        expect(a.byAgent.map((r: { total_cost_usd: number }) => r.total_cost_usd)).toEqual([3]);
+        expect(a.topRuns.map((r: { run_id: string }) => r.run_id).sort()).toEqual(['r-free', 'r-real']);
+        expect(a.byModel.reduce((n: number, r: { total_cost_usd: number }) => n + r.total_cost_usd, 0)).toBeCloseTo(3, 5);
+        expect(a.monthly.at(-1).total_cost_usd).toBeCloseTo(3, 5);
+
+        const d = JSON.parse((await app.inject({ method: 'GET', url: `/api/dashboard?tz=${tz}` })).body);
+        expect(d.kpis.costSummary30d.total_cost_usd).toBeCloseTo(a.summary.total_cost_usd, 5);
+        expect(d.kpis.costSummary30d.run_count).toBe(a.summary.run_count);
+    });
+
+    it('the Dashboard month starts at the viewer-zone month start, like Analytics', async () => {
+        await insertProject('p1');
+        await insertAgent({ id: 'agent-coder' });
+        const t = await insertItem({ type: 'task', project_id: 'p1', title: 'T' });
+        // 30 minutes after the month began in Pacific/Kiritimati (UTC+14) — still last month in UTC.
+        const { rows } = await sql<{ at: string }>`
+            SELECT to_char(((date_trunc('month', now() AT TIME ZONE 'Pacific/Kiritimati') + interval '30 minutes') AT TIME ZONE 'Pacific/Kiritimati') AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS at`.execute(testDb);
+        await insertRun({ id: 'r-edge', item_id: t, total_cost_usd: 4, completed_at: rows[0]!.at });
+        for (const tz of ['Pacific/Kiritimati', 'UTC']) {
+            const a = JSON.parse((await app.inject({ method: 'GET', url: `/api/analytics?tz=${tz}` })).body);
+            const d = JSON.parse((await app.inject({ method: 'GET', url: `/api/dashboard?tz=${tz}` })).body);
+            expect(d.kpis.costSummary30d.total_cost_usd, tz).toBeCloseTo(a.summary.total_cost_usd, 5);
+        }
+    });
 });

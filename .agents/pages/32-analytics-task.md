@@ -10,6 +10,7 @@ All-time cost for one Task and its sub-tasks, filterable by item kind.
 - Loading: three `<Skeleton>` blocks (`:86-88`).
 - Error: `Failed to load task analytics: <message>` (`:97`).
 - Populated: Task totals → per-kind cards (clickable filters) → paged descendant table.
+- No rows: "No completed runs on this Task or its sub-tasks yet." when no kind filter is on; "No items match the current filter." only while one is. The row's kind pill is slate text on the kind's tint (the chart hue as 10px text missed AA).
 
 ## UI elements
 
@@ -20,7 +21,8 @@ All-time cost for one Task and its sub-tasks, filterable by item kind.
 **Descendant table**
 - Sub-caption: `Every descendant of this task. Sorted by cost. Filtered to <label> only.` (`:335`)
 - **`Showing only: <label>` chip** (`:340`) — deletable; clearing it resets `page` (`:342-343`).
-- **Rows-per-page** select — resets `page` (`:524`). **Pagination** over the filtered total.
+- **Rows-per-page** select (25 / 50 / 100, labelled by its caption) — resets `page`. **Pagination** over the filtered total.
+- On a phone the table shows Title, Runs and Total cost; Type and Last run return from `sm` up.
 
 ## Modals / drawers
 None.

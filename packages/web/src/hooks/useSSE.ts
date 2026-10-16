@@ -143,6 +143,10 @@ export function useSSE() {
             if (event.type === 'counts_changed') {
                 invalidate(['sidenav-counts']);
                 invalidate(['dashboard']);
+                // A needs_you row drops out of the feed once its item leaves
+                // waiting_for_info / in_review (notStaleNeedsYou, API side).
+                // The badge moved with sidenav-counts; the open feed must too.
+                invalidate(['notifications']);
                 // Item-list queries also need to react: a transition/assign/create
                 // changes an item's row, and pages like /queue derive UI off the
                 // joined items + runs view. Without this, freshly-created items
@@ -173,6 +177,9 @@ export function useSSE() {
             }
             if (event.type === 'notification_created') {
                 invalidate(['notifications']);
+                // A reminder fire is a new notification and moves the
+                // reminder's next fire / status / fire count with it.
+                invalidate(['reminders']);
                 invalidate(['sidenav-counts']);
                 invalidate(['dashboard']);
             }

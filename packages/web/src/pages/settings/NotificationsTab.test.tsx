@@ -1551,3 +1551,32 @@ describe('NotificationsTab', () => {
         expect(patched).not.toBeNull();
     });
 }, 15000);
+
+describe('NotificationsTab — the Owner time zone', () => {
+    const device = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    it("says so when the saved zone is this device's", async () => {
+        server.use(http.get(`${BASE}/settings`, () => HttpResponse.json(settings({ quiet_hours_timezone: device }))), ...defaultHandlers);
+        renderWithProviders(<NotificationsTab />);
+        expect(await screen.findByText("(this device's zone)")).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: `Use ${device}` })).not.toBeInTheDocument();
+    });
+
+    it('offers to switch to the device zone when they differ, and saves it', async () => {
+        const other = device === 'Pacific/Chatham' ? 'Asia/Kolkata' : 'Pacific/Chatham';
+        let patched: unknown = null;
+        server.use(
+            http.get(`${BASE}/settings`, () => HttpResponse.json(settings({ quiet_hours_timezone: other }))),
+            http.patch(`${BASE}/settings/notifications`, async ({ request }) => {
+                patched = await request.json();
+                return HttpResponse.json(settings({ quiet_hours_timezone: device }));
+            }),
+            ...defaultHandlers
+        );
+        renderWithProviders(<NotificationsTab />);
+        await waitFor(() => expect(screen.getByTestId('owner-timezone')).toHaveTextContent(other));
+        expect(screen.getByText(`(this device is in ${device})`)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: `Use ${device}` }));
+        await waitFor(() => expect(patched).toEqual({ quiet_hours_timezone: device }));
+    });
+});

@@ -11,7 +11,8 @@ vi.mock('../routes/events.js', () => ({
 // Mock external notification delivery so tests don't hit real services
 vi.mock('../services/external-notifications.js', () => ({
     deliverExternalNow: vi.fn().mockResolvedValue(undefined),
-    sendExternalNotification: vi.fn().mockResolvedValue(undefined),
+    channelConfigured: vi.fn().mockResolvedValue(true),
+    sendOwnerExternalMessage: vi.fn().mockResolvedValue({ notification_id: 1, external_status: 'none', held: false }),
 }));
 
 // Also mock web-push so no push delivery is attempted
@@ -20,7 +21,7 @@ vi.mock('../services/web-push.js', () => ({
 }));
 
 import { buildApp } from '../server.js';
-import { sendExternalNotification } from '../services/external-notifications.js';
+import { sendOwnerExternalMessage } from '../services/external-notifications.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 
 let app: FastifyInstance;
@@ -94,6 +95,22 @@ describe('GET /api/notifications', () => {
         expect(second.map((n) => n.message)).toEqual(['n1', 'n0']);
     });
 
+    it('carries in_app on every row and filters on ?in_app=', async () => {
+        await testDb
+            .insertInto('notifications')
+            .values([
+                { event_type: 'test_event', message: 'feed', kind: 'update' as const },
+                { event_type: 'mcp_external', message: 'log only', kind: 'system' as const, in_app: false },
+            ])
+            .execute();
+        const get = async (qs: string) =>
+            JSON.parse((await app.inject({ method: 'GET', url: `/api/notifications${qs}` })).body) as Array<{ message: string; in_app: boolean }>;
+        expect((await get('')).map((n) => [n.message, n.in_app]).sort()).toEqual([['feed', true], ['log only', false]]);
+        expect((await get('?in_app=true')).map((n) => n.message)).toEqual(['feed']);
+        expect((await get('?in_app=false')).map((n) => n.message)).toEqual(['log only']);
+        expect((await app.inject({ method: 'GET', url: '/api/notifications?in_app=1' })).statusCode).toBe(400);
+    });
+
     it('rejects a non-numeric `before`', async () => {
         const res = await app.inject({ method: 'GET', url: '/api/notifications?before=abc' });
         expect(res.statusCode).toBe(400);
@@ -155,6 +172,17 @@ describe('POST /api/notifications/:id/resend', () => {
         });
         // External delivery is mocked; should succeed
         expect(res.statusCode).toBe(200);
+    });
+
+    it('returns 409 and leaves the row alone when no channel is connected', async () => {
+        const { channelConfigured, deliverExternalNow } = await import('../services/external-notifications.js');
+        vi.mocked(channelConfigured).mockResolvedValueOnce(false);
+        vi.mocked(deliverExternalNow).mockClear();
+        const id = await insertNotification({ message: 'No channel' });
+        const res = await app.inject({ method: 'POST', url: `/api/notifications/${id}/resend` });
+        expect(res.statusCode).toBe(409);
+        expect(JSON.parse(res.body)).toMatchObject({ kind: 'credentials_missing', error: expect.stringMatching(/No external channel/) });
+        expect(deliverExternalNow).not.toHaveBeenCalled();
     });
 
     it('returns 502 when deliverExternalNow throws (lines 51-55)', async () => {
@@ -219,24 +247,25 @@ describe('POST /api/notifications/send-external', () => {
         expect(JSON.parse(res.body)).toMatchObject({ ok: true });
     });
 
-    it('reports whether anything was actually delivered', async () => {
-        vi.mocked(sendExternalNotification).mockResolvedValueOnce(true);
+    it('reports sent / held / status from the tracked row', async () => {
+        vi.mocked(sendOwnerExternalMessage).mockResolvedValueOnce({ notification_id: 7, external_status: 'sent', held: false });
         const sent = await app.inject({
             method: 'POST',
             url: '/api/notifications/send-external',
-            payload: { message: 'delivered' },
+            payload: { message: 'delivered', event_key: 'agent.daily-digest' },
         });
-        expect(JSON.parse(sent.body)).toEqual({ ok: true, sent: true });
+        expect(JSON.parse(sent.body)).toEqual({ ok: true, sent: true, notification_id: 7, external_status: 'sent', held: false });
+        expect(sendOwnerExternalMessage).toHaveBeenLastCalledWith('delivered', 'agent.daily-digest');
 
-        // Quiet hours / toggle off / no transport all resolve false.
-        vi.mocked(sendExternalNotification).mockResolvedValueOnce(false);
-        const suppressed = await app.inject({
+        // Quiet hours hold it: not sent yet, but not dropped either.
+        vi.mocked(sendOwnerExternalMessage).mockResolvedValueOnce({ notification_id: 8, external_status: 'pending', held: true });
+        const held = await app.inject({
             method: 'POST',
             url: '/api/notifications/send-external',
-            payload: { message: 'suppressed' },
+            payload: { message: 'held' },
         });
-        expect(suppressed.statusCode).toBe(202);
-        expect(JSON.parse(suppressed.body)).toEqual({ ok: true, sent: false });
+        expect(held.statusCode).toBe(202);
+        expect(JSON.parse(held.body)).toEqual({ ok: true, sent: false, notification_id: 8, external_status: 'pending', held: true });
     });
 
     it('returns 400 for missing message', async () => {

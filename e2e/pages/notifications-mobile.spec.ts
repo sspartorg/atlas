@@ -30,6 +30,8 @@ function row(over: Record<string, unknown>) {
         read_at: null,
         link_url: null,
         external_deferred_at: null,
+        reminder_id: null,
+        in_app: true,
         created_at: ago(5),
         ...over,
     };

@@ -210,6 +210,8 @@ describe('useSSE', () => {
         expect(keys).toContainEqual(['agents']);
         expect(keys).toContainEqual(['projects']);
         expect(keys).toContainEqual(['workflow-queue']);
+        // An item leaving waiting_for_info drops its needs_you row from the open feed.
+        expect(keys).toContainEqual(['notifications']);
     });
 
     // One agent step emits several events naming the same keys. They go out
@@ -283,6 +285,8 @@ describe('useSSE', () => {
         expect(keys).toContainEqual(['notifications']);
         expect(keys).toContainEqual(['sidenav-counts']);
         expect(keys).toContainEqual(['dashboard']);
+        // A reminder fire moves the open Reminders page (next fire, status, count).
+        expect(keys).toContainEqual(['reminders']);
     });
 
     // ── notification_updated ───────────────────────────────────────────────

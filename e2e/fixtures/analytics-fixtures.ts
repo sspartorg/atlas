@@ -109,17 +109,18 @@ export function workflowsFixture() {
         ],
         gates: { pass: 112, fail: 14, unavailable: 3, needs_review: 1, pass_rate: 112 / 126 },
         park_reasons: [
-            { reason: 'Agent asked you', count: 13 },
-            { reason: 'Required checklist failed', count: 6 },
-            { reason: 'Loop limit reached', count: 3 },
-            { reason: 'A check could not run', count: 2 },
+            { kind: 'question', reason: 'Agent asked you', count: 13 },
+            { kind: 'checklist_failed', reason: 'Required checklist failed', count: 6 },
+            { kind: 'loop_limit', reason: 'Loop limit reached', count: 3 },
+            { kind: 'check_unavailable', reason: 'A check could not run', count: 2 },
         ],
         retries: { retries: 6, dispatches: 214, rate: 6 / 214 },
         agents: [
             agent('agent-architect', 'Architect', '#5B7CFA', 29, 27, 0, 2, 1, 0, 21.8, 190),
             agent('agent-architect-reviewer', 'Architect Reviewer', '#4263CB', 29, 22, 6, 1, 0, 0, 3.1, 24),
-            agent('agent-coder', 'Coder', '#7C3AED', 64, 51, 4, 9, 12, 7, 88.4, 640),
+            // In name order, as the API returns them (fleetPerformance sorts by name, ADR 0023).
             agent('agent-code-reviewer', 'Code Reviewer', '#0891B2', 64, 46, 17, 1, 2, 1, 14.2, 95),
+            agent('agent-coder', 'Coder', '#7C3AED', 64, 51, 4, 9, 12, 7, 88.4, 640),
             agent('agent-qa', 'QA Engineer', '#059669', 28, 25, 1, 2, 3, 2, 9.7, 210),
         ],
         previous: { runs: 35, success_rate: 0.81 },

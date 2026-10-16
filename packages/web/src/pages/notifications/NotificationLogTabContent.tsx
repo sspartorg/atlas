@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -23,7 +24,7 @@ import { timeOfDay, relativeDay } from './timeFormat.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
-type Filter = 'all' | NotificationDeliveryStatus;
+type Filter = 'all' | NotificationDeliveryStatus | 'skipped';
 
 interface Props {
     settings: ISettings | undefined;
@@ -35,17 +36,20 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
     const [filter, setFilter] = useState<Filter>('all');
 
     // Parent fetches the 200-row dataset once; we filter client-side here so
-    // the per-filter server round-trip is gone.
+    // the per-filter server round-trip is gone. A `none` row with a reason was
+    // skipped at the flush (its event was turned off while held) — it stays in
+    // the log so the hold doesn't just vanish.
     const externalRows = useMemo(
-        () => allRows.filter((r) => r.external_status !== 'none'),
+        () => allRows.filter((r) => r.external_status !== 'none' || isSkipped(r)),
         [allRows]
     );
     const counts = useMemo(() => {
-        const c = { all: externalRows.length, sent: 0, failed: 0, pending: 0 };
+        const c = { all: externalRows.length, sent: 0, failed: 0, pending: 0, skipped: 0 };
         for (const r of externalRows) {
             if (r.external_status === 'sent') c.sent++;
             else if (r.external_status === 'failed') c.failed++;
             else if (r.external_status === 'pending') c.pending++;
+            else if (isSkipped(r)) c.skipped++;
         }
         return c;
     }, [externalRows]);
@@ -54,7 +58,9 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
         () =>
             filter === 'all'
                 ? externalRows
-                : externalRows.filter((r) => r.external_status === filter),
+                : filter === 'skipped'
+                  ? externalRows.filter(isSkipped)
+                  : externalRows.filter((r) => r.external_status === filter),
         [externalRows, filter]
     );
 
@@ -104,6 +110,13 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
                         count={counts.pending}
                         selected={filter === 'pending'}
                         onClick={() => setFilter('pending')}
+                    />
+                    {/* Skipped and cancelled sends: without this pill "All" summed to more than the rest. */}
+                    <FilterPill
+                        label="Skipped"
+                        count={counts.skipped}
+                        selected={filter === 'skipped'}
+                        onClick={() => setFilter('skipped')}
                     />
                 </PillRow>
                 {settings?.external_notification_endpoint_label && (
@@ -272,11 +285,12 @@ function useRowActions(row: INotification) {
         cancel: () =>
             cancel.mutate(row.id, {
                 onSuccess: () => toast.show({ message: 'Cancelled pending delivery' }),
+                onError: (err) => toast.show({ message: 'Cancel failed', detail: err.message }),
             }),
     };
 }
 
-/** Sent → Resend, Failed → Retry, Pending (held or in flight) → Cancel. */
+/** Sent → Resend, Failed → Retry, Skipped → Send now, Pending (held or in flight) → Cancel. */
 function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium' }) {
     const a = useRowActions(row);
     const spec =
@@ -304,7 +318,15 @@ function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium'
                       busy: a.cancelPending,
                       color: ATLAS_PALETTE.slate60,
                   }
-                : null;
+                : isSkipped(row)
+                  ? {
+                        label: 'Send now',
+                        icon: <SendRounded />,
+                        onClick: a.resend,
+                        busy: a.resendPending,
+                        color: ATLAS_PALETTE.slate60,
+                    }
+                  : null;
     if (!spec) return null;
     return (
         <Tooltip title={spec.label}>
@@ -325,6 +347,12 @@ function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium'
 
 const isHeld = (row: INotification) =>
     row.external_status === 'pending' && row.external_deferred_at !== null;
+const isSkipped = (row: INotification) => row.external_status === 'none' && row.failure_reason !== null;
+// The API's CANCELLED_BY_OWNER reason ("Cancelled by you"): a skipped row the Owner stopped.
+const isCancelled = (row: INotification) => isSkipped(row) && (row.failure_reason ?? '').startsWith('Cancelled');
+/** The reason line under the message: why it failed, or why it was skipped. */
+const reasonOf = (row: INotification) =>
+    row.external_status === 'failed' || isSkipped(row) ? row.failure_reason : null;
 
 function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil: string | null }) {
     const meta = getEventMeta(row.event_type);
@@ -333,7 +361,7 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
         <NotificationCard
             icon={<EventTypeIcon eventType={row.event_type} size={32} />}
             title={meta.label}
-            chip={<StatusChip status={row.external_status} held={held} />}
+            chip={<StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} cancelled={isCancelled(row)} />}
             message={row.message}
             meta={
                 <>
@@ -347,7 +375,8 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
                     {held && heldUntil && ` · sends ${heldUntil}`}
                 </>
             }
-            alert={row.external_status === 'failed' ? row.failure_reason : null}
+            alert={reasonOf(row)}
+            alertMuted={isSkipped(row)}
             action={<RowAction row={row} size="medium" />}
             tone={held ? 'held' : 'default'}
         />
@@ -368,6 +397,7 @@ function NotificationLogRow({
 
     return (
         <Box
+            data-testid="notification-log-row"
             sx={{
                 gridColumn: '1 / -1',
                 display: 'grid',
@@ -455,24 +485,25 @@ function NotificationLogRow({
                 >
                     {row.message}
                 </Typography>
-                {row.external_status === 'failed' && row.failure_reason && (
+                {reasonOf(row) && (
                     <Typography
                         sx={{
                             fontFamily: MONO,
                             fontSize: 11,
-                            color: ATLAS_PALETTE.error,
+                            color: isSkipped(row) ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.error,
                             mt: 0.5,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        ⚠ {row.failure_reason}
+                        {isSkipped(row) ? '' : '⚠ '}
+                        {row.failure_reason}
                     </Typography>
                 )}
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                <StatusChip status={row.external_status} held={held} />
+                <StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} cancelled={isCancelled(row)} />
                 {held && heldUntil && (
                     <Typography
                         sx={{ fontFamily: MONO, fontSize: 10, color: ATLAS_PALETTE.slate60 }}
@@ -491,13 +522,19 @@ function NotificationLogRow({
 function StatusChip({
     status,
     held = false,
+    skipped = false,
+    cancelled = false,
 }: {
     status: NotificationDeliveryStatus;
     held?: boolean;
+    skipped?: boolean;
+    cancelled?: boolean;
 }) {
     const style = held
         ? { label: 'Held · quiet hours', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
-        : status === 'sent'
+        : skipped
+          ? { label: cancelled ? 'Cancelled' : 'Skipped', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 }
+          : status === 'sent'
           ? { label: 'Sent', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg }
           : status === 'failed'
             ? { label: 'Failed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg }
@@ -539,6 +576,7 @@ function StatusChip({
 
 function EmptyState({ settings }: { settings: ISettings | undefined }) {
     const toast = useToast();
+    const queryClient = useQueryClient();
     const [testing, setTesting] = useState(false);
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
     const chatId = settings?.external_notification_chat_id ?? null;
@@ -555,7 +593,11 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
                         ? { message: 'Test failed', detail: r.error }
                         : { message: 'Test failed' }
                 );
+        } catch (err) {
+            toast.show({ message: 'Test failed', detail: err instanceof Error ? err.message : String(err) });
         } finally {
+            // The test result moves the connection pill and endpoint label.
+            void queryClient.invalidateQueries({ queryKey: ['settings'] });
             setTesting(false);
         }
     }
@@ -609,7 +651,7 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
                         color="success"
                         startIcon={<SendRounded sx={{ fontSize: 16 }} />}
                         onClick={() => void handleSendTest()}
-                        disabled={testing || !endpointLabel || !chatId}
+                        disabled={testing || !connected}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
                         {testing ? 'Sending…' : 'Send a Test Message'}

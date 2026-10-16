@@ -28,6 +28,7 @@ import {
     type IWorkflowGraph,
     type IWorkflowNode,
     type IssueType,
+    type WorkflowParkKind,
     type WorkflowRunStatus,
 } from '@atlas/shared';
 import { sql } from 'kysely';
@@ -323,7 +324,7 @@ export async function startWorkflowRun(
     if (workflow.use_worktree && !parent) {
         const failure = await prepareWorktree(run, pushesRunBranch(workflow));
         if (failure) {
-            await parkFailed(run, firstNodeId, `Could not prepare the worktree: ${failure}`);
+            await parkFailed(run, firstNodeId, `Could not prepare the worktree: ${failure}`, 'setup_failed');
             return runId;
         }
     }
@@ -391,11 +392,11 @@ async function prepareWorktree(run: RunRow, pushUpstream: boolean): Promise<stri
 async function goTo(run: RunRow, nodeId: string, why?: string): Promise<void> {
     const node = nodeById(run.graph_snapshot, nodeId);
     if (!node) {
-        await park(run, run.current_node_id, `Workflow graph has no node ${nodeId}`);
+        await park(run, run.current_node_id, `Workflow graph has no node ${nodeId}`, 'wiring_gap');
         return;
     }
     if (node.type === 'owner') {
-        await park(run, node.id, why ? `Sent back to you: ${why}` : 'The workflow reached an Owner step — review and reply to continue');
+        await park(run, node.id, why ? `Sent back to you: ${why}` : 'The workflow reached an Owner step — review and reply to continue', 'review_requested');
         return;
     }
     if (node.type === 'end') {
@@ -429,6 +430,7 @@ async function runScriptNode(run: RunRow, node: IWorkflowNode): Promise<void> {
             run,
             node.id,
             `The Script step "${node.label ?? node.id}" has no command. Type one in the workflow builder, then resume the run.`,
+            'wiring_gap',
         );
         return;
     }
@@ -457,7 +459,7 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
     const item = run.item_id ? await loadItem(run.item_id) : undefined;
     const { repos, workspace } = await runRepos(run);
     if (repos.length === 0) {
-        await park(run, node.id, `The check \`${command}\` had no repo to run in`);
+        await park(run, node.id, `The check \`${command}\` had no repo to run in`, 'check_unavailable');
         return;
     }
 
@@ -517,6 +519,7 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
                 node.id,
                 `${tag}The check \`${command}\` could not run (${result.reason}), so nothing was checked. ` +
                     `This is not a failure — resume the run to retry.`,
+                'check_unavailable',
             );
             return;
         }
@@ -527,13 +530,13 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
             if (!failTarget) {
                 // A gate with nobody to route a failure to is still a real
                 // verdict; it parks with the Owner rather than passing.
-                await parkFailed(run, node.id, detail);
+                await parkFailed(run, node.id, detail, 'gate_failed');
                 return;
             }
             const workflow = await loadWorkflow(run.workflow_id);
             const loops = run.loop_count + 1;
             if (loops > (workflow?.max_loops ?? 3)) {
-                await park(run, node.id, `Loop limit reached (${workflow?.max_loops ?? 3}): ${detail}`);
+                await park(run, node.id, `Loop limit reached (${workflow?.max_loops ?? 3}): ${detail}`, 'loop_limit');
                 return;
             }
             await db.updateTable('workflow_runs').set({ loop_count: loops }).where('id', '=', run.id).execute();
@@ -563,7 +566,7 @@ async function executeScriptCheck(run: RunRow, node: IWorkflowNode, command: str
        exactly one pass connection to validate, and the run walks the frozen
        snapshot that was validated before the first step. */
     if (!pass) {
-        await park(run, node.id, 'No pass connection from this step');
+        await park(run, node.id, 'No pass connection from this step', 'wiring_gap');
         return;
     }
     await goTo(run, pass);
@@ -608,7 +611,7 @@ async function runNextSubtask(run: RunRow, node: IWorkflowNode): Promise<void> {
     if (!next) {
         const target = nextNodeId(run.graph_snapshot, node.id, 'pass');
         if (!target) {
-            await park(run, node.id, 'No pass connection from this step');
+            await park(run, node.id, 'No pass connection from this step', 'wiring_gap');
             return;
         }
         await goTo(run, target);
@@ -617,7 +620,7 @@ async function runNextSubtask(run: RunRow, node: IWorkflowNode): Promise<void> {
     try {
         await startWorkflowRun(node.sub_workflow_id ?? '', next.id, { run, nodeId: node.id });
     } catch (err) {
-        await parkFailed(run, node.id, `Could not start sub-task ${next.id}: ${(err as Error).message}`);
+        await parkFailed(run, node.id, `Could not start sub-task ${next.id}: ${(err as Error).message}`, 'dispatch_failed');
     }
 }
 
@@ -626,7 +629,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode, retryOf?: string): Pr
         ? await db.selectFrom('agents').select(['id', 'name', 'status']).where('id', '=', node.agent_id).executeTakeFirst()
         : undefined;
     if (!agent || agent.status !== 'active') {
-        await parkFailed(run, node.id, `Agent ${node.agent_id ?? '(none)'} is missing or inactive`);
+        await parkFailed(run, node.id, `Agent ${node.agent_id ?? '(none)'} is missing or inactive`, 'missing_agent');
         return;
     }
     await db
@@ -656,7 +659,7 @@ async function spawnNode(run: RunRow, node: IWorkflowNode, retryOf?: string): Pr
             },
         });
     } catch (err) {
-        await parkFailed(run, node.id, `Could not start ${agent.name}: ${(err as Error).message}`);
+        await parkFailed(run, node.id, `Could not start ${agent.name}: ${(err as Error).message}`, 'dispatch_failed');
     }
 }
 
@@ -692,7 +695,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
         return;
     }
     if (step.status === 'setup_failed') {
-        await parkFailed(run, step.node_id, 'Project setup script failed');
+        await parkFailed(run, step.node_id, 'Project setup script failed', 'setup_failed');
         return;
     }
     if (step.status === 'error') {
@@ -714,7 +717,7 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
             return;
         }
         const what = retried ? 'The agent step errored again after an automatic retry' : 'The agent step errored';
-        await parkFailed(run, step.node_id, detail ? `${what}: ${detail}` : what);
+        await parkFailed(run, step.node_id, detail ? `${what}: ${detail}` : what, 'step_error');
         return;
     }
     if (step.status !== 'completed') return;
@@ -744,13 +747,19 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     const decision = decideRunRouting({ outcome, requiredChecklist });
 
     if (decision.kind === 'park_waiting_for_info') {
-        await park(run, step.node_id, outcome?.reason ?? decision.detail ?? 'The agent needs input', Boolean(outcome?.reason));
+        await park(
+            run,
+            step.node_id,
+            outcome?.reason ?? decision.detail ?? 'The agent needs input',
+            outcome ? 'question' : 'no_outcome',
+            Boolean(outcome?.reason),
+        );
         return;
     }
     if (decision.kind === 'apply_on_pass') {
         const target = nextNodeId(run.graph_snapshot, step.node_id, 'pass');
         if (!target) {
-            await park(run, step.node_id, 'No pass connection from this step');
+            await park(run, step.node_id, 'No pass connection from this step', 'wiring_gap');
             return;
         }
         await goTo(run, target);
@@ -759,13 +768,20 @@ export async function onStepFinished(agentRunId: string): Promise<void> {
     const failTarget = nextNodeId(run.graph_snapshot, step.node_id, 'fail');
     if (!failTarget) {
         const reasonPosted = Boolean(outcome?.reason) && decision.detail === outcome?.reason;
-        await park(run, step.node_id, decision.detail ?? 'The agent rejected the work', reasonPosted);
+        // A `done` routed to fail is a required checklist the agent left unticked.
+        await park(
+            run,
+            step.node_id,
+            decision.detail ?? 'The agent rejected the work',
+            outcome?.kind === 'done' ? 'checklist_failed' : 'rejected',
+            reasonPosted,
+        );
         return;
     }
     const workflow = await loadWorkflow(run.workflow_id);
     const loops = run.loop_count + 1;
     if (loops > (workflow?.max_loops ?? 3)) {
-        await park(run, step.node_id, `Loop limit reached (${workflow?.max_loops ?? 3}): ${decision.detail ?? 'rejected'}`);
+        await park(run, step.node_id, `Loop limit reached (${workflow?.max_loops ?? 3}): ${decision.detail ?? 'rejected'}`, 'loop_limit');
         return;
     }
     await db.updateTable('workflow_runs').set({ loop_count: loops }).where('id', '=', run.id).execute();
@@ -823,14 +839,15 @@ export async function retryStep(runId: string, nodeId: string, crashedStepId: st
 
 /** A park caused by something breaking (not a question or a review): it goes
  *  outward as `workflow.failed`, with its own toggle. */
-function parkFailed(run: RunRow, nodeId: string | null, reason: string): Promise<void> {
-    return park(run, nodeId, reason, false, true);
+function parkFailed(run: RunRow, nodeId: string | null, reason: string, kind: WorkflowParkKind): Promise<void> {
+    return park(run, nodeId, reason, kind, false, true);
 }
 
 async function park(
     run: RunRow,
     nodeId: string | null,
     reason: string,
+    kind: WorkflowParkKind,
     stepPostedReason = false,
     failed = false,
 ): Promise<void> {
@@ -840,7 +857,7 @@ async function park(
         .where('id', '=', run.id)
         .execute();
     run.status = 'waiting_for_owner';
-    await recordRunEvent(run.id, 'parked', reason);
+    await recordRunEvent(run.id, 'parked', reason, kind);
     broadcastRun(run, 'waiting_for_owner', nodeId);
     const workflow = await loadWorkflow(run.workflow_id);
     const name = workflow?.name ?? 'Workflow';
@@ -890,7 +907,7 @@ async function waitOnChild(child: RunRow, reason: string): Promise<void> {
         .set({ status: 'waiting_for_owner', parked_node_id: child.parent_node_id, current_node_id: child.parent_node_id, park_reason: why })
         .where('id', '=', parent.id)
         .execute();
-    await recordRunEvent(parent.id, 'parked', why);
+    await recordRunEvent(parent.id, 'parked', why, 'subtask_waiting');
     broadcastRun(parent, 'waiting_for_owner', child.parent_node_id);
     if (parent.item_id) {
         await setItemStatus(parent.item_id, 'waiting_for_info', `workflow_parked: ${why}`.slice(0, 280), { clearAssignee: true });
@@ -952,7 +969,7 @@ export async function continueResumedRun(runId: string): Promise<void> {
         if (workflow?.use_worktree) {
             const failure = await prepareWorktree(run, pushesRunBranch(workflow));
             if (failure) {
-                await parkFailed(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`);
+                await parkFailed(run, parked.id, `Could not refresh the worktree onto the latest default branch: ${failure}`, 'setup_failed');
                 return;
             }
         }
@@ -1178,7 +1195,7 @@ async function finishRun(run: RunRow, endNode: IWorkflowNode): Promise<void> {
     if (delivery.failure) {
         // Parked at End: fixing the cause (e.g. the project credential) and
         // resuming re-runs delivery against the kept worktree.
-        await parkFailed(run, endNode.id, `${delivery.failure}. Resume the run to retry delivery.`);
+        await parkFailed(run, endNode.id, `${delivery.failure}. Resume the run to retry delivery.`, 'delivery_failed');
         return;
     }
 
@@ -1234,7 +1251,7 @@ async function sendBackToSubtasks(run: RunRow, endNode: IWorkflowNode): Promise<
         const workflow = await loadWorkflow(run.workflow_id);
         const rounds = run.gate_rounds + 1;
         if (rounds > (workflow?.max_loops ?? 3)) {
-            await park(run, endNode.id, `Sent back for late sub-tasks ${workflow?.max_loops ?? 3} times: sub-task ${open.id} is still open`);
+            await park(run, endNode.id, `Sent back for late sub-tasks ${workflow?.max_loops ?? 3} times: sub-task ${open.id} is still open`, 'loop_limit');
             return true;
         }
         await db.updateTable('workflow_runs').set({ gate_rounds: rounds }).where('id', '=', run.id).execute();
@@ -1255,6 +1272,7 @@ async function sendBackToSubtasks(run: RunRow, endNode: IWorkflowNode): Promise<
         run,
         endNode.id,
         `No Sub-tasks step runs ${stray.map((i) => i.id).join(', ')} (no matching label). Label or close them, then resume.`,
+        'wiring_gap',
     );
     return true;
 }
@@ -1420,7 +1438,7 @@ export async function reconcileWorkflowRuns(now: Date = new Date()): Promise<num
         .execute();
     for (const { id } of stale) {
         const run = await loadRun(id);
-        if (run) await parkFailed(run, run.current_node_id, 'A step stopped reporting back (the API may have restarted)');
+        if (run) await parkFailed(run, run.current_node_id, 'A step stopped reporting back (the API may have restarted)', 'lost_step');
     }
     return stale.length;
 }
@@ -1479,6 +1497,9 @@ async function oldestReadyItem(workflowId: string, readyByLastFire: boolean): Pr
             ),
         )
         .orderBy('i.updated_at', 'asc')
+        // Items updated in one statement share updated_at; without a tie-break
+        // the pick followed the plan (index vs heap order) and was not FIFO.
+        .orderBy('i.id', 'asc')
         .limit(1);
     if (readyByLastFire) {
         q = q.where(sql<boolean>`i.updated_at <= (SELECT w.last_run_at FROM workflows w WHERE w.id = ${workflowId})`);

@@ -227,9 +227,9 @@ const PLAN_SEED = `
     INSERT INTO run_gate_results (id, workflow_run_id, script_id, verdict, created_at)
         SELECT 'plg-' || g, 'plw-' || (1 + g % 4000), 'gate', 'pass', now() - g * interval '1 hour'
           FROM generate_series(1, 6000) g;
-    INSERT INTO workflow_run_events (id, workflow_run_id, kind, created_at)
+    INSERT INTO workflow_run_events (id, workflow_run_id, kind, park_kind, created_at)
         SELECT 'ple-' || g, 'plw-' || (1 + g % 4000), CASE WHEN g % 2 = 0 THEN 'parked' ELSE 'resumed' END,
-               now() - g * interval '1 hour'
+               CASE WHEN g % 2 = 0 THEN 'question' END, now() - g * interval '1 hour'
           FROM generate_series(1, 6000) g;
     INSERT INTO jira_attachments (id, jira_key, filename, created_at)
         SELECT 'plj-' || g, 'PLN-' || (g % 500), 'f', now() - g * interval '1 hour' FROM generate_series(1, 4000) g;

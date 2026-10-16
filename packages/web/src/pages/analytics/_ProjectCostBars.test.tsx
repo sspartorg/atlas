@@ -74,7 +74,7 @@ describe('ProjectCostBars', () => {
         );
         expect(screen.getByText('TerminalOnly')).toBeInTheDocument();
         // Session count surfaced in the sub-text.
-        expect(screen.getByText(/3 term/)).toBeInTheDocument();
+        expect(screen.getByText(/3 sessions/)).toBeInTheDocument();
     });
 
     it('renders the empty-state when both byProject and terminalByProject are empty', () => {
@@ -105,7 +105,7 @@ describe('ProjectCostBars', () => {
         expect(screen.getByText('$5.50')).toBeInTheDocument();
         // Sub-text now mentions both runs and terminal sessions.
         expect(screen.getByText(/8 runs/)).toBeInTheDocument();
-        expect(screen.getByText(/2 term/)).toBeInTheDocument();
+        expect(screen.getByText(/2 sessions/)).toBeInTheDocument();
     });
 
     it('merges terminal-only project with null project_id via name key', () => {
@@ -139,6 +139,6 @@ describe('ProjectCostBars', () => {
         expect(screen.getByText('AgentOnly')).toBeInTheDocument();
         expect(screen.getByText('NoIdTerminal')).toBeInTheDocument();
         // Terminal-only row shows session count, not run count.
-        expect(screen.getByText(/2 term/)).toBeInTheDocument();
+        expect(screen.getByText(/2 sessions/)).toBeInTheDocument();
     });
 });

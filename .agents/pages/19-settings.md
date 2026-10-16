@@ -69,6 +69,7 @@ The card Atlas sends looks like this — paste into [adaptivecards.io/designer](
 **Per-event notifications** — Switch per key in `EXTERNAL_NOTIFICATION_EVENT_KEYS`; commits → `useUpdateNotifications.mutate({ external_notification_event_toggles })`. Default ON (Terminal idle defaults OFF). Includes **Jira Sync Failed** (`jira.sync_failed`) and **Workflow Failed** (`workflow.failed`), added 2026-10-16.
 
 **Quiet hours**
+- **Time Zone** row: the Owner zone (`settings.quiet_hours_timezone`, auto-saved from the browser the first time). "(this device's zone)" when it matches the browser; otherwise "(this device is in <zone>)" + **Use <zone>** → `PATCH /api/settings/notifications { quiet_hours_timezone }` → toast "Time zone set to <zone>". Quiet hours, reminder schedules and every time on the Reminders page use it. (It used to read "(detected from system)" even when the saved zone was a different one.)
 - Section copy: Telegram/Teams messages are **held** during the window and sent when it ends, marked with the time they were raised; in-app and push still arrive right away; same From and To = off.
 - Enable row helper: off → "deliver at any hour"; on with From == To → "From and To are the same, so there is no quiet window."; otherwise "held between the times below".
 - Section copy: Telegram/Teams messages are **held** during the window and sent when it ends, marked with the time they were raised; in-app and push still arrive right away; same From and To = off.

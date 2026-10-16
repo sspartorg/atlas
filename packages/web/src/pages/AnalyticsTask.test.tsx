@@ -469,9 +469,8 @@ describe('AnalyticsTask page', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
-    it('renders "No items match" when children rows are empty', async () => {
-        // (children.data?.rows.length ?? 0) === 0 && !isPending →
-        // "No items match the current filter." message
+    it('says the Task has no runs yet when unfiltered rows are empty', async () => {
+        // Unfiltered: "No items match the current filter." read as if a filter were on.
         server.use(
             http.get(`${BASE}/analytics/task/ATL-1`, () => HttpResponse.json(populatedTask)),
             http.get(`${BASE}/analytics/task/ATL-1/children`, () =>
@@ -480,8 +479,9 @@ describe('AnalyticsTask page', () => {
         );
         renderAt('/analytics/task/ATL-1');
         await waitFor(() => {
-            expect(screen.getByText(/No items match the current filter/i)).toBeInTheDocument();
+            expect(screen.getByText('No completed runs on this Task or its sub-tasks yet.')).toBeInTheDocument();
         });
+        expect(screen.queryByText(/No items match the current filter/i)).not.toBeInTheDocument();
     });
 
     it('deletes chip filter via onDelete to reset typeFilter', async () => {

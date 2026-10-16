@@ -23,6 +23,13 @@ import {
     MetricMarquee,
 } from './analytics/_chrome.js';
 
+// On a phone the table keeps title, runs and cost; the other two columns
+// (`PHONE_HIDDEN`) come back from sm up, so cost is never behind a sideways scroll.
+const TASK_COLUMNS_SX = {
+    gridTemplateColumns: { xs: 'minmax(0, 1fr) 44px 84px', sm: '1.5fr 100px 100px 110px 100px' },
+} as const;
+const PHONE_HIDDEN = { display: { xs: 'none', sm: 'block' } } as const;
+
 // Lazy: keeps the project-level chunk lean and shares the same
 // component used by the /analytics page so terminal session
 // formatting stays consistent.
@@ -356,7 +363,8 @@ export function AnalyticsProject() {
                     }
                 />
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {data.topTasks.map((task) => {
+                    {/* All-zero bars would read as a ranking of nothing. */}
+                    {topMax > 0 && data.topTasks.map((task) => {
                         const pct = topMax > 0 ? (task.totals.total_cost_usd / topMax) * 100 : 0;
                         return (
                             <Box
@@ -467,12 +475,12 @@ export function AnalyticsProject() {
                                         textAlign: 'right',
                                     }}
                                 >
-                                    {task.descendant_count} child
+                                    {task.descendant_count} sub-task{task.descendant_count === 1 ? '' : 's'}
                                 </Typography>
                             </Box>
                         );
                     })}
-                    {data.topTasks.length === 0 && (
+                    {topMax === 0 && (
                         <Typography sx={{ color: ATLAS_PALETTE.slate60, fontSize: 13, py: 2 }}>
                             No tasks with cost data yet.
                         </Typography>
@@ -518,17 +526,18 @@ export function AnalyticsProject() {
                         <Box
                             sx={{
                                 display: 'grid',
-                                gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
+                                ...TASK_COLUMNS_SX,
                                 gap: 2,
                                 py: 1,
                                 borderBottom: `1px solid ${ATLAS_PALETTE.slate10}`,
                                 mb: 1,
-                                minWidth: { xs: 580, sm: 'auto' },
                             }}
                         >
                             {['Title', 'Descendants', 'Runs', 'Total cost', 'Last run'].map(
                                 (h, i) => (
-                                    <Eyebrow key={i}>{h}</Eyebrow>
+                                    <Box key={i} sx={i === 1 || i === 4 ? PHONE_HIDDEN : {}}>
+                                <Eyebrow>{h}</Eyebrow>
+                            </Box>
                                 )
                             )}
                         </Box>
@@ -537,7 +546,6 @@ export function AnalyticsProject() {
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: 0.5,
-                                minWidth: { xs: 580, sm: 'auto' },
                             }}
                         >
                             {paged.data?.rows.map((row) => (
@@ -547,7 +555,7 @@ export function AnalyticsProject() {
                                     to={`/analytics/task/${row.id}`}
                                     sx={{
                                         display: 'grid',
-                                        gridTemplateColumns: '1.5fr 100px 100px 110px 100px',
+                                        ...TASK_COLUMNS_SX,
                                         gap: 2,
                                         py: 1.25,
                                         px: 1.5,
@@ -588,6 +596,7 @@ export function AnalyticsProject() {
                                             fontSize: 12,
                                             color: ATLAS_PALETTE.slate60,
                                             textAlign: 'right',
+                                            ...PHONE_HIDDEN,
                                         }}
                                     >
                                         {row.descendant_count}
@@ -620,6 +629,7 @@ export function AnalyticsProject() {
                                             fontSize: 11,
                                             color: ATLAS_PALETTE.slate60,
                                             textAlign: 'right',
+                                            ...PHONE_HIDDEN,
                                         }}
                                     >
                                         {fmtRelativeOrDash(row.last_run_at)}
@@ -642,11 +652,12 @@ export function AnalyticsProject() {
                         }}
                     >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                            <Typography id="analytics-project-rows-label" sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
                                 Rows per page
                             </Typography>
                             <Select
                                 size="small"
+                                labelId="analytics-project-rows-label"
                                 value={limit}
                                 onChange={(e) => {
                                     setLimit(Number(e.target.value));

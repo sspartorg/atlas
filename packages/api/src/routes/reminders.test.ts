@@ -212,7 +212,24 @@ describe('PATCH /api/reminders — catch → 409 (REM-EXTRA)', () => {
         // Either 404 (null return) or 409 (thrown exception) — both are correct outcomes
         // depending on service implementation; the catch block at line 42-44 is exercised
         // by the throw path (409).
-        expect([404, 409]).toContain(res.statusCode);
+        expect(res.statusCode).toBe(409);
+    });
+});
+
+describe('a bad cron expression is a 400 the modal can show, not a 500', () => {
+    it('POST and PATCH refuse it with the reason', async () => {
+        const bad = { ...VALID_REMINDER, schedule: { kind: 'cron', expr: 'every tuesday' } };
+        const post = await app.inject({ method: 'POST', url: '/api/reminders', payload: bad });
+        expect(post.statusCode).toBe(400);
+        expect(JSON.parse(post.body)).toMatchObject({ kind: 'validation_error', error: expect.stringMatching(/^Invalid cron expression "every tuesday"/) });
+
+        const created = await app.inject({ method: 'POST', url: '/api/reminders', payload: VALID_REMINDER });
+        const { id } = JSON.parse(created.body) as { id: number };
+        const patch = await app.inject({ method: 'PATCH', url: `/api/reminders/${id}`, payload: { schedule: bad.schedule } });
+        expect(patch.statusCode).toBe(400);
+        const never = await app.inject({ method: 'POST', url: '/api/reminders', payload: { ...VALID_REMINDER, schedule: { kind: 'cron', expr: '0 0 30 2 *' } } });
+        expect(never.statusCode).toBe(400);
+        expect(JSON.parse(never.body).error).toMatch(/no future fire/);
     });
 });
 

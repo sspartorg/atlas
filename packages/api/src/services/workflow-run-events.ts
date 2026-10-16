@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
+import type { WorkflowParkKind } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 
 // Migration 024 — the park / resume history `workflow_runs.park_reason` cannot
@@ -15,15 +16,18 @@ import { db } from '../db/kysely-client.js';
 // the event. `parked_node_id` wins over `current_node_id` because a Task run
 // reopened by its sub-task has already cleared `parked_node_id` in the same
 // statement, and `current_node_id` still names the Sub-tasks step it waited at.
+export function recordRunEvent(runId: string, kind: 'resumed'): Promise<void>;
+export function recordRunEvent(runId: string, kind: 'parked', reason: string, parkKind: WorkflowParkKind): Promise<void>;
 export async function recordRunEvent(
     runId: string,
     kind: 'parked' | 'resumed',
     reason: string | null = null,
+    parkKind: WorkflowParkKind | null = null,
 ): Promise<void> {
     try {
         await sql`
-            INSERT INTO workflow_run_events (id, workflow_run_id, item_id, kind, node_id, reason)
-            SELECT ${randomUUID()}, id, item_id, ${kind}, COALESCE(parked_node_id, current_node_id), ${reason?.slice(0, 1000) ?? null}
+            INSERT INTO workflow_run_events (id, workflow_run_id, item_id, kind, node_id, reason, park_kind)
+            SELECT ${randomUUID()}, id, item_id, ${kind}, COALESCE(parked_node_id, current_node_id), ${reason?.slice(0, 1000) ?? null}, ${parkKind}
             FROM workflow_runs WHERE id = ${runId}
         `.execute(db);
     } catch {

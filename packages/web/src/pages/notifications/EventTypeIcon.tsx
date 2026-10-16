@@ -34,6 +34,8 @@ const EVENT_META: Record<string, IconMeta> = {
     ci_failed: { icon: 'bug_report', label: 'CI Failed', ...bad },
     reminder: { icon: 'alarm', label: 'Reminder', ...warn },
     jira_sync: { icon: 'sync_alt', label: 'Jira', ...info },
+    // MCP sendExternalNotification: a message Claude sent on the Owner's behalf (log only).
+    mcp_external: { icon: 'send', label: 'Sent by Claude', ...info },
     'terminal.waiting_for_input': { icon: 'terminal', label: 'Terminal Waiting', ...warn },
     autofetch_success: { icon: 'sync', label: 'Auto-fetch Success', ...ok },
     autofetch_skipped: { icon: 'sync_disabled', label: 'Auto-fetch Skipped', ...quiet },

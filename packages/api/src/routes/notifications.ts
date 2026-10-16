@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { NotificationFilterSchema } from '@atlas/shared';
 import { z } from 'zod';
 import { notificationsService } from '../services/notifications.js';
-import { deliverExternalNow, sendExternalNotification } from '../services/external-notifications.js';
+import { channelConfigured, deliverExternalNow, sendOwnerExternalMessage } from '../services/external-notifications.js';
 
 // A09 — body shape for the MCP-callable external-notification passthrough.
 // Manual validation here avoids adding a zod dep to @atlas/api just for one
@@ -26,10 +26,15 @@ function parseSendExternalBody(body: unknown): { message: string; event_key?: st
     return out;
 }
 
-// `before` is the "Load more" cursor (a notification id). API-only, so it
-// extends the shared filter here rather than in @atlas/shared.
+// `before` is the "Load more" cursor (a notification id); `in_app=true` is the
+// In-App Feed's rows only. API-only, so they extend the shared filter here
+// rather than in @atlas/shared.
 const ListQuerySchema = NotificationFilterSchema.extend({
     before: z.coerce.number().int().min(1).optional(),
+    in_app: z
+        .enum(['true', 'false'])
+        .transform((v) => v === 'true')
+        .optional(),
 });
 
 export async function notificationsRoutes(app: FastifyInstance) {
@@ -62,6 +67,14 @@ export async function notificationsRoutes(app: FastifyInstance) {
         if (n === null) return reply.status(400).send({ error: 'invalid id', kind: 'validation_error' });
         const row = await notificationsService.get(n);
         if (!row) return reply.status(404).send({ error: 'Notification not found' });
+        // Without a channel the send can only end at `none`: the toast would
+        // say "Resent" and the row would drop out of the log.
+        if (!(await channelConfigured())) {
+            return reply.status(409).send({
+                error: 'No external channel is connected. Set one up in Settings → Notifications.',
+                kind: 'credentials_missing',
+            });
+        }
         try {
             // The Owner pressed Resend/Retry: send now, quiet hours or not.
             await deliverExternalNow(row.id, row.message);
@@ -97,10 +110,11 @@ export async function notificationsRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, changed });
     });
 
-    // A09 — MCP-callable external-notification passthrough. Lets autonomous
-    // agents (the daily AI-news scout is the first user) deliver a one-shot
-    // message without creating a notifications row. Honors quiet hours +
-    // event toggles when event_key is set (delegated to services/external-notifications.ts).
+    // A09 — MCP-callable external-notification send. Lets autonomous agents
+    // (the daily AI-news scout is the first user) deliver a one-shot message.
+    // It gets a log-only row (`in_app=false`, event_type `mcp_external`) so
+    // quiet hours HOLD it rather than drop it, the event toggle applies when
+    // event_key is set, and the Notification Log tracks it.
     app.post('/api/notifications/send-external', async (req, reply) => {
         let body: { message: string; event_key?: string };
         try {
@@ -108,9 +122,10 @@ export async function notificationsRoutes(app: FastifyInstance) {
         } catch (err) {
             return reply.status(400).send({ error: (err as Error).message });
         }
-        // `sent: false` = gated (quiet hours / event toggle off / no transport),
-        // so the caller can tell a suppressed message from a delivered one.
-        const sent = await sendExternalNotification(body.message, body.event_key as never);
-        return reply.status(202).send({ ok: true, sent });
+        // `sent: false` + `held: true` = quiet hours, it goes out when the
+        // window ends. `sent: false` + `held: false` = toggle off, no channel,
+        // or the transport failed (`external_status` says which).
+        const r = await sendOwnerExternalMessage(body.message, body.event_key);
+        return reply.status(202).send({ ok: true, sent: r.external_status === 'sent', ...r });
     });
 }

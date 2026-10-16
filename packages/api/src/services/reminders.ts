@@ -96,11 +96,15 @@ export function computeNextFire(schedule: ReminderSchedule, from: Date = new Dat
     let next: Date | null;
     try {
         next = new Cron(expr, { paused: true, ...(timezone ? { timezone } : {}) }).nextRun(from);
-    } catch (e) {
-        if (!timezone) throw e;
-        next = new Cron(expr, { paused: true }).nextRun(from);
+    } catch {
+        try {
+            next = new Cron(expr, { paused: true }).nextRun(from);
+        } catch (e) {
+            // A bad expression is the caller's input, not a server fault.
+            throw new ApiError('validation_error', `Invalid cron expression "${expr}": ${(e as Error).message}`, 400);
+        }
     }
-    if (!next) throw new Error(`Schedule "${expr}" has no future fire`);
+    if (!next) throw new ApiError('validation_error', `Schedule "${expr}" has no future fire`, 400);
     return next;
 }
 
@@ -191,7 +195,7 @@ export const remindersService = {
         const existing = await this.get(id);
         if (!existing) return undefined;
         if (existing.status !== 'active' && existing.status !== 'paused') {
-            throw new Error(`Cannot edit reminder ${id} in status '${existing.status}'`);
+            throw new ApiError('conflict', `Cannot edit reminder ${id} in status '${existing.status}'`, 409);
         }
 
         const update: Record<string, unknown> = {};
@@ -368,10 +372,11 @@ async function fireOne(r: IReminder): Promise<void> {
     // `claimReminder`. Never call this without a successful claim; doing
     // so re-introduces the double-fire race the claim was written to
     // close.
-    // Every channel gets a notifications row: the in-app feed shows it, and an
-    // external send needs it to track delivery (and to be held through quiet
-    // hours). `create()` broadcasts `notification_created` itself. The row's
-    // reminder_id is the fire log.
+    // Every channel gets a notifications row: an external send needs it to
+    // track delivery (and to be held through quiet hours), and its
+    // reminder_id is the fire log. An external-only reminder's row is
+    // log-only (`in_app: false`): Notification Log yes, feed / badge / push no.
+    // `create()` broadcasts `notification_created` itself.
     const message = r.body ? `${r.label}: ${r.body}` : r.label;
     const n = await notificationsService.create({
         event_type: 'reminder',
@@ -382,9 +387,8 @@ async function fireOne(r: IReminder): Promise<void> {
         project_id: null,
         link_url: '/reminders',
         reminder_id: r.id,
+        in_app: r.channel !== 'external',
     });
-    // ponytail: an external-only reminder still lands in the in-app feed (it
-    // always did, via the same row); a per-row "hide from feed" flag would fix it.
     if (r.channel === 'external' || r.channel === 'both') {
         try {
             await sendExternalForNotification(n.id, message);

@@ -236,6 +236,15 @@ interface IUpsertProjectSchedulePayload {
     conflict_policy: ScheduleConflictPolicy;
 }
 
+/** POST /api/notifications/send-external. `held` = quiet hours; it sends when the window ends. */
+interface ISendExternalResult {
+    ok: true;
+    sent: boolean;
+    held: boolean;
+    notification_id: number;
+    external_status: 'none' | 'pending' | 'sent' | 'failed';
+}
+
 export interface IApiClient {
     listAgents(): Promise<IAgent[]>;
     getAgent(id: string): Promise<IAgentComposite>;
@@ -306,7 +315,7 @@ export interface IApiClient {
         channel?: ReminderChannel;
         since?: string;
     }): Promise<IReminder[]>;
-    sendExternalNotification(payload: { message: string; event_key?: string }): Promise<{ ok: true }>;
+    sendExternalNotification(payload: { message: string; event_key?: string }): Promise<ISendExternalResult>;
     // C03 — item mutation polymorphic surface. The server-side Update*Schemas
     // differ per issue type (a task has spec_md + pr_url + worktree_branch,
     // a sub-task doesn't). The client passes
@@ -642,10 +651,10 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             return request<IReminder[]>(`/api/reminders${qs ? `?${qs}` : ''}`);
         },
 
-        // A09 — one-shot external-notification passthrough bypassing the
-        // notifications table.
+        // A09 — one-shot external notification. The API logs it as a
+        // log-only notification row (held through quiet hours).
         sendExternalNotification: (payload) =>
-            request<{ ok: true }>('/api/notifications/send-external', { method: 'POST', body: payload }),
+            request<ISendExternalResult>('/api/notifications/send-external', { method: 'POST', body: payload }),
 
         // C03 — polymorphic item mutation. Dispatches via the existing
         // issueTypeToRouteSegment() helper so the same client.<method>() call

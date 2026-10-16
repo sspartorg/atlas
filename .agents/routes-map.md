@@ -90,7 +90,7 @@ ALERTS & ADMIN
   Settings            /settings
 ```
 
-The Topbar (`packages/web/src/components/Topbar.tsx`) holds the Notifications status indicator and the shortcuts (`?`) icon that opens `ShortcutsDialog` (Cmd/Ctrl+?).
+The shell's scrolling content area is the page's `main` landmark (`App.tsx`). Sidenav entries are real links (`<a href>`; Tab reaches them, Enter follows, a modified click opens a new tab — they were `Box onClick` rows the keyboard could not reach). The Topbar (`packages/web/src/components/Topbar.tsx`) holds the Notifications status indicator (popover: active provider, unread count, links to Notifications and Settings — see [17-notifications.md](pages/17-notifications.md)) and the shortcuts (`?`) icon that opens `ShortcutsDialog` (Cmd/Ctrl+?).
 
 **Unsaved-draft guard.** `DraftGuardProvider` (`packages/web/src/hooks/useDraftGuard.tsx`) wraps `AppShell`. Sidenav rows, BottomNav tabs, MoreSheet rows and the `g`+`<key>` shortcuts navigate through `useConfirmLeave()`. When a mounted form has called `useDraftGuard(true)` (TaskNew, Task Detail's Add sub-task form), they open a **Discard draft?** dialog instead of navigating.
 
