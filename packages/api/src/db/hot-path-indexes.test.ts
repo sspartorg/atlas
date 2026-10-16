@@ -333,7 +333,8 @@ describe('migration 012 — page indexes', () => {
         ],
         [
             'delivery status events by time',
-            'idx_issue_events_status_created_at',
+            // Either status-only partial index serves a whole-history pass.
+            'idx_issue_events_(?:status_created_at|item_status)',
             `SELECT item_id, min(created_at) FILTER (WHERE to_value = 'done') FROM issue_events
               WHERE field = 'status' AND created_at < now() GROUP BY item_id`,
         ],
@@ -395,6 +396,7 @@ const ANALYTICS_INDEXES = [
     'idx_notifications_created_id',
     'idx_reminders_history',
     'idx_item_external_links_pr_url',
+    'idx_issue_events_item_status',
 ];
 
 // Rows PLAN_SEED leaves out: a few agent-test items (as in a real workspace),
@@ -416,7 +418,7 @@ const WINDOW = `now() - interval '30 days'`;
 const SHORT_WINDOW = `now() - interval '2 days'`;
 
 describe('migration 016 — analytics and keyset indexes', () => {
-    it('creates the four indexes and drops the single-column notifications index', async () => {
+    it('creates the five indexes and drops the single-column notifications index', async () => {
         expect(await indexNames(ANALYTICS_INDEXES)).toEqual([...ANALYTICS_INDEXES].sort());
         expect(await indexNames(['idx_notifications_created_at'])).toEqual([]);
     });
@@ -463,7 +465,7 @@ describe('migration 016 — analytics and keyset indexes', () => {
             // A short window over a long history: the case the rewrite is for.
             'delivery firstDoneIn: window Done events first, then their history by item',
             // Either item-leading index serves the per-item probe.
-            ['idx_issue_events_status_created_at', 'idx_issue_events_item(?:_agent_event)?'],
+            ['idx_issue_events_status_created_at', 'idx_issue_events_item(?:_agent_event|_status)?'],
             `SELECT e.item_id,
                     MIN(e.created_at) FILTER (WHERE e.to_value = 'done') AS done_at,
                     MIN(e.created_at) FILTER (WHERE e.to_value = 'in_progress') AS ip_at
@@ -475,6 +477,18 @@ describe('migration 016 — analytics and keyset indexes', () => {
                        AND d.created_at >= ${SHORT_WINDOW} AND d.created_at < now())
               GROUP BY e.item_id
              HAVING MIN(e.created_at) FILTER (WHERE e.to_value = 'done') >= ${SHORT_WINDOW}`,
+        ],
+        [
+            // Per shipped item: did it leave Done later? Without the per-item
+            // status index this range-scanned every later status event (O(n²)).
+            'delivery reworked probe: one seek per item',
+            ['idx_issue_events_item_status'],
+            `SELECT f.item_id, EXISTS (SELECT 1 FROM issue_events r
+                                        WHERE r.item_id = f.item_id AND r.field = 'status' AND r.from_value = 'done'
+                                          AND r.created_at > f.done_at AND r.created_at < now()) AS reworked
+               FROM (SELECT d.item_id, MIN(d.created_at) AS done_at FROM issue_events d
+                      WHERE d.field = 'status' AND d.to_value = 'done' AND d.created_at >= ${WINDOW}
+                      GROUP BY d.item_id) f`,
         ],
         [
             'delivery waits: status events bounded on both sides',

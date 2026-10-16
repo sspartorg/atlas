@@ -15,6 +15,10 @@ import type { Knex } from 'knex';
 //   all; this one is exactly its WHERE + ORDER BY.
 // - The scorecard looks PR links up by url (`link_kind = 'pull_request'`);
 //   the only url index was the (item_id, url) unique, useless without item_id.
+// - Per-item status history (Delivery's "reworked after Done" probe, the
+//   time-in-status replay): with only the time-ordered status index the
+//   planner range-scanned every later status event per shipped item — O(n²),
+//   136 ms at 2.4k items. Per item it is an index-only seek (4.5 ms).
 
 const CREATE: Array<[name: string, def: string]> = [
     ['idx_items_is_test', 'public.items (id) WHERE is_test'],
@@ -24,6 +28,10 @@ const CREATE: Array<[name: string, def: string]> = [
         `public.reminders (updated_at DESC, id DESC) WHERE status IN ('cancelled', 'completed')`,
     ],
     ['idx_item_external_links_pr_url', `public.item_external_links (url) WHERE link_kind = 'pull_request'`],
+    [
+        'idx_issue_events_item_status',
+        `public.issue_events (item_id, created_at) INCLUDE (from_value, to_value) WHERE field = 'status'`,
+    ],
 ];
 
 // Replaced by idx_notifications_created_id (same leading column and direction).
