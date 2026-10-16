@@ -10,7 +10,7 @@ import MenuItem from '@mui/material/MenuItem';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
-import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { ATLAS_PALETTE, CHART_PALETTE } from '../theme/tokens.js';
 import { formatCostUsd } from '../utils/formatCost.js';
 import {
     Card,
@@ -139,21 +139,21 @@ export function AnalyticsProject() {
                             sx={{
                                 fontFamily: MONO,
                                 fontSize: 11,
-                                color: 'rgba(255,255,255,.65)',
+                                color: ATLAS_PALETTE.slate60,
                                 textDecoration: 'none',
                                 letterSpacing: '0.04em',
-                                '&:hover': { color: '#FFFFFF' },
+                                '&:hover': { color: ATLAS_PALETTE.slate },
                             }}
                         >
                             Analytics
                         </Box>
                         <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.4)' }}
+                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate40 }}
                         >
                             /
                         </Typography>
                         <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.85)' }}
+                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate80 }}
                         >
                             {data.project.name}
                         </Typography>
@@ -166,7 +166,7 @@ export function AnalyticsProject() {
                     label="Total spend"
                     value={formatCostUsd(combinedCost)}
                     sub={`${formatCostUsd(data.totals.total_cost_usd)} agentic · ${formatCostUsd(terminalSummary.total_cost_usd)} terminal`}
-                    accent={'#06B6D4'}
+                    accent={CHART_PALETTE.output}
                 />
                 <MetricMarquee
                     label="Agentic runs"
@@ -183,7 +183,7 @@ export function AnalyticsProject() {
                     label="Avg cost / activity"
                     value={totalActivity > 0 ? formatCostUsd(avgCostPerActivity) : '—'}
                     sub="blended across runs + sessions"
-                    accent={'#F43F5E'}
+                    accent={CHART_PALETTE.terminal}
                 />
             </Hero>
 
@@ -385,7 +385,7 @@ export function AnalyticsProject() {
                                     transition: 'background 160ms ease, border-color 160ms ease',
                                     '&:hover': {
                                         background: ATLAS_PALETTE.cloud,
-                                        borderColor: `color-mix(in srgb, ${'#3B82F6'} 18%, transparent)`,
+                                        borderColor: `color-mix(in srgb, ${CHART_PALETTE.cost} 18%, transparent)`,
                                     },
                                 }}
                             >
@@ -420,7 +420,7 @@ export function AnalyticsProject() {
                                         position: 'relative',
                                         height: 8,
                                         borderRadius: '999px',
-                                        background: `color-mix(in srgb, ${'#3B82F6'} 8%, transparent)`,
+                                        background: `color-mix(in srgb, ${CHART_PALETTE.cost} 8%, transparent)`,
                                         overflow: 'hidden',
                                     }}
                                 >
@@ -429,7 +429,7 @@ export function AnalyticsProject() {
                                             position: 'absolute',
                                             inset: 0,
                                             width: `${Math.max(2, pct)}%`,
-                                            background: `linear-gradient(90deg, ${'#3B82F6'} 0%, ${'#06B6D4'} 100%)`,
+                                            background: `linear-gradient(90deg, ${CHART_PALETTE.cost} 0%, ${CHART_PALETTE.output} 100%)`,
                                             borderRadius: '999px',
                                         }}
                                     />
@@ -489,14 +489,14 @@ export function AnalyticsProject() {
                                 borderRadius: '8px',
                                 px: 2.5,
                                 py: 1,
-                                color: '#3B82F6',
+                                color: CHART_PALETTE.cost,
                                 fontFamily: MONO,
                                 fontSize: 11.5,
                                 letterSpacing: '0.04em',
                                 cursor: 'pointer',
                                 '&:hover': {
                                     background: ATLAS_PALETTE.cloud,
-                                    borderColor: `color-mix(in srgb, ${'#3B82F6'} 22%, transparent)`,
+                                    borderColor: `color-mix(in srgb, ${CHART_PALETTE.cost} 22%, transparent)`,
                                 },
                             }}
                         >

@@ -1,4 +1,7 @@
 import type {
+    AnalyticsWindow,
+    IAnalyticsDelivery,
+    IAnalyticsWorkflows,
     AgentCategory,
     AgentKindSlug,
     ApiErrorBody,
@@ -200,6 +203,11 @@ export type TeamConfigUpdate = Partial<
 export type JiraSourceInput = Pick<IJiraSource, 'jql' | 'workflow_id' | 'repo_ids'>;
 
 const get = <T>(path: string) => request<T>(path);
+
+/** The viewer's IANA zone: analytics buckets are the viewer's wall clock. */
+function viewerTz(): string {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+}
 const post = <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) =>
@@ -276,10 +284,12 @@ export const api = {
     },
 
     analytics: {
-        get: (tz?: string) => {
-            const t = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-            return get<AnalyticsResponse>(`/analytics?tz=${encodeURIComponent(t)}`);
-        },
+        get: (window: AnalyticsWindow = 'month', tz: string = viewerTz()) =>
+            get<AnalyticsResponse>(`/analytics?tz=${encodeURIComponent(tz)}&window=${window}`),
+        delivery: (window: AnalyticsWindow, tz: string = viewerTz()) =>
+            get<IAnalyticsDelivery>(`/analytics/delivery?tz=${encodeURIComponent(tz)}&window=${window}`),
+        workflows: (window: AnalyticsWindow, tz: string = viewerTz()) =>
+            get<IAnalyticsWorkflows>(`/analytics/workflows?tz=${encodeURIComponent(tz)}&window=${window}`),
         // Drill-down: project aggregate (totals + byKind + top 25 tasks).
         project: (projectId: string) =>
             get<AnalyticsProjectResponse>(`/analytics/project/${encodeURIComponent(projectId)}`),

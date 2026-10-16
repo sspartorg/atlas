@@ -47,12 +47,11 @@ export function SpendByAgentCard({ byAgent, totalAgentCost }: Props) {
         return (
             <Card>
                 <ChartTitle
-                    eyebrow="Spend by agent"
                     title="Cost share of the active fleet"
-                    sub="Distribution of agent spend across the fleet for the current month."
+                    sub="Distribution of agent spend across the fleet in this window."
                 />
                 <ChartEmpty
-                    label="No agent spend this month"
+                    label="No agent spend in this window"
                     sub="Each completed run is attributed back to its agent — the donut fills in as soon as one lands."
                 />
             </Card>
@@ -62,9 +61,8 @@ export function SpendByAgentCard({ byAgent, totalAgentCost }: Props) {
     return (
         <Card>
             <ChartTitle
-                eyebrow="Spend by agent"
                 title="Cost share of the active fleet"
-                sub={`${byAgent.length} agent${byAgent.length === 1 ? '' : 's'} ran this month · ${formatCostUsd(totalAgentCost)} attributed.`}
+                sub={`${byAgent.length} agent${byAgent.length === 1 ? '' : 's'} ran in this window · ${formatCostUsd(totalAgentCost)} attributed.`}
             />
             <Box
                 sx={{

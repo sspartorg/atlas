@@ -1,4 +1,4 @@
-import type { AgentCli, IAgent, IssueType, IWorkflowRunSummary } from '@atlas/shared';
+import type { AgentCli, AnalyticsWindow, IAgent, IssueType, IWorkflowRunSummary } from '@atlas/shared';
 
 export interface SidenavCounts {
     projects: number;
@@ -236,8 +236,33 @@ export interface TerminalCostSummary {
     session_count: number;
 }
 
+interface AnalyticsModelRow {
+    source: 'agentic' | 'terminal';
+    cli: AgentCli;
+    model: string | null;
+    total_cost_usd: number;
+    cache_read_tokens: number;
+    count: number;
+}
+
 export interface AnalyticsResponse {
-    period: { start: string; end: string };
+    period: {
+        start: string;
+        end: string;
+        tz?: string;
+        window?: AnalyticsWindow;
+        previous_start?: string;
+        previous_end?: string;
+    };
+    /** Spend over the previous window (same span into last month for `month`). */
+    previous?: { total_cost_usd: number; terminal_total_cost_usd: number };
+    byModel?: AnalyticsModelRow[];
+    /** What cache reads saved against fresh-input prices, priced per model. */
+    cache_savings_usd?: number;
+    /** Cache reads on models with no known price, left out of the saving. */
+    cache_savings_unpriced_tokens?: number;
+    /** Tasks first moved into Done in the window (the Delivery tab's definition). */
+    shipped_tasks?: number;
     summary: CostSummary;
     daily: AnalyticsDailyRow[];
     monthly: AnalyticsMonthlyRow[];

@@ -463,3 +463,32 @@ export const LABEL_COLORS = {
 } as const;
 
 export type LabelColorKey = keyof typeof LABEL_COLORS;
+
+// =====================================================================
+// CHART_PALETTE — every chart's series colours (Analytics + drill-downs).
+// The eight slots are the dataviz reference palette, light and dark steps
+// in theme-vars.css, validated (validate_palette.js) for the adjacent
+// orders used below. Roles name the entity, so a colour means one thing
+// wherever it appears:
+//   agentic spend = 1 blue, terminal spend = 2 orange,
+//   Tasks = 3 aqua, sub-tasks = 4 yellow,
+//   input / output / cached tokens = 7 violet / 3 aqua / 4 yellow.
+// =====================================================================
+
+const chartSlot = (n: number) => `var(--atlas-chart-${n})`;
+
+export const CHART_PALETTE = {
+    cost: chartSlot(1),
+    costSoft: `color-mix(in srgb, ${chartSlot(1)} 18%, transparent)`,
+    terminal: chartSlot(2),
+    terminalSoft: `color-mix(in srgb, ${chartSlot(2)} 18%, transparent)`,
+    task: chartSlot(3),
+    subTask: chartSlot(4),
+    jira: chartSlot(7),
+    input: chartSlot(7),
+    output: chartSlot(3),
+    cached: chartSlot(4),
+    runs: chartSlot(4),
+    grid: 'rgba(127,127,127,.16)',
+    rail: 'rgba(127,127,127,.28)',
+} as const;

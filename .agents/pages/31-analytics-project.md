@@ -14,7 +14,7 @@ All-time cost for one project, broken down by item kind (`task` / `sub_task`) an
 
 ## UI elements
 
-**Header** — project name + all-time totals (cost, tokens, `N tasks`, run and terminal-session counts).
+**Header** — project name + all-time totals (cost, tokens, `N tasks`, run and terminal-session counts). Drawn in `_chrome.tsx` `Hero`, a tinted accent surface that follows light and dark (it was an always-dark gradient until the Analytics tabs rework); `AnalyticsTask` uses the same Hero.
 
 **By kind** — pie over `data.byKind`, filtered to `total_cost_usd > 0` so zero-cost kinds don't render a 0° slice (`:106`).
 

@@ -76,6 +76,18 @@
     --atlas-heroGradientStart: #4f46e5;
     --atlas-heroGradientEnd: #3730a3;
 
+    /* Chart series (dataviz reference palette, validated with
+       validate_palette.js against both surfaces; slot order is the CVD
+       safety mechanism — assign in order, never cycle). */
+    --atlas-chart-1: #2a78d6;
+    --atlas-chart-2: #eb6834;
+    --atlas-chart-3: #1baf7a;
+    --atlas-chart-4: #eda100;
+    --atlas-chart-5: #e87ba4;
+    --atlas-chart-6: #008300;
+    --atlas-chart-7: #6250d6;
+    --atlas-chart-8: #e34948;
+
     /* Mercury sidenav scale */
     --atlas-sideBg: #f4f4f4;
     --atlas-sideBorder: #e0e0e0;
@@ -211,6 +223,15 @@
     --atlas-onAccent: #0a0a0a;
     --atlas-heroGradientStart: #4f46e5;
     --atlas-heroGradientEnd: #3730a3;
+
+    --atlas-chart-1: #3987e5;
+    --atlas-chart-2: #d95926;
+    --atlas-chart-3: #199e70;
+    --atlas-chart-4: #c98500;
+    --atlas-chart-5: #d55181;
+    --atlas-chart-6: #008300;
+    --atlas-chart-7: #9085e9;
+    --atlas-chart-8: #e66767;
 
     /* Mercury sidenav scale */
     --atlas-sideBg: #050505;

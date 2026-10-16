@@ -489,10 +489,19 @@ describe('api.counts.project', () => {
 });
 
 describe('api.analytics (extended)', () => {
-    it('get with explicit tz', async () => {
+    it('get with explicit window and tz', async () => {
         const cap = captureGet('/analytics', {});
-        await api.analytics.get('America/New_York');
-        expect(cap.url).toContain('tz=');
+        await api.analytics.get('7d', 'America/New_York');
+        expect(cap.url).toContain('tz=America%2FNew_York');
+        expect(cap.url).toContain('window=7d');
+    });
+    it('delivery and workflows pass window + tz', async () => {
+        const d = captureGet('/analytics/delivery', {});
+        await api.analytics.delivery('90d', 'Asia/Kolkata');
+        expect(d.url).toContain('/analytics/delivery?tz=Asia%2FKolkata&window=90d');
+        const w = captureGet('/analytics/workflows', {});
+        await api.analytics.workflows('30d');
+        expect(w.url).toMatch(/\/analytics\/workflows\?tz=.+&window=30d$/);
     });
     it('project drill-down', async () => {
         const cap = captureGet('/analytics/project/p1', {});

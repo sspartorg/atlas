@@ -32,13 +32,12 @@ export function TopRunsTable({
         return (
             <Card>
                 <ChartTitle
-                    eyebrow="Most expensive runs"
                     title="Top runs by cost"
-                    sub="Top 10 completed runs this month ranked by spend."
+                    sub="Top 10 completed runs in this window, by spend."
                 />
                 <ChartEmpty
-                    label="No completed runs this month"
-                    sub="Top runs are picked from agents whose runs completed within the current month."
+                    label="No completed runs in this window"
+                    sub="Top runs are picked from agents whose runs completed within this window."
                 />
             </Card>
         );
@@ -46,9 +45,8 @@ export function TopRunsTable({
     return (
         <Card>
             <ChartTitle
-                eyebrow="Most expensive runs"
                 title="Top runs by cost"
-                sub={`Top ${topRuns.length} run${topRuns.length === 1 ? '' : 's'} ranked by spend this month · click an agent to open the run.`}
+                sub={`Top ${topRuns.length} run${topRuns.length === 1 ? '' : 's'} by spend in this window · click an agent to open the run.`}
             />
             <Box sx={{ overflowX: 'auto' }}>
                 <Box sx={{ minWidth: 700 }}>

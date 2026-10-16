@@ -12,7 +12,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 import type { IssueType } from '@atlas/shared';
 import { api } from '../api/api.js';
 import { useSetPageTitle } from '../components/shell/index.js';
-import { ATLAS_PALETTE } from '../theme/tokens.js';
+import { ATLAS_PALETTE, CHART_PALETTE } from '../theme/tokens.js';
 import { formatCostUsd } from '../utils/formatCost.js';
 import {
     Card,
@@ -116,16 +116,16 @@ export function AnalyticsTask() {
                             sx={{
                                 fontFamily: MONO,
                                 fontSize: 11,
-                                color: 'rgba(255,255,255,.65)',
+                                color: ATLAS_PALETTE.slate60,
                                 textDecoration: 'none',
                                 letterSpacing: '0.04em',
-                                '&:hover': { color: '#FFFFFF' },
+                                '&:hover': { color: ATLAS_PALETTE.slate },
                             }}
                         >
                             Analytics
                         </Box>
                         <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.4)' }}
+                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate40 }}
                         >
                             /
                         </Typography>
@@ -135,21 +135,21 @@ export function AnalyticsTask() {
                             sx={{
                                 fontFamily: MONO,
                                 fontSize: 11,
-                                color: 'rgba(255,255,255,.65)',
+                                color: ATLAS_PALETTE.slate60,
                                 textDecoration: 'none',
                                 letterSpacing: '0.04em',
-                                '&:hover': { color: '#FFFFFF' },
+                                '&:hover': { color: ATLAS_PALETTE.slate },
                             }}
                         >
                             {data.task.project_name || data.task.project_id || 'Project'}
                         </Box>
                         <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.4)' }}
+                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate40 }}
                         >
                             /
                         </Typography>
                         <Typography
-                            sx={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.85)' }}
+                            sx={{ fontFamily: MONO, fontSize: 11, color: ATLAS_PALETTE.slate80 }}
                         >
                             {data.task.id}
                         </Typography>
@@ -161,7 +161,7 @@ export function AnalyticsTask() {
                 <MetricMarquee
                     label="Total cost"
                     value={formatCostUsd(data.totals.total_cost_usd)}
-                    accent={'#06B6D4'}
+                    accent={CHART_PALETTE.output}
                 />
                 <MetricMarquee
                     label="Runs"
@@ -180,7 +180,7 @@ export function AnalyticsTask() {
                             ? formatCostUsd(data.totals.total_cost_usd / data.totals.run_count)
                             : '—'
                     }
-                    accent={'#F43F5E'}
+                    accent={CHART_PALETTE.terminal}
                 />
             </Hero>
 
@@ -264,7 +264,7 @@ export function AnalyticsTask() {
                                             background: isActive
                                                 ? ATLAS_PALETTE.cloud
                                                 : ATLAS_PALETTE.white,
-                                            border: `1px solid ${isActive ? '#3B82F6' : ATLAS_PALETTE.slate10}`,
+                                            border: `1px solid ${isActive ? CHART_PALETTE.cost : ATLAS_PALETTE.slate10}`,
                                             borderRadius: '10px',
                                             p: 2,
                                             cursor: 'pointer',
@@ -344,7 +344,7 @@ export function AnalyticsTask() {
                             }}
                             sx={{
                                 background: ATLAS_PALETTE.cloud,
-                                color: '#3B82F6',
+                                color: CHART_PALETTE.cost,
                                 fontFamily: MONO,
                                 fontSize: 11,
                             }}
