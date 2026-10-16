@@ -13,7 +13,7 @@ import DoneAllRounded from '@mui/icons-material/DoneAllRounded';
 import SendRounded from '@mui/icons-material/SendRounded';
 import InboxOutlined from '@mui/icons-material/InboxOutlined';
 import { useSettings, isExternalChannelConnected } from '../hooks/useSettings.js';
-import { useNotifications, useMarkAllRead } from '../hooks/useNotifications.js';
+import { useNotifications, useNotificationFeed, useMarkAllRead } from '../hooks/useNotifications.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useToast } from '../hooks/useToast.js';
 import { useNow } from '../hooks/useNow.js';
@@ -74,8 +74,9 @@ export function Notifications() {
 
     // For the "last delivery" stamp at the top — peek at the most-recent sent row.
     const { data: recentSent = [] } = useNotifications({ external_status: 'sent', limit: 1 });
-    // Lifted from per-tab containers — both tabs read from the same 200-row set.
-    const { data: allRows = [] } = useNotifications({ limit: 200 });
+    // Lifted from per-tab containers — both tabs read the same rows, 200 per page.
+    const feed = useNotificationFeed();
+    const allRows = feed.rows;
     // InAppFeedTab needs the agent dictionary to resolve avatars; lift it too.
     const { data: agents = [] } = useAgents();
     const lastDeliveryAt = recentSent[0]?.created_at ?? null;
@@ -272,6 +273,18 @@ export function Notifications() {
 
             {tab === 'external' && <NotificationLogTab settings={settings} allRows={allRows} />}
             {tab === 'in-app' && <InAppFeedTab allRows={allRows} agents={agents} />}
+            {feed.hasNextPage && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+                    <Button
+                        variant="outlined"
+                        onClick={() => void feed.fetchNextPage()}
+                        disabled={feed.isFetchingNextPage}
+                        sx={{ textTransform: 'none', fontWeight: 500 }}
+                    >
+                        {feed.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                    </Button>
+                </Box>
+            )}
         </Box>
     );
 }

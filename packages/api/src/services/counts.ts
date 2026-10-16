@@ -76,6 +76,9 @@ export interface ProjectCounts {
     terminalCostSummary: ITerminalCostSummary;
 }
 
+// The dashboard renders at most 20 rows of any list; `total` carries the rest.
+const TODAYS_PASS_LIMIT = 20;
+
 /**
  * "Awaiting you": a question is always the Owner's; an in_review item is not
  * while a running workflow still owns it or its Task — Delivery moves its
@@ -83,16 +86,19 @@ export interface ProjectCounts {
  * need you" while nothing did.
  */
 function awaitingOwner(eb: ExpressionBuilder<DB & { x: DB['items_live'] }, 'x'>) {
-    const ownedByRunningWorkflow = eb.exists(
-        eb
-            .selectFrom('workflow_runs as wr')
-            .select('wr.id')
-            .where('wr.status', '=', 'running')
-            .where((w) => w.or([w('wr.item_id', '=', w.ref('x.id')), w('wr.item_id', '=', w.ref('x.parent_id'))])),
-    );
+    // One NOT EXISTS per column, not an OR inside one: the OR made Postgres
+    // re-scan workflow_runs for every in_review row instead of probing item_id.
+    const runningOn = (col: 'x.id' | 'x.parent_id') =>
+        eb.exists(
+            eb
+                .selectFrom('workflow_runs as wr')
+                .select('wr.id')
+                .where('wr.status', '=', 'running')
+                .whereRef('wr.item_id', '=', col),
+        );
     return eb.or([
         eb('x.status', '=', 'waiting_for_info'),
-        eb.and([eb('x.status', '=', 'in_review'), eb.not(ownedByRunningWorkflow)]),
+        eb.and([eb('x.status', '=', 'in_review'), eb.not(runningOn('x.id')), eb.not(runningOn('x.parent_id'))]),
     ]);
 }
 
@@ -348,25 +354,30 @@ export const countsService = {
     async getTodaysPass(): Promise<TodaysPass> {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
-        const rows = await db
+        const base = db
             .selectFrom('agent_runs as r')
             .innerJoin('agents as a', 'a.id', 'r.agent_id')
             .innerJoin('items as i', 'i.id', 'r.item_id')
-            .select([
-                'r.id as run_id',
-                'r.agent_id as agent_id',
-                'a.name as agent_name',
-                'a.category as agent_category',
-                'a.accent_color as agent_accent_color',
-                'i.type as issue_type',
-                'i.id as issue_id',
-                'r.completed_at as completed_at',
-            ])
             .where('r.status', '=', 'completed')
             .where('r.completed_at', 'is not', null)
-            .where('r.completed_at', '>=', startOfDay.toISOString())
-            .orderBy('r.completed_at', 'desc')
-            .execute();
+            .where('r.completed_at', '>=', startOfDay.toISOString());
+        const [rows, totalRow] = await Promise.all([
+            base
+                .select([
+                    'r.id as run_id',
+                    'r.agent_id as agent_id',
+                    'a.name as agent_name',
+                    'a.category as agent_category',
+                    'a.accent_color as agent_accent_color',
+                    'i.type as issue_type',
+                    'i.id as issue_id',
+                    'r.completed_at as completed_at',
+                ])
+                .orderBy('r.completed_at', 'desc')
+                .limit(TODAYS_PASS_LIMIT)
+                .execute(),
+            base.select(({ fn }) => fn.countAll<string>().as('n')).executeTakeFirst(),
+        ]);
         return {
             items: rows.map((r) => ({
                 run_id: r.run_id as string,
@@ -378,7 +389,7 @@ export const countsService = {
                 issue_id: r.issue_id as string,
                 completed_at: r.completed_at as string,
             })),
-            total: rows.length,
+            total: Number(totalRow?.n ?? 0),
         };
     },
 

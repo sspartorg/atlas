@@ -78,6 +78,26 @@ describe('GET /api/notifications', () => {
         expect(body.length).toBe(1);
         expect(body[0]).toMatchObject({ message: 'Hello World' });
     });
+
+    it('pages with the `before` cursor, newest first, with no gaps or repeats', async () => {
+        // One statement, so all five share created_at and the id breaks the tie.
+        await testDb
+            .insertInto('notifications')
+            .values(Array.from({ length: 5 }, (_, i) => ({ event_type: 'test_event', message: `n${i}`, kind: 'update' as const })))
+            .execute();
+        await insertNotification({ message: 'newest' });
+        const page = async (qs: string) =>
+            (JSON.parse((await app.inject({ method: 'GET', url: `/api/notifications?${qs}` })).body) as Array<{ id: number; message: string }>);
+        const first = await page('limit=4');
+        expect(first.map((n) => n.message)).toEqual(['newest', 'n4', 'n3', 'n2']);
+        const second = await page(`limit=4&before=${first[3]!.id}`);
+        expect(second.map((n) => n.message)).toEqual(['n1', 'n0']);
+    });
+
+    it('rejects a non-numeric `before`', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/notifications?before=abc' });
+        expect(res.statusCode).toBe(400);
+    });
 });
 
 describe('PATCH /api/notifications/:id/sent', () => {

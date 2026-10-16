@@ -6,6 +6,7 @@ import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Notifications } from './Notifications.js';
 import { useToast } from '../hooks/useToast.js';
+import { makeNotification } from '../test-utils/factories.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -322,5 +323,24 @@ describe('Notifications page', () => {
         } finally {
             Object.defineProperty(window, 'matchMedia', { writable: true, value: original });
         }
+    });
+
+    it('loads older rows with "Load more" through the before cursor, then hides it', async () => {
+        const seen: Array<string | null> = [];
+        server.use(
+            http.get(`${BASE}/notifications`, ({ request }) => {
+                const url = new URL(request.url);
+                if (url.searchParams.get('limit') !== '200') return HttpResponse.json([]);
+                const before = url.searchParams.get('before');
+                seen.push(before);
+                const ids = before ? [3, 2, 1] : Array.from({ length: 200 }, (_, i) => 1000 - i);
+                return HttpResponse.json(ids.map((id) => makeNotification({ id, message: `msg-${id}` })));
+            }),
+            ...defaultHandlers,
+        );
+        renderWithProviders(<Notifications />, { initialEntries: ['/notifications?tab=in-app'] });
+        fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+        await waitFor(() => expect(seen).toEqual([null, '801']));
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument());
     });
 });

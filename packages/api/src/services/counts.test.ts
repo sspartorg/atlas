@@ -144,6 +144,26 @@ describe('countsService', () => {
             expect(tp.items[0]!.agent_name).toBe('Coder');
         });
 
+        it('caps items at 20 and still counts every run today', async () => {
+            const now = Date.now();
+            await testDb
+                .insertInto('agent_runs')
+                .values(
+                    Array.from({ length: 25 }, (_, i) => ({
+                        id: `r-${i}`,
+                        agent_id: 'agent-coder',
+                        item_id: 's1',
+                        status: 'completed' as const,
+                        completed_at: new Date(now - (25 - i)).toISOString(),
+                    })),
+                )
+                .execute();
+            const tp = await countsService.getTodaysPass();
+            expect(tp.total).toBe(25);
+            expect(tp.items).toHaveLength(20);
+            expect(tp.items[0]!.run_id).toBe('r-24');
+        });
+
         it('returns empty when nothing completed today', async () => {
             const tp = await countsService.getTodaysPass();
             expect(tp.total).toBe(0);

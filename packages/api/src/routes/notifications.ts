@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { NotificationFilterSchema } from '@atlas/shared';
+import { z } from 'zod';
 import { notificationsService } from '../services/notifications.js';
 import { deliverExternalNow, sendExternalNotification } from '../services/external-notifications.js';
 
@@ -25,10 +26,16 @@ function parseSendExternalBody(body: unknown): { message: string; event_key?: st
     return out;
 }
 
+// `before` is the "Load more" cursor (a notification id). API-only, so it
+// extends the shared filter here rather than in @atlas/shared.
+const ListQuerySchema = NotificationFilterSchema.extend({
+    before: z.coerce.number().int().min(1).optional(),
+});
+
 export async function notificationsRoutes(app: FastifyInstance) {
     app.get('/api/notifications', async (req, reply) => {
         /* v8 ignore next */
-        const filter = NotificationFilterSchema.parse(req.query ?? {});
+        const filter = ListQuerySchema.parse(req.query ?? {});
         return reply.send(await notificationsService.list(filter));
     });
 

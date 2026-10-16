@@ -244,6 +244,23 @@ describe('GET /api/analytics/project/:projectId/tasks — paginated (W2)', () =>
         expect(body.rows[1].id).toBe(ids.taskId);
     });
 
+    it('the summary carries the top 25 tasks and counts all of them', async () => {
+        const ids = await seedFullTree();
+        for (let i = 0; i < 29; i++) {
+            await insertItem({ id: `ATL-${100 + i}`, type: 'task', project_id: 'p1', title: `T${i}` });
+            await insertRun({ id: `r-many-${i}`, item_id: `ATL-${100 + i}`, total_cost_usd: 100 + i });
+        }
+        const body = (await app.inject({ method: 'GET', url: `/api/analytics/project/${ids.projectId}` })).json();
+        expect(body.task_count).toBe(30);
+        expect(body.topTasks).toHaveLength(25);
+        expect(body.topTasks[0].id).toBe('ATL-128');
+        const page2 = (
+            await app.inject({ method: 'GET', url: `/api/analytics/project/${ids.projectId}/tasks?page=2&limit=25` })
+        ).json();
+        expect(page2.total).toBe(30);
+        expect(page2.rows.map((r: { id: string }) => r.id)).toEqual(['ATL-103', 'ATL-102', 'ATL-101', 'ATL-100', ids.taskId]);
+    });
+
     it('clamps limit to 100', async () => {
         const ids = await seedFullTree();
         const res = await app.inject({

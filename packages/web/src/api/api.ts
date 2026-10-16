@@ -865,11 +865,13 @@ export const api = {
             kind?: NotificationKind;
             external_status?: NotificationDeliveryStatus;
             limit?: number;
+            before?: number;
         }) => {
             const qs = new URLSearchParams();
             if (opts?.kind) qs.set('kind', opts.kind);
             if (opts?.external_status) qs.set('external_status', opts.external_status);
             if (opts?.limit) qs.set('limit', String(opts.limit));
+            if (opts?.before) qs.set('before', String(opts.before));
             const tail = qs.toString();
             return get<INotification[]>(`/notifications${tail ? `?${tail}` : ''}`);
         },

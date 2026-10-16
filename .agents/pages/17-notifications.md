@@ -16,6 +16,7 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 - **Mark All Read** button → `markAllRead.mutate()` → toast with count
 - On phones (`useIsMobile()`, below `md`) the three actions are icon-only `IconButton`s with a Tooltip + `aria-label` (`Refresh notifications`, `Notification settings`, `Mark all read`), all on one row.
 - **Tabs** (controlled via `?tab=`): Notification Log (default) / In-App Feed
+- **Load more** (below either tab, only while the last page came back full): both tabs read one feed, 200 rows a page (`useNotificationFeed`, `useInfiniteQuery`); the button fetches the next 200 with `?before=<last id>`.
 
 ### Notification Log tab (`NotificationLogTab`)
 - Filter pills: All / Sent / Failed / Pending (with counts), in one row that scrolls sideways instead of wrapping (`PillRow`, `role="group"` "Filter deliveries"). Pending counts held rows too.
@@ -50,14 +51,14 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 None.
 
 ## Hooks used
-- `useNotifications()` (per-tab filters + counts)
+- `useNotificationFeed()` (the rows both tabs filter, paged 200 at a time) + `useNotifications({ external_status: 'sent', limit: 1 })` (last delivery stamp)
 - `useMarkAllRead`, `useResendNotification`, `useCancelNotification`
 - `useAgents` (for agent chip resolution)
 - `useNow` (60s tick for relative-time aging)
 - `useIsMobile` (header icon buttons, log cards)
 
 ## API endpoints touched
-- `GET /api/notifications?external_status=â€¦&limit=200`
+- `GET /api/notifications?limit=200[&before=<id>]` (feed pages) and `?external_status=sent&limit=1` (last delivery)
 - `POST /api/notifications/:id/resend`
 - `POST /api/notifications/:id/cancel`
 - `POST /api/notifications/mark-all-read`

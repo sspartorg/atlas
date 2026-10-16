@@ -124,6 +124,91 @@ function cacheSavings(rows: Array<{ model: string | null; cache_read_tokens: num
     return { usd, unpriced };
 }
 
+/**
+ * One page of a project's Tasks, each rolled up over its whole sub-task tree
+ * and sorted by cost. Paged in SQL: the summary needs the top 25 and the
+ * "View all" table one page, never the full list.
+ */
+async function projectTaskRollup(projectId: string, limit: number, offset: number) {
+    const result = await sql<{
+        root_id: string;
+        root_title: string;
+        cost: string | null;
+        input_tokens: string | null;
+        output_tokens: string | null;
+        cache_read_tokens: string | null;
+        run_count: string;
+        descendant_count: string;
+        last_run_at: string | null;
+        total_rows: string;
+    }>`
+        WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
+            SELECT e.id, e.id, e.parent_id, 0
+              FROM items_live e
+             WHERE e.project_id = ${projectId} AND e.type = 'task'
+            UNION ALL
+            SELECT t.root_id, i.id, i.parent_id, t.depth + 1
+              FROM items_live i
+              JOIN tree t ON i.parent_id = t.id
+        ),
+        rolled AS (
+            SELECT
+                tree.root_id AS root_id,
+                e.title AS root_title,
+                COALESCE(SUM(r.total_cost_usd), 0) AS cost_num,
+                COALESCE(SUM(r.input_tokens), 0) AS input_tokens_num,
+                COALESCE(SUM(r.output_tokens), 0) AS output_tokens_num,
+                COALESCE(SUM(r.cache_read_tokens), 0) AS cache_read_tokens_num,
+                COUNT(r.id) AS run_count_num,
+                COUNT(DISTINCT tree.id) - 1 AS descendant_count_num,
+                MAX(r.completed_at) AS last_run_at_ts
+              FROM tree
+              LEFT JOIN agent_runs r
+                ON r.item_id = tree.id AND r.status = 'completed'
+              LEFT JOIN items_live e ON e.id = tree.root_id
+             GROUP BY tree.root_id, e.title
+        )
+        SELECT
+            root_id,
+            root_title,
+            cost_num::text AS cost,
+            input_tokens_num::text AS input_tokens,
+            output_tokens_num::text AS output_tokens,
+            cache_read_tokens_num::text AS cache_read_tokens,
+            run_count_num::text AS run_count,
+            descendant_count_num::text AS descendant_count,
+            last_run_at_ts::text AS last_run_at,
+            COUNT(*) OVER ()::text AS total_rows
+          FROM rolled
+         ORDER BY cost_num DESC, root_id ASC
+         LIMIT ${limit} OFFSET ${offset}
+    `.execute(db);
+
+    const rows = result.rows.map((r) => ({
+        id: r.root_id,
+        title: r.root_title,
+        /* v8 ignore next */
+        descendant_count: Number(r.descendant_count ?? 0),
+        last_run_at: r.last_run_at,
+        totals: {
+            /* v8 ignore next */
+            total_cost_usd: Number(r.cost ?? 0),
+            /* v8 ignore next */
+            input_tokens: Number(r.input_tokens ?? 0),
+            /* v8 ignore next */
+            output_tokens: Number(r.output_tokens ?? 0),
+            /* v8 ignore next */
+            cache_read_tokens: Number(r.cache_read_tokens ?? 0),
+            /* v8 ignore next */
+            run_count: Number(r.run_count ?? 0),
+        },
+    }));
+    const total =
+        /* v8 ignore next */
+        result.rows.length > 0 ? Number(result.rows[0]?.total_rows ?? 0) : 0;
+    return { rows, total };
+}
+
 export async function analyticsRoutes(app: FastifyInstance) {
     app.get('/api/analytics/delivery', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
@@ -717,7 +802,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         // page reports combined spend.
         const [
             perItemRows,
-            taskRollupRows,
+            taskRollup,
             terminalSummaryRow,
             terminalByCliRows,
             topTerminalRows,
@@ -745,43 +830,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                  WHERE i.project_id = ${projectId}
                  GROUP BY i.type
             `.execute(db),
-            sql<{
-                root_id: string;
-                root_title: string;
-                cost: string | null;
-                input_tokens: string | null;
-                output_tokens: string | null;
-                cache_read_tokens: string | null;
-                run_count: string;
-                descendant_count: string;
-                last_run_at: string | null;
-            }>`
-                WITH RECURSIVE tree(root_id, id, parent_id, type, depth) AS (
-                    SELECT e.id, e.id, e.parent_id, e.type, 0
-                      FROM items_live e
-                     WHERE e.project_id = ${projectId} AND e.type = 'task'
-                    UNION ALL
-                    SELECT t.root_id, i.id, i.parent_id, i.type, t.depth + 1
-                      FROM items_live i
-                      JOIN tree t ON i.parent_id = t.id
-                )
-                SELECT
-                    tree.root_id AS root_id,
-                    e.title AS root_title,
-                    COALESCE(SUM(r.total_cost_usd), 0)::text AS cost,
-                    COALESCE(SUM(r.input_tokens), 0)::text AS input_tokens,
-                    COALESCE(SUM(r.output_tokens), 0)::text AS output_tokens,
-                    COALESCE(SUM(r.cache_read_tokens), 0)::text AS cache_read_tokens,
-                    COUNT(r.id)::text AS run_count,
-                    (COUNT(DISTINCT tree.id) - 1)::text AS descendant_count,
-                    MAX(r.completed_at)::text AS last_run_at
-                  FROM tree
-                  LEFT JOIN agent_runs r
-                    ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items_live e ON e.id = tree.root_id
-                 GROUP BY tree.root_id, e.title
-                 ORDER BY COALESCE(SUM(r.total_cost_usd), 0) DESC, tree.root_id ASC
-            `.execute(db),
+            projectTaskRollup(projectId, 25, 0),
             // Terminal-session summary scoped to this project. All-time
             // (matches the agent-run rollups above, which are also
             // all-time for the drill-down). Status='closed' only — same
@@ -887,27 +936,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
             }
         }
 
-        const allTasks = taskRollupRows.rows;
-        const topTasks = allTasks.slice(0, 25).map((r) => ({
-            id: r.root_id,
-            title: r.root_title,
-            /* v8 ignore next */
-            descendant_count: Number(r.descendant_count ?? 0),
-            last_run_at: r.last_run_at,
-            totals: {
-                /* v8 ignore next */
-                total_cost_usd: Number(r.cost ?? 0),
-                /* v8 ignore next */
-                input_tokens: Number(r.input_tokens ?? 0),
-                /* v8 ignore next */
-                output_tokens: Number(r.output_tokens ?? 0),
-                /* v8 ignore next */
-                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
-                /* v8 ignore next */
-                run_count: Number(r.run_count ?? 0),
-            },
-        }));
-
         return reply.send({
             project: { id: project.id, name: project.name },
             totals,
@@ -915,8 +943,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 const row = byKindMap.get(t);
                 return row ? [row] : [];
             }),
-            topTasks,
-            task_count: allTasks.length,
+            topTasks: taskRollup.rows,
+            task_count: taskRollup.total,
             // Terminal-session aggregates for the same project. Zero-shaped
             // when no closed sessions exist so the FE can render the empty
             // state without nullable guards.
@@ -987,82 +1015,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
             .executeTakeFirst();
         if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
-        const result = await sql<{
-            root_id: string;
-            root_title: string;
-            cost: string | null;
-            input_tokens: string | null;
-            output_tokens: string | null;
-            cache_read_tokens: string | null;
-            run_count: string;
-            descendant_count: string;
-            last_run_at: string | null;
-            total_rows: string;
-        }>`
-            WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
-                SELECT e.id, e.id, e.parent_id, 0
-                  FROM items_live e
-                 WHERE e.project_id = ${projectId} AND e.type = 'task'
-                UNION ALL
-                SELECT t.root_id, i.id, i.parent_id, t.depth + 1
-                  FROM items_live i
-                  JOIN tree t ON i.parent_id = t.id
-            ),
-            rolled AS (
-                SELECT
-                    tree.root_id AS root_id,
-                    e.title AS root_title,
-                    COALESCE(SUM(r.total_cost_usd), 0) AS cost_num,
-                    COALESCE(SUM(r.input_tokens), 0) AS input_tokens_num,
-                    COALESCE(SUM(r.output_tokens), 0) AS output_tokens_num,
-                    COALESCE(SUM(r.cache_read_tokens), 0) AS cache_read_tokens_num,
-                    COUNT(r.id) AS run_count_num,
-                    COUNT(DISTINCT tree.id) - 1 AS descendant_count_num,
-                    MAX(r.completed_at) AS last_run_at_ts
-                  FROM tree
-                  LEFT JOIN agent_runs r
-                    ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items_live e ON e.id = tree.root_id
-                 GROUP BY tree.root_id, e.title
-            )
-            SELECT
-                root_id,
-                root_title,
-                cost_num::text AS cost,
-                input_tokens_num::text AS input_tokens,
-                output_tokens_num::text AS output_tokens,
-                cache_read_tokens_num::text AS cache_read_tokens,
-                run_count_num::text AS run_count,
-                descendant_count_num::text AS descendant_count,
-                last_run_at_ts::text AS last_run_at,
-                COUNT(*) OVER ()::text AS total_rows
-              FROM rolled
-             ORDER BY cost_num DESC, root_id ASC
-             LIMIT ${limit} OFFSET ${offset}
-        `.execute(db);
-
-        const rows = result.rows.map((r) => ({
-            id: r.root_id,
-            title: r.root_title,
-            /* v8 ignore next */
-            descendant_count: Number(r.descendant_count ?? 0),
-            last_run_at: r.last_run_at,
-            totals: {
-                /* v8 ignore next */
-                total_cost_usd: Number(r.cost ?? 0),
-                /* v8 ignore next */
-                input_tokens: Number(r.input_tokens ?? 0),
-                /* v8 ignore next */
-                output_tokens: Number(r.output_tokens ?? 0),
-                /* v8 ignore next */
-                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
-                /* v8 ignore next */
-                run_count: Number(r.run_count ?? 0),
-            },
-        }));
-        const total =
-            /* v8 ignore next */
-            result.rows.length > 0 ? Number(result.rows[0]?.total_rows ?? 0) : 0;
+        const { rows, total } = await projectTaskRollup(projectId, limit, offset);
 
         return reply.send({ rows, total, page, limit });
     });

@@ -161,14 +161,13 @@ const FleetQuerySchema = z.object({ days: z.enum(['30', '90']).default('90') }).
 
 export async function agentsRoutes(app: FastifyInstance) {
     app.get('/api/agents', async (req, reply) => {
-        const agents = await agentsService.list();
         // `?view=summary` drops `prompt_md` — most of the payload (a 22-agent
         // fleet is ~110 KB with prompts, ~20 KB without). The dashboard only
-        // needs names, categories and status.
+        // needs names, categories and status, so the column is never read.
         if ((req.query as { view?: string }).view === 'summary') {
-            return reply.send(agents.map(({ prompt_md: _prompt, ...rest }) => rest));
+            return reply.send(await agentsService.listSummary());
         }
-        return reply.send(agents);
+        return reply.send(await agentsService.list());
     });
 
     app.get('/api/agents/:id', async (req, reply) => {

@@ -1,4 +1,4 @@
-import type { ExpressionBuilder } from 'kysely';
+import { sql, type ExpressionBuilder } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import type { DB } from '../db/types.js';
 import { broadcastSSE } from '../routes/events.js';
@@ -33,6 +33,8 @@ interface ListFilter {
     kind?: NotificationKind | undefined;
     external_status?: NotificationDeliveryStatus | undefined;
     limit?: number | undefined;
+    // Keyset cursor: rows strictly older than this notification id's row.
+    before?: number | undefined;
 }
 
 // One row of the notifications-with-item-type join. Avoids the previous N+1
@@ -149,8 +151,14 @@ export const notificationsService = {
         let q = selectNotificationsWithItemType().where(notStaleNeedsYou);
         if (filter.kind) q = q.where('n.kind', '=', filter.kind);
         if (filter.external_status) q = q.where('n.external_status', '=', filter.external_status);
+        if (filter.before !== undefined) {
+            q = q.where(
+                sql<boolean>`(n.created_at, n.id) < (SELECT c.created_at, c.id FROM notifications c WHERE c.id = ${filter.before})`,
+            );
+        }
         const rows = await q
             .orderBy('n.created_at', 'desc')
+            .orderBy('n.id', 'desc')
             .limit(filter.limit ?? 50)
             .execute();
         return rows.map((r) => rowToNotification(r as Record<string, unknown>));
