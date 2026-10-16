@@ -291,9 +291,3 @@ export async function refreshExpiring(nowMs: number = Date.now()): Promise<{ ref
     });
     return { refreshed, errors };
 }
-
-export const githubAppTokens = {
-    mintInstallationToken,
-    refreshCredential,
-    refreshExpiring,
-};

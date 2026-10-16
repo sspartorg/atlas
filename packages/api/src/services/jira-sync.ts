@@ -75,11 +75,11 @@ export interface LocalAttachment {
 }
 
 /** Headings of the bridge-managed sections at the end of a description. */
-export const JIRA_FILES_HEADING = '## Attachments from Jira';
-export const JIRA_COMMENTS_HEADING = '## Comments from Jira';
+const JIRA_FILES_HEADING = '## Attachments from Jira';
+const JIRA_COMMENTS_HEADING = '## Comments from Jira';
 
 /** [the Owner's / imported part, the managed sections ('' if none)]. */
-export function splitManaged(description: string): [string, string] {
+function splitManaged(description: string): [string, string] {
     const at = [JIRA_FILES_HEADING, JIRA_COMMENTS_HEADING]
         .map((h) => description.lastIndexOf(`\n${h}`))
         .filter((i) => i !== -1);
@@ -654,7 +654,7 @@ function distinctRepos(matches: Match[], keep: (m: Match) => boolean): IProjectR
 // ── Attachments: Jira → Atlas copies ────────────────────────────────────────
 
 /** Files larger than this are listed with a link to Jira instead of copied. */
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 export function jiraAttachmentsDir(): string {
     return join(dataDir(), 'jira-attachments');
