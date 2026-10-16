@@ -14,7 +14,9 @@ import { notificationLinkUrl, type IssueType } from '@atlas/shared';
 // `vapidSubject` is a mailto: URL the browser's push service contacts in
 // case of abuse — `mailto:atlas@local` is fine for single-owner local use;
 // no Owner-facing config surface needed.
-const VAPID_SUBJECT = 'mailto:atlas@local';
+// Apple's push service rejects a VAPID JWT whose `sub` is not a reachable
+// contact (BadJwtToken); `mailto:atlas@local` worked for Chrome only.
+const VAPID_SUBJECT = 'https://github.com/sspartorg/atlas';
 
 // In-process cache: once we've loaded + bound the keys for this Node
 // process, skip the DB roundtrip on subsequent publish calls.

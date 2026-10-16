@@ -84,15 +84,18 @@ export function usePushSubscription(): UsePushSubscriptionResult {
         }
         setBusy(true);
         try {
-            const { publicKey } = await api.push.getVapidPublicKey();
-            if (!publicKey) {
-                setError('Server failed to provide a VAPID public key. Check API logs.');
-                return;
-            }
-
+            // First, before any await: Safari only shows the prompt when it is
+            // asked straight from the click. Awaiting the VAPID key first spent
+            // the gesture, and Safari refused without ever asking.
             const perm = await Notification.requestPermission();
             if (perm !== 'granted') {
                 setState(perm === 'denied' ? 'denied' : 'default');
+                return;
+            }
+
+            const { publicKey } = await api.push.getVapidPublicKey();
+            if (!publicKey) {
+                setError('Server failed to provide a VAPID public key. Check API logs.');
                 return;
             }
 

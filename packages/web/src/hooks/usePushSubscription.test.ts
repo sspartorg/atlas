@@ -228,6 +228,34 @@ describe('usePushSubscription', () => {
         await waitFor(() => expect(result.current.state).toBe('denied'), { timeout: 500 });
     });
 
+    // Safari only prompts when requestPermission is called straight from the
+    // click: nothing may be awaited before it, and a refusal never fetches.
+    it('enable(): asks for permission before any network call', async () => {
+        const order: string[] = [];
+        mockGetVapidPublicKey.mockClear();
+        mockGetVapidPublicKey.mockImplementationOnce(async () => {
+            order.push('vapid');
+            return { publicKey: 'dGVzdA' };
+        });
+        vi.stubGlobal('Notification', {
+            permission: 'default',
+            requestPermission: vi.fn(async () => {
+                order.push('permission');
+                return 'denied';
+            }),
+        });
+        Object.defineProperty(navigator, 'serviceWorker', {
+            value: { ready: Promise.resolve({ pushManager: { getSubscription: vi.fn().mockResolvedValue(null), subscribe: vi.fn() } }) },
+            configurable: true,
+        });
+        vi.stubGlobal('PushManager', class {});
+        const { result } = renderHook(() => usePushSubscription(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current.state).toBe('default'));
+        await result.current.enable();
+        expect(order).toEqual(['permission']);
+        expect(mockGetVapidPublicKey).not.toHaveBeenCalled();
+    });
+
     it('enable(): Notification.requestPermission default (not denied) sets state to default', async () => {
         // requestPermission returns 'default' — enable() sets state='default' and returns
         vi.stubGlobal('Notification', {
