@@ -171,7 +171,7 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
                         <ChartEmpty label="No failed checks in this window" sub="A Script step that goes red is counted here under its check." />
                     ) : (
                         <TableScroll label="Red checks by script">
-                            <Table size="small" aria-label="Red checks by script" sx={{ minWidth: 360 }}>
+                            <Table size="small" aria-label="Red checks by script" sx={{ minWidth: { xs: 0, sm: 360 } }}>
                                 <TableHead>
                                     <TableRow>
                                         <TableCell sx={HEAD_SX}>Check</TableCell>

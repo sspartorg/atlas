@@ -445,7 +445,9 @@ describe('NotificationsTab', () => {
             ...defaultHandlers
         );
         renderWithProviders(<NotificationsTab />);
-        await screen.findByText(/Browser Push/i);
+        await screen.findByText('Browser Push');
+        // Push follows the same switches and quiet hours as Telegram / Teams.
+        expect(screen.getByText(/follows the same per-event switches and quiet hours/)).toBeInTheDocument();
     });
 
     it('renders Telegram fields when provider=telegram and hides Webhook URL field', async () => {

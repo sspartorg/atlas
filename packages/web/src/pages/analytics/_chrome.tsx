@@ -604,7 +604,9 @@ export const LEGEND_PROPS = {
 };
 
 // Axis and tooltip formatters, named so every chart shares (and tests) one copy.
-export const usdTick = (v: number) => `$${v}`;
+// Compact so a fixed-width axis never clips: $950, $1.2k, $15k.
+export const usdTick = (v: number) =>
+    Math.abs(v) >= 1000 ? `$${Number((v / 1000).toFixed(v >= 10_000 ? 0 : 1))}k` : `$${v}`;
 export const hourTick = (v: number) => `${v}h`;
 export const tokenTick = (v: number) => formatTokenCount(v);
 export const usdTooltip = (v: unknown) => formatCostUsd(Number(v));

@@ -229,7 +229,7 @@ export function SpendTab({ window }: { window: AnalyticsWindow }) {
                             <BarChart data={series} margin={{ top: 4, right: 16, left: -12, bottom: 0 }}>
                                 <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={{ stroke: CHART_COLORS.rail }} tickLine={false} minTickGap={16} />
-                                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} tickFormatter={usdTick} />
+                                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={48} tickFormatter={usdTick} />
                                 <Tooltip {...TOOLTIP_STYLE} formatter={usdTooltip} />
                                 <Legend {...LEGEND_PROPS} />
                                 <Bar dataKey="agentic" name="Agent runs" stackId="s" fill={CHART_COLORS.cost} stroke={ATLAS_PALETTE.white} strokeWidth={1} maxBarSize={22} />
@@ -272,7 +272,7 @@ export function SpendTab({ window }: { window: AnalyticsWindow }) {
                             <BarChart data={savingsSeries} margin={{ top: 4, right: 16, left: -12, bottom: 0 }}>
                                 <CartesianGrid stroke={CHART_COLORS.grid} vertical={false} />
                                 <XAxis dataKey="label" tick={AXIS_TICK} axisLine={{ stroke: CHART_COLORS.rail }} tickLine={false} minTickGap={16} />
-                                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} tickFormatter={usdTick} />
+                                <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={48} tickFormatter={usdTick} />
                                 <Tooltip {...TOOLTIP_STYLE} formatter={usdTooltip} />
                                 <Bar dataKey="usd" name="Cache savings" fill={CHART_COLORS.cached} radius={[4, 4, 0, 0]} maxBarSize={22} />
                             </BarChart>
