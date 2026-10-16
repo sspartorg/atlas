@@ -3,6 +3,7 @@ import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
 import { plainNotice, notificationsService } from './notifications.js';
+import { broadcastSSE } from '../routes/events.js';
 import { closeTestDb, truncateAll, testDb } from '../../tests/_pg-db.js';
 import { insertItem, insertProject } from '../../tests/_items.js';
 
@@ -224,6 +225,24 @@ describe('notificationsService', () => {
 
         it('markRead returns false for missing id', async () => {
             expect(await notificationsService.markRead(9999)).toBe(false);
+        });
+    });
+
+    describe('log-only rows (in_app = false)', () => {
+        it('default to in_app; a log-only row stays out of the unread count and Mark All Read', async () => {
+            const feed = await notificationsService.create({ event_type: 'reminder', message: 'feed' });
+            vi.mocked(broadcastSSE).mockClear();
+            const logOnly = await notificationsService.create({ event_type: 'reminder', message: 'external only', in_app: false });
+            expect(feed.in_app).toBe(true);
+            expect(logOnly.in_app).toBe(false);
+            // The log refreshes, but no badge changed.
+            expect(vi.mocked(broadcastSSE).mock.calls.map((c) => c[0].type)).toEqual(['notification_created']);
+            await expect(notificationsService.countUnread()).resolves.toBe(1);
+            await expect(notificationsService.markAllRead()).resolves.toBe(1);
+            expect((await notificationsService.get(logOnly.id))!.read_at).toBeNull();
+            // The Notification Log (no filter) still lists both.
+            expect((await notificationsService.list()).map((n) => n.message).sort()).toEqual(['external only', 'feed']);
+            expect((await notificationsService.list({ in_app: true })).map((n) => n.message)).toEqual(['feed']);
         });
     });
 

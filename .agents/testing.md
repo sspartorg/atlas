@@ -164,6 +164,7 @@ The forensic audits (`pnpm e2e:forensic`, `e2e:functional`, `e2e:state-transitio
 
 - `pnpm e2e` â€” full headless suite (~7 minutes wall-clock)
 - `pnpm e2e:headed` â€” opens a browser window per spec; slower, useful for debugging
+- `pnpm e2e:live` â€” `e2e/live/` (tagged `@live`, skipped by `pnpm e2e` unless `E2E_LIVE=1`): quiet hours against the real clock and the real minute tick. Opens a window ending a minute or two out, holds a reminder / a failing workflow / MCP sends, and asserts a local HTTP receiver gets exactly one Teams Adaptive Card POST (then one Telegram Bot API `sendMessage`) per message once it ends, plus a **Skipped** row for a toggle turned off while held. ~6 minutes; same e2e stack and teardown
 - `pnpm e2e:update-snapshots` â€” re-baseline visual snapshots (currently off; turn on when spec set grows)
 - `pnpm e2e:report` â€” opens the HTML report after a run
 - `pnpm gate:full` â€” `pnpm gate` + `pnpm e2e` together (long, for pre-release)

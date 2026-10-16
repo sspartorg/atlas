@@ -100,7 +100,7 @@ async function fetchSettings(): Promise<ISettings> {
 // route — the redacted `fetchSettings()` shape is what the wire sees.
 // Callers are limited to server-side code that needs the plaintext value
 // to actually deliver a notification (the Teams/Telegram transports and
-// the `sendExternalNotification` orchestrator). Any new caller should be
+// the `transportSend` orchestrator). Any new caller should be
 // audited during code review — a leak here re-opens the exact hole the
 // Batch-9 read-model change closed.
 async function fetchSettingsWithSecrets(): Promise<ISettings> {

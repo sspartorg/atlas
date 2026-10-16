@@ -32,7 +32,7 @@ One-page reminder list with create, edit, pause / resume, snooze, cancel and del
 
 ## Modals / drawers
 - `NewReminderModal` (`pages/reminders/NewReminderModal.tsx`), mounted only while open:
-  - **Label** (required, max 200) · **Body** (optional) · **Schedule** `Once` (datetime-local) / `Daily` (time) / `Weekly` (time + weekdays) / `Cron` (expression) · **Channel** In-app / External Notification / Both.
+  - **Label** (required, max 200) · **Body** (optional) · **Schedule** `Once` (datetime-local) / `Daily` (time) / `Weekly` (time + weekdays) / `Cron` (expression) · **Channel** In-app / External Notification / Both. **External Notification** alone means no in-app feed card: the fire's row is log-only (`in_app=false`) — on the Notification Log and the fire log, not the feed, the unread badge or web push.
   - Doubles as the **edit** modal (`editing` prop → `PATCH`).
 - Cancel and Delete confirmation dialogs (`ConfirmDialog` in `Reminders.tsx`).
 
@@ -55,6 +55,7 @@ One-page reminder list with create, edit, pause / resume, snooze, cancel and del
 - `crud_reminder` — `op: create | update | cancel | pause | resume | snooze` (snooze takes `minutes`).
 
 ## Also on the Notifications page
+- An external-only reminder's fires show on the Notification Log tab only (held / sent / failed like any outward send), not in the In-App Feed.
 - An in-app feed card for a reminder fire (`notifications.reminder_id` set) carries a **Snooze reminder** button instead of the chevron: the same three snooze choices plus **Open Reminders**. Snoozing marks the card read. The card itself isn't a button there (it holds one). Older reminder rows without `reminder_id` stay plain link cards.
 
 ## Permissions / guards
@@ -63,6 +64,7 @@ One-page reminder list with create, edit, pause / resume, snooze, cancel and del
 - Only `active` rows fire; paused rows are skipped and the claim CAS also requires `status='active'`.
 
 ## Edge cases / quirks
+- A reminder has no event key, so Settings → Notifications toggles never hold back or skip its external send; only quiet hours delay it.
 - Resume recomputes `next_fire_at` from now — slots missed while paused are not replayed.
 - A snoozed recurring reminder fires once at the snooze time, then returns to its schedule.
 - A reminder firing doesn't block agent dispatch and vice versa (same minute tick).

@@ -368,10 +368,11 @@ async function fireOne(r: IReminder): Promise<void> {
     // `claimReminder`. Never call this without a successful claim; doing
     // so re-introduces the double-fire race the claim was written to
     // close.
-    // Every channel gets a notifications row: the in-app feed shows it, and an
-    // external send needs it to track delivery (and to be held through quiet
-    // hours). `create()` broadcasts `notification_created` itself. The row's
-    // reminder_id is the fire log.
+    // Every channel gets a notifications row: an external send needs it to
+    // track delivery (and to be held through quiet hours), and its
+    // reminder_id is the fire log. An external-only reminder's row is
+    // log-only (`in_app: false`): Notification Log yes, feed / badge / push no.
+    // `create()` broadcasts `notification_created` itself.
     const message = r.body ? `${r.label}: ${r.body}` : r.label;
     const n = await notificationsService.create({
         event_type: 'reminder',
@@ -382,9 +383,8 @@ async function fireOne(r: IReminder): Promise<void> {
         project_id: null,
         link_url: '/reminders',
         reminder_id: r.id,
+        in_app: r.channel !== 'external',
     });
-    // ponytail: an external-only reminder still lands in the in-app feed (it
-    // always did, via the same row); a per-row "hide from feed" flag would fix it.
     if (r.channel === 'external' || r.channel === 'both') {
         try {
             await sendExternalForNotification(n.id, message);

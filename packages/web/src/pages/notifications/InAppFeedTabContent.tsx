@@ -27,7 +27,10 @@ interface Props {
     agents: AgentSummary[];
 }
 
-export function InAppFeedTabContent({ allRows, agents }: Props) {
+export function InAppFeedTabContent({ allRows: pageRows, agents }: Props) {
+    // Both tabs share one feed; log-only rows (external-only reminders, MCP
+    // sends) belong to the Notification Log alone.
+    const allRows = useMemo(() => pageRows.filter((r) => r.in_app), [pageRows]);
     const navigate = useNavigate();
     const [filter, setFilter] = useState<Filter>('all');
     // Tick every minute so the relative time on each row ages forward.

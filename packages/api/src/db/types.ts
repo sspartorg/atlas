@@ -696,6 +696,11 @@ export interface NotificationsTable {
     link_url: StrN;
     external_deferred_at: TSn;
     reminder_id: ColumnType<number | null, number | null | undefined, number | null>;
+    // Migration 013.
+    external_event_key: StrN;
+    external_claimed_at: TSn;
+    external_reclaimed: ColumnType<boolean, boolean | undefined, boolean>;
+    in_app: ColumnType<boolean, boolean | undefined, boolean>;
     created_at: CreatedAt;
 }
 

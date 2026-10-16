@@ -54,7 +54,7 @@ export const telegramTransport: ExternalNotificationTransport = {
         !!s.external_notification_token && !!s.external_notification_chat_id,
 
     async send(message: string, s): Promise<void> {
-        // Settings arrive pre-decrypted from `sendExternalNotification`
+        // Settings arrive pre-decrypted from `transportSend`
         // — no local DB roundtrip. See ExternalNotificationTransport.send
         // for the rationale (single-fetch invariant + race-window fix).
         const config = getTransportCredentials(s);

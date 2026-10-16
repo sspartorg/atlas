@@ -1479,6 +1479,9 @@ async function oldestReadyItem(workflowId: string, readyByLastFire: boolean): Pr
             ),
         )
         .orderBy('i.updated_at', 'asc')
+        // Items updated in one statement share updated_at; without a tie-break
+        // the pick followed the plan (index vs heap order) and was not FIFO.
+        .orderBy('i.id', 'asc')
         .limit(1);
     if (readyByLastFire) {
         q = q.where(sql<boolean>`i.updated_at <= (SELECT w.last_run_at FROM workflows w WHERE w.id = ${workflowId})`);

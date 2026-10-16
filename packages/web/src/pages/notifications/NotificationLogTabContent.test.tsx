@@ -651,6 +651,47 @@ describe('NotificationLogTabContent', () => {
         });
     });
 
+    describe('skipped while held (event turned off before the window ended)', () => {
+        const skipped = makeNotification({
+            id: 90,
+            external_status: 'none',
+            failure_reason: 'Skipped: event turned off while held',
+            message: 'Run failed overnight',
+        });
+        const cancelled = makeNotification({ id: 91, external_status: 'none', message: 'Cancelled one' });
+
+        it('stays in the log with a Skipped chip, its reason and Send now; a cancelled row does not', () => {
+            renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[skipped, cancelled]} />);
+            expect(screen.getByText('Run failed overnight')).toBeInTheDocument();
+            expect(screen.getByText('Skipped')).toBeInTheDocument();
+            expect(screen.getByText(/Skipped: event turned off while held/)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
+            expect(screen.queryByText('Cancelled one')).not.toBeInTheDocument();
+        });
+
+        it('mobile: the card shows the chip and the reason', () => {
+            const restore = mockMobileViewport();
+            try {
+                renderWithProviders(<NotificationLogTabContent settings={settings} allRows={[skipped]} />);
+                const card = screen.getByTestId('notification-card');
+                expect(card).toHaveTextContent('Skipped');
+                expect(card).toHaveTextContent('Skipped: event turned off while held');
+                expect(screen.getAllByRole('button', { name: 'Send now' })).toHaveLength(1);
+            } finally {
+                restore();
+            }
+        });
+    });
+
+    it('lists log-only rows (in_app=false) like any other send', () => {
+        const rows = [
+            makeNotification({ id: 95, event_type: 'mcp_external', external_status: 'sent', in_app: false, message: 'Digest from Claude' }),
+        ];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        expect(screen.getByText('Digest from Claude')).toBeInTheDocument();
+        expect(screen.getByText('Sent by Claude')).toBeInTheDocument();
+    });
+
     it('mobile: each status gets exactly one action in the fixed zone', () => {
         const restore = mockMobileViewport();
         try {

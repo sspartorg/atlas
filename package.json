@@ -33,6 +33,7 @@
     "coverage:assertion-density": "tsx tools/coverage/assertion-density.ts",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
+    "e2e:live": "cross-env E2E_LIVE=1 playwright test e2e/live --project=chromium",
     "e2e:update-snapshots": "playwright test --update-snapshots",
     "e2e:report": "playwright show-report",
     "e2e:seed": "tsx e2e/fixtures/run-seed.ts",

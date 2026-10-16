@@ -1090,6 +1090,10 @@ export interface INotification {
     /** The reminder whose fire produced this row; null for every other
      *  producer, and for reminder fires from before the fire log. */
     reminder_id: number | null;
+    /** False for rows that only track an outward send (an external-only
+     *  reminder, an MCP `send-external`): they show in the Notification Log,
+     *  never in the In-App Feed or the unread count. */
+    in_app: boolean;
     created_at: string;
 }
 

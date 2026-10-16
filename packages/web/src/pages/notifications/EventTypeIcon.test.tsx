@@ -25,6 +25,7 @@ describe('EventTypeIcon', () => {
         ['ci_failed', 'bug_report'],
         ['reminder', 'alarm'],
         ['jira_sync', 'sync_alt'],
+        ['mcp_external', 'send'],
         ['terminal.waiting_for_input', 'terminal'],
         ['autofetch_success', 'sync'],
         ['autofetch_skipped', 'sync_disabled'],

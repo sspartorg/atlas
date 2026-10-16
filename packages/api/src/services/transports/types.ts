@@ -10,7 +10,7 @@ export interface ExternalNotificationTransport {
      * Deliver the message via this transport. Throws on transport-level failure.
      *
      * The `settings` argument carries the already-decrypted plaintext token /
-     * webhook URL. The orchestrator (`sendExternalNotification`) fetches
+     * webhook URL. The orchestrator (`transportSend`) fetches
      * via `settingsService.getWithSecrets()` once and threads the result
      * down so the transport doesn't hit the DB a second time. Passing the
      * same object also closes a narrow race window where the Owner could
@@ -25,7 +25,7 @@ export interface ExternalNotificationTransport {
      * indistinguishable from misconfiguration). Persists `last_test_ok` +
      * `endpoint_label` via `settingsService.recordExternalNotificationTest`.
      * Fetches its own settings — the Send Test button is not routed through
-     * `sendExternalNotification`.
+     * `transportSend`.
      */
     test(): Promise<{ ok: boolean; error?: string; endpoint_label?: string | null }>;
 }

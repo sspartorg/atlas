@@ -38,7 +38,7 @@ export const teamsTransport: ExternalNotificationTransport = {
     isConfigured: (s) => !!s.external_notification_webhook_url,
 
     async send(message: string, s): Promise<void> {
-        // Settings arrive pre-decrypted from `sendExternalNotification`
+        // Settings arrive pre-decrypted from `transportSend`
         // — no local DB roundtrip. See ExternalNotificationTransport.send
         // for the rationale (single-fetch invariant + race-window fix).
         if (!s.external_notification_webhook_url) return;

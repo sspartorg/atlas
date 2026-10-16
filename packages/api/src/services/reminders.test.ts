@@ -180,8 +180,9 @@ describe('remindersService.fireDueReminders — fires with external channel (fir
         `.execute(testDb);
 
         await remindersService.fireDueReminders(new Date());
-        // external channel: creates a notification row, then calls sendExternalForNotification
-        expect(notificationsService.create).toHaveBeenCalled();
+        // external channel: a log-only row (kept for the log + fire log, out
+        // of the feed), then sendExternalForNotification
+        expect(notificationsService.create).toHaveBeenCalledWith(expect.objectContaining({ in_app: false, reminder_id: expect.any(Number) }));
         expect(sendExternalForNotification).toHaveBeenCalled();
     });
 });
@@ -199,8 +200,8 @@ describe('remindersService.fireDueReminders — fires with both channel (fireOne
         `.execute(testDb);
 
         await remindersService.fireDueReminders(new Date());
-        // both channel: notification + external call
-        expect(notificationsService.create).toHaveBeenCalled();
+        // both channel: a feed notification + external call
+        expect(notificationsService.create).toHaveBeenCalledWith(expect.objectContaining({ in_app: true }));
         expect(sendExternalForNotification).toHaveBeenCalled();
     });
 });

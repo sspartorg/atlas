@@ -35,9 +35,11 @@ export function NotificationLogTabContent({ settings, allRows }: Props) {
     const [filter, setFilter] = useState<Filter>('all');
 
     // Parent fetches the 200-row dataset once; we filter client-side here so
-    // the per-filter server round-trip is gone.
+    // the per-filter server round-trip is gone. A `none` row with a reason was
+    // skipped at the flush (its event was turned off while held) — it stays in
+    // the log so the hold doesn't just vanish.
     const externalRows = useMemo(
-        () => allRows.filter((r) => r.external_status !== 'none'),
+        () => allRows.filter((r) => r.external_status !== 'none' || isSkipped(r)),
         [allRows]
     );
     const counts = useMemo(() => {
@@ -276,7 +278,7 @@ function useRowActions(row: INotification) {
     };
 }
 
-/** Sent → Resend, Failed → Retry, Pending (held or in flight) → Cancel. */
+/** Sent → Resend, Failed → Retry, Skipped → Send now, Pending (held or in flight) → Cancel. */
 function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium' }) {
     const a = useRowActions(row);
     const spec =
@@ -304,7 +306,15 @@ function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium'
                       busy: a.cancelPending,
                       color: ATLAS_PALETTE.slate60,
                   }
-                : null;
+                : isSkipped(row)
+                  ? {
+                        label: 'Send now',
+                        icon: <SendRounded />,
+                        onClick: a.resend,
+                        busy: a.resendPending,
+                        color: ATLAS_PALETTE.slate60,
+                    }
+                  : null;
     if (!spec) return null;
     return (
         <Tooltip title={spec.label}>
@@ -325,6 +335,10 @@ function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium'
 
 const isHeld = (row: INotification) =>
     row.external_status === 'pending' && row.external_deferred_at !== null;
+const isSkipped = (row: INotification) => row.external_status === 'none' && row.failure_reason !== null;
+/** The reason line under the message: why it failed, or why it was skipped. */
+const reasonOf = (row: INotification) =>
+    row.external_status === 'failed' || isSkipped(row) ? row.failure_reason : null;
 
 function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil: string | null }) {
     const meta = getEventMeta(row.event_type);
@@ -333,7 +347,7 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
         <NotificationCard
             icon={<EventTypeIcon eventType={row.event_type} size={32} />}
             title={meta.label}
-            chip={<StatusChip status={row.external_status} held={held} />}
+            chip={<StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} />}
             message={row.message}
             meta={
                 <>
@@ -347,7 +361,8 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
                     {held && heldUntil && ` · sends ${heldUntil}`}
                 </>
             }
-            alert={row.external_status === 'failed' ? row.failure_reason : null}
+            alert={reasonOf(row)}
+            alertMuted={isSkipped(row)}
             action={<RowAction row={row} size="medium" />}
             tone={held ? 'held' : 'default'}
         />
@@ -455,24 +470,25 @@ function NotificationLogRow({
                 >
                     {row.message}
                 </Typography>
-                {row.external_status === 'failed' && row.failure_reason && (
+                {reasonOf(row) && (
                     <Typography
                         sx={{
                             fontFamily: MONO,
                             fontSize: 11,
-                            color: ATLAS_PALETTE.error,
+                            color: isSkipped(row) ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.error,
                             mt: 0.5,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                         }}
                     >
-                        ⚠ {row.failure_reason}
+                        {isSkipped(row) ? '' : '⚠ '}
+                        {row.failure_reason}
                     </Typography>
                 )}
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                <StatusChip status={row.external_status} held={held} />
+                <StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} />
                 {held && heldUntil && (
                     <Typography
                         sx={{ fontFamily: MONO, fontSize: 10, color: ATLAS_PALETTE.slate60 }}
@@ -491,13 +507,17 @@ function NotificationLogRow({
 function StatusChip({
     status,
     held = false,
+    skipped = false,
 }: {
     status: NotificationDeliveryStatus;
     held?: boolean;
+    skipped?: boolean;
 }) {
     const style = held
         ? { label: 'Held · quiet hours', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
-        : status === 'sent'
+        : skipped
+          ? { label: 'Skipped', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 }
+          : status === 'sent'
           ? { label: 'Sent', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg }
           : status === 'failed'
             ? { label: 'Failed', bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg }

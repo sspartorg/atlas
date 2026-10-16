@@ -325,11 +325,14 @@ Fields: `id, project_id, title, body_md, applies_to, icon, enabled, sort_order, 
 
 Delivery queue for external notification + in-app notifications.
 
-Fields: `id, kind, issue_type, issue_id, project_id, message, event_type, agent_id, external_status, failure_reason, push_status, push_failure_reason, read_at, link_url, external_deferred_at, reminder_id, created_at`
+Fields: `id, kind, issue_type, issue_id, project_id, message, event_type, agent_id, external_status, failure_reason, push_status, push_failure_reason, read_at, link_url, external_deferred_at, reminder_id, in_app, created_at`
 
 - `kind` âˆˆ `needs_you | update | system`
 - `external_status` âˆˆ `none | pending | sent | failed`. `pending` + non-null `external_deferred_at` = held by quiet hours until the window ends (migration 010).
 - `link_url` — where a click opens; stamped at create time (`notificationLinkUrl` in @atlas/shared).
+- `in_app` (migration 013, default true) — false for a log-only row: an external-only reminder fire or an MCP `send-external` (`event_type='mcp_external'`). It shows in the Notification Log and the reminder fire log, never in the In-App Feed, the unread count or Mark All Read, and gets no web push.
+- `external_status='none'` with a `failure_reason` = **skipped**: held through quiet hours, but its event toggle was off when the window ended ("Skipped: event turned off while held").
+- DB-only columns (not on `INotification`, migration 013): `external_event_key` (the key a hold was raised under, re-checked at the flush), `external_claimed_at` / `external_reclaimed` (in-flight claim; a claim older than 10 minutes is retried once, then the row is failed).
 - `reminder_id` — the reminder whose fire produced the row (FK `ON DELETE SET NULL`, migration 011); null for every other producer and for fires before the log. It is the reminder fire log and lets the feed snooze from the card.
 - `event_type` âˆˆ external notification event keys (see below)
 

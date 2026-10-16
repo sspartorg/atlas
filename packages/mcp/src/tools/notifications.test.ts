@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { registerNotificationTools } from './notifications.js';
+import { NOTIFICATION_TOOLS, registerNotificationTools } from './notifications.js';
 import type { IApiClient } from '../api-client.js';
 
 type Handler<T = unknown> = (input: T) => Promise<CallToolResult>;
@@ -65,6 +65,20 @@ describe('registerNotificationTools', () => {
             expect(sendExternalNotification).toHaveBeenCalledWith({ message: 'hi' });
             const parsed = parseToolResult<{ ok: boolean }>(result);
             expect(parsed.ok).toBe(true);
+        });
+
+        it('relays a held send (quiet hours) and says so in its description', async () => {
+            const { server, tools } = captureServer();
+            const held = { ok: true, sent: false, held: true, notification_id: 9, external_status: 'pending' };
+            registerNotificationTools(
+                server,
+                makeFakeApiClient({ sendExternalNotification: vi.fn().mockResolvedValue(held) }),
+            );
+            const tool = NOTIFICATION_TOOLS.find((t) => t.name === 'sendExternalNotification')!;
+            expect(tool.description).toMatch(/held and sent when the window ends/);
+            expect(tool.description).toMatch(/Notification Log, not the in-app feed/);
+            const result = await tools.get('sendExternalNotification')!.handler({ message: 'night' });
+            expect(parseToolResult(result)).toEqual(held);
         });
 
         it('forwards event_key when provided', async () => {
