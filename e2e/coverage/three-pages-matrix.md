@@ -35,7 +35,9 @@ Abbreviations for the files used most:
 | u:api-N | `packages/api/src/services/notifications.test.ts`, `.../external-notifications.test.ts`, `packages/api/src/routes/notifications.test.ts` |
 | u:api-R | `packages/api/src/routes/reminders.test.ts`, `.../services/reminders.test.ts`, `.../reminders-lifecycle.test.ts` |
 | u:EventTypeIcon, u:Sidenav, u:NotificationStatusPopover, u:useSSE, u:_chrome | the matching `*.test.ts(x)` beside each component / hook in `packages/web/src` |
-| u:api-A | `packages/api/src/routes/analytics.test.ts`, `.../services/analytics-delivery.test.ts`, `.../analytics-workflows.test.ts` |
+| u:api-A | `packages/api/src/routes/analytics.test.ts`, `.../services/analytics-delivery.test.ts`, `.../analytics-workflows.test.ts`, `.../analytics-spend.test.ts` |
+| u:api-delivery, u:api-workflows, u:api-spend | `packages/api/src/services/analytics-{delivery,workflows,spend}.test.ts` (part of u:api-A) |
+| u:_depth | `packages/web/src/pages/analytics/_depth.test.tsx` |
 
 ## 1. Notifications — data variants
 
@@ -44,7 +46,7 @@ Abbreviations for the files used most:
 | # | event_type | Label · icon | Target | Tests | Before |
 |---|---|---|---|---|---|
 | N1 | `workflow_run` (link_url) | Workflow · workflow | `/workflows/:id/runs/:runId` | NF "each renders its icon and label…"; NM routing; u:EventTypeIcon | yes |
-| N2 | `agent_completed` (task item) | Agent Completed · task_alt | `/tasks/:id` | NF same | gap |
+| N2 | `agent_completed` (direct agent run on an item, re-added 2026-10-17) | Agent Completed · task_alt | `/tasks/:id` | NF same; u:`agent-run-trace.integration.test.ts` | gap |
 | N3 | `agent_completed_no_item` | Agent Run Finished · task_alt | `/agents/:id/runs/:runId` | NF same | gap |
 | N4 | `agent_error` (sub-task item) | Agent Failed · error | `/sub-tasks/:id` | NF same | gap |
 | N5 | `agent_error_no_item` | Agent Run Failed · error | `/agents/:id/runs/:runId` | NF same | gap |
@@ -113,7 +115,19 @@ Abbreviations for the files used most:
 | N63 | SSE: new row + badge arrive without reload | NF live "a workflow park arrives over SSE…"; u:useSSE | gap |
 | N64 | Topbar pill + popover: provider, endpoint / untested / none, unread count, Open notifications, Settings, Escape | NF "Mark All Read…", "the popover names…"; A11 keyboard; u:NotificationStatusPopover | gap |
 | N65 | Sidenav badge count / hidden at 0 | NF; u:Sidenav | partial |
-| N66 | Phone cards (3-zone grid), icon header buttons | NM | yes |
+| N66 | Phone cards (3-zone grid; title full width, status chip + "sends HH:MM" on their own line, nothing escapes the card, title and chip never overlap), icon header buttons on the title row — at 390 and 360px, plus the iPad project (834px) | NM; `packages/web/src/pages/notifications/NotificationCard.test.tsx`; `packages/web/src/components/PageHeader.test.tsx` | yes |
+
+### 1.6 Outward routing (added 2026-10-17)
+
+| # | Rule | Tests |
+|---|---|---|
+| N70 | Telegram gets plain text (no `parse_mode`), ≤ 4096 chars; the e2e fake Bot API 400s unbalanced Markdown like the real one | u:`transports/telegram.test.ts`; NF "a park and the finish both reach Telegram verbatim…" |
+| N71 | A real workflow park and its finish both go outward (needs-you + `workflow.finished`) | NF same; u:`workflow-engine.integration.test.ts` delivery modes |
+| N72 | Each producer passes its own toggle key (CI, auto-fetch incl. pre-checks, reminders, standalone failure, item-run finish) | u:`ci-follow-through.test.ts`, `auto-fetch-runner.integration.test.ts`, `agent-run-trace.integration.test.ts`, `external-notifications.test.ts` "every event key honours its own toggle" |
+| N73 | Toggle off → Log shows Skipped + `"<title>" is turned off in Settings`, Send now sends | NF "a finish whose toggle is off…"; u:`external-notifications.test.ts` |
+| N74 | Web push: toggle off → not pushed; quiet hours → held, flushed after, re-checks toggle | u:`web-push.test.ts` "web push follows the outward rules" |
+| N75 | Midnight renders 00:00 (hourCycle h23) in the quiet-hours compare | u:`external-notifications.test.ts` |
+| N76 | Settings lists every outward event switch | NF "Settings lists every outward event…" |
 
 ## 2. Settings → Notifications
 
@@ -185,7 +199,7 @@ Abbreviations for the files used most:
 | R44 | An open Reminders page follows a fire without refresh | RF "an open Reminders page follows a fire…"; u:useSSE | gap |
 | R45 | Loading skeleton; load error `Alert` (not the empty hero) | RF "a failed load…"; u:R | new |
 | R46 | Empty state hero | `e2e/pages/reminders.spec.ts`; RF | yes |
-| R47 | Phone card layout, FAB | RM | yes |
+| R47 | Phone card layout, FAB; header actions (Refresh + History switch) on the title row; ≥8px between cards; ⋮ never touches the expand chevron; fire log entries two lines (date, then push / external chips; reason clamped, tap to expand), never overlapping — at 390 and 360px, plus the iPad project (834px) | RM; u:R | yes |
 
 ## 4. Analytics
 
@@ -241,6 +255,23 @@ Abbreviations for the files used most:
 | A62 | Workflows 500 → "Could not load workflow analytics: …" | AF | gap |
 | A63 | Spend 500 → "Could not load spend: …"; other tabs still work | AF | gap |
 | A64 | Project 500 / 404, Task 404 / not-a-task | AF "drill-downs…" | gap |
+
+### 4.6 Trends, flow, quality and cost efficiency (2026-10-16)
+
+| # | Item | Tests | Before |
+|---|---|---|---|
+| A70 | Every tile (Overview 6, Delivery 13, Workflows 5, Spend 4): Δ vs the previous equal-length window (▲/▼, green when good news for that metric, points for rates, "—" with no earlier data) and a labelled sparkline of the per-bucket series | AF "every tile compares with the previous window…"; AR "every tile's trend…" (Tasks shipped delta = SQL, all windows); u:_depth (Sparkline, StatTile trend); u:api delivery/workflows/spend `trends` (exact series) | new |
+| A71 | Flow efficiency (In progress + In review ÷ all status time before first Done, shipped Tasks) | AR (SQL, 4 windows); AF definition + value; AB "—"; u:api-delivery 37200/127800 | new |
+| A72 | Your response to parks (park → run's next resume; p50 / p90; sub-task copies and agent tests out; open parks counted) | AR (SQL median, 4 windows); AF; AB "—", "no parks"; u:api-delivery 2h / 18720s | new |
+| A73 | Weekly throughput (Tasks shipped ÷ window weeks; sparkline per Monday week) | AR; AF; AB "0.0"; u:api-delivery 56/13 | new |
+| A74 | Rework after Done (shipped Tasks that left Done again by the window end) | AR; AF; AB "—"; u:api-delivery 1 of 4 | new |
+| A75 | First-attempt merges (runs whose every PR merged with no retried step and no park in the tree) | AR (SQL, 4 windows); AF; AB "—", "no merged runs"; u:api-delivery 1 of 3 | new |
+| A76 | Retries per Task (retries ÷ distinct Tasks worked; a sub-task's run counts for its Task) | AR; AF; AB "—", "no Tasks worked"; u:api-workflows 2 ÷ 2 | new |
+| A77 | Red checks by script table (failures, run trees, last failed; top 10) | AR (rows = SQL); AF; AB "No failed checks in this window"; u:api-workflows, u:_depth | new |
+| A78 | Agents: cost vs first-attempt success scatter (a comparison, not a ranking, ADR 0023) | AF (one dot per agent); AB "No agent steps in this window"; u:_depth | new |
+| A79 | Cost per PR and per shipped Task, by workflow and by model | AR (per-PR column = SQL, 4 windows); AF; AB "No workflow runs in this window"; u:api-spend exact rows; u:_depth | new |
+| A80 | Cache savings per day / week chart | AF; AB "No cache savings in this window"; u:api-spend 5.6 | new |
+| A81 | No sideways page scroll at 390px on any tab | AF "nothing scrolls sideways at 390px" | new |
 
 ## 5. Everywhere (all three pages + Settings → Notifications + drill-downs)
 

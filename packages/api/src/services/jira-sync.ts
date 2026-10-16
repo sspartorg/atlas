@@ -1455,6 +1455,7 @@ async function recordSync(ok: boolean, message: string, stampSyncTime: boolean):
         const n = await notificationsService.create({
             event_type: 'jira_sync',
             message: `Jira sync failed: ${text}`,
+            event_key: 'jira.sync_failed',
             kind: 'needs_you',
             agent_id: null,
             link_url: '/settings?tab=jira',

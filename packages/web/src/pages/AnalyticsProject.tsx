@@ -173,24 +173,20 @@ export function AnalyticsProject() {
                     label="Total spend"
                     value={formatCostUsd(combinedCost)}
                     sub={`${formatCostUsd(data.totals.total_cost_usd)} agentic · ${formatCostUsd(terminalSummary.total_cost_usd)} terminal`}
-                    accent={CHART_PALETTE.output}
                 />
                 <MetricMarquee
                     label="Agentic runs"
                     value={data.totals.run_count.toLocaleString()}
                     sub={`${sessionCount.toLocaleString()} terminal session${sessionCount === 1 ? '' : 's'}`}
-                    accent={ATLAS_PALETTE.gold}
                 />
                 <MetricMarquee
                     label="Tasks"
                     value={data.task_count.toLocaleString()}
-                    accent={ATLAS_PALETTE.green}
                 />
                 <MetricMarquee
                     label="Avg cost / activity"
                     value={totalActivity > 0 ? formatCostUsd(avgCostPerActivity) : '—'}
                     sub="blended across runs + sessions"
-                    accent={CHART_PALETTE.terminal}
                 />
             </Hero>
 
@@ -428,7 +424,7 @@ export function AnalyticsProject() {
                                         position: 'relative',
                                         height: 8,
                                         borderRadius: '999px',
-                                        background: `color-mix(in srgb, ${CHART_PALETTE.cost} 8%, transparent)`,
+                                        background: ATLAS_PALETTE.slate06,
                                         overflow: 'hidden',
                                     }}
                                 >
@@ -437,7 +433,7 @@ export function AnalyticsProject() {
                                             position: 'absolute',
                                             inset: 0,
                                             width: `${Math.max(2, pct)}%`,
-                                            background: `linear-gradient(90deg, ${CHART_PALETTE.cost} 0%, ${CHART_PALETTE.output} 100%)`,
+                                            background: ATLAS_PALETTE.brandBlue,
                                             borderRadius: '999px',
                                         }}
                                     />

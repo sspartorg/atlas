@@ -8,7 +8,7 @@ import { costRollupForRoot, costRowsForRoot } from '../services/item-cost-tree.j
 import { countShippedTasks, deliveryAnalytics } from '../services/analytics-delivery.js';
 import { workflowAnalytics } from '../services/analytics-workflows.js';
 import { normalizeTz, notTestRun, resolveWindow } from '../services/analytics-window.js';
-import { lookupClaudePrices } from '../services/claude-model-pricing.js';
+import { cacheSavings, spendInsight } from '../services/analytics-spend.js';
 import type { ItemType } from '../db/types.js';
 
 // Cost data changes only when a run completes, which fires an SSE event that
@@ -97,18 +97,6 @@ async function fetchSubagentsBySession(
 // The base summary keeps its lenient tz (an unknown zone reads as UTC, as it
 // always has); only `window` is validated.
 const SummaryWindowSchema = z.object({ window: z.enum(ANALYTICS_WINDOWS).default('month') });
-
-/** Cache reads cost a fraction of fresh input; the saving is the difference, priced per model. */
-function cacheSavings(rows: Array<{ model: string | null; cache_read_tokens: number }>) {
-    let usd = 0;
-    let unpriced = 0;
-    for (const r of rows) {
-        const p = r.model ? lookupClaudePrices(r.model) : null;
-        if (p) usd += (r.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
-        else unpriced += r.cache_read_tokens;
-    }
-    return { usd, unpriced };
-}
 
 /**
  * One page of a project's Tasks, each rolled up over its whole sub-task tree
@@ -488,7 +476,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                     .execute(),
             ]);
 
-        const [prevAgent, prevTerminal, agentByModel, terminalByModel, shippedTasks] = await Promise.all([
+        const [prevAgent, prevTerminal, agentByModel, terminalByModel, shippedTasks, insight] = await Promise.all([
             db
                 .selectFrom('agent_runs')
                 .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
@@ -532,6 +520,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 .groupBy(['cli', 'model'])
                 .execute(),
             countShippedTasks(win.start, win.end),
+            spendInsight(win),
         ]);
         const byModel = [
             ...agentByModel.map((r) => ({ source: 'agentic' as const, r })),
@@ -658,6 +647,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
             cache_savings_usd: savings.usd,
             cache_savings_unpriced_tokens: savings.unpriced,
             shipped_tasks: shippedTasks,
+            ...insight,
             summary: {
                 total_cost_usd: Number(summaryRow?.total_cost_usd ?? 0),
                 input_tokens: inputTok,

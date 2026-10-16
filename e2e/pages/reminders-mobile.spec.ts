@@ -3,8 +3,10 @@ import AxeBuilder from '@axe-core/playwright';
 import { goto } from '../helpers/nav.js';
 import { API, apiGet, apiPost } from '../helpers/api.js';
 import { setThemeMode } from '../helpers/theme.js';
+import { expectActionsOnTitleRow, expectBoxesContainTheirContent, intersects, noHorizontalOverflow } from '../helpers/layout.js';
 
-// Reminders against the real e2e API: the phone card (390px, `mobile-chrome`),
+// Reminders against the real e2e API: the phone card (390px `mobile-chrome`, and
+// 360px via setViewportSize; 834px on `ipad-chrome`),
 // the desktop grid, pause / resume / snooze / delete through the row menu, the
 // lazy fire log, and an axe pass in light and dark with history on.
 
@@ -97,7 +99,82 @@ for (const tag of ['', ' @mobile']) {
     });
 }
 
+// The fire log comes from a fixture: producing real fires needs the minute tick.
+const FIRES = [
+    {
+        notification_id: 3,
+        fired_at: new Date(Date.now() - 3_600_000).toISOString(),
+        push_status: 'sent',
+        external_status: 'failed',
+        failure_reason:
+            'Telegram: Forbidden: bot was blocked by the user, and this reason is long enough to need truncating on a phone',
+    },
+    { notification_id: 2, fired_at: new Date(Date.now() - 90_000_000).toISOString(), push_status: 'sent', external_status: 'sent', failure_reason: null },
+    { notification_id: 1, fired_at: new Date(Date.now() - 180_000_000).toISOString(), push_status: 'none', external_status: 'pending', failure_reason: null },
+];
+
+async function layoutChecks(page: Page): Promise<void> {
+    await expectActionsOnTitleRow(page);
+    await noHorizontalOverflow(page);
+    await expectBoxesContainTheirContent(page.getByTestId('reminder-row'));
+
+    // Live and history cards keep at least 8px between them.
+    const boxes = await page.getByTestId('reminder-row').evaluateAll((els) =>
+        els.map((el) => {
+            const r = el.getBoundingClientRect();
+            return { top: r.top, bottom: r.bottom };
+        }),
+    );
+    for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i]!.top - boxes[i - 1]!.bottom, `gap above card ${i}`).toBeGreaterThanOrEqual(8);
+    }
+
+    // The expand chevron and the ⋮ button never touch.
+    const hist = row(page, OLD);
+    const chevron = await hist.getByTestId(/ExpandMoreRoundedIcon/).boundingBox();
+    const kebab = await hist.getByRole('button', { name: `Actions for ${OLD}` }).boundingBox();
+    expect(chevron && kebab).toBeTruthy();
+    expect(intersects(chevron!, kebab!), `chevron ${JSON.stringify(chevron)} kebab ${JSON.stringify(kebab)}`).toBe(false);
+
+    // Fire log: one entry per fire — date on line 1, delivery chips on line 2 — none overlapping.
+    const fires = hist.getByTestId('reminder-fire');
+    await expect(fires).toHaveCount(FIRES.length);
+    const fireBoxes = await fires.evaluateAll((els) =>
+        els.map((el) => {
+            const r = el.getBoundingClientRect();
+            const [date, chips] = [...el.children].map((c) => c.getBoundingClientRect());
+            return { top: r.top, bottom: r.bottom, dateBottom: date!.bottom, chipsTop: chips!.top };
+        }),
+    );
+    for (const [i, f] of fireBoxes.entries()) {
+        expect(f.chipsTop, `fire ${i}: chips under the date`).toBeGreaterThanOrEqual(f.dateBottom - 1);
+        if (i > 0) expect(f.top, `fire ${i} starts below fire ${i - 1}`).toBeGreaterThanOrEqual(fireBoxes[i - 1]!.bottom - 1);
+    }
+    await expect(fires.first().getByText('Push sent')).toBeVisible();
+    await expect(fires.first().getByText('External failed')).toBeVisible();
+    // The reason is clamped to two lines; a tap shows the rest.
+    const reason = fires.first().getByRole('button', { name: /bot was blocked/ });
+    await expect(reason).toHaveAttribute('aria-expanded', 'false');
+    await reason.click();
+    await expect(reason).toHaveAttribute('aria-expanded', 'true');
+}
+
 test.describe('/reminders layout @mobile', () => {
+    for (const width of [390, 360]) {
+        test(`${width}px: header on one row, cards contained and spaced, fire log readable @mobile`, async ({
+            page,
+            request,
+        }) => {
+            await page.setViewportSize({ width, height: 844 });
+            await page.route(/\/api\/reminders\/\d+\/fires/, (r) => r.fulfill({ json: FIRES }));
+            await seed(request);
+            await goto(page, '/reminders');
+            await showHistory(page);
+            await row(page, OLD).getByRole('button', { name: /show fire log/ }).click();
+            await layoutChecks(page);
+        });
+    }
+
     test('390px: no horizontal overflow; history cards are full width with a readable label @mobile', async ({
         page,
         request,
@@ -130,6 +207,17 @@ test.describe('/reminders layout @mobile', () => {
         const time = await row(page, OLD).getByText(/^Cancelled/).boundingBox();
         const kebab = await row(page, OLD).getByRole('button', { name: `Actions for ${OLD}` }).boundingBox();
         expect(time!.x + time!.width).toBeLessThanOrEqual(kebab!.x);
+    });
+});
+
+test.describe('/reminders layout @ipad', () => {
+    test('834px: header on one row, cards contained and spaced, fire log readable @ipad', async ({ page, request }) => {
+        await page.route(/\/api\/reminders\/\d+\/fires/, (r) => r.fulfill({ json: FIRES }));
+        await seed(request);
+        await goto(page, '/reminders');
+        await showHistory(page);
+        await row(page, OLD).getByRole('button', { name: /show fire log/ }).click();
+        await layoutChecks(page);
     });
 });
 

@@ -14,11 +14,11 @@ All-time cost for one project, broken down by item kind (`task` / `sub_task`) an
 
 ## UI elements
 
-**Header** — project name + all-time totals (cost, tokens, `N tasks`, run and terminal-session counts). Drawn in `_chrome.tsx` `Hero`, a tinted accent surface that follows light and dark (it was an always-dark gradient until the Analytics tabs rework); `AnalyticsTask` uses the same Hero.
+**Header** — project name + all-time totals (cost, tokens, `N tasks`, run and terminal-session counts). Drawn in `_chrome.tsx` `Hero`, a plain white card with a `slate10` border like every other card (it was an always-dark gradient, then a tinted band); its four `MetricMarquee`s share one indigo left rule (`brandBlue`). `AnalyticsTask` uses the same Hero.
 
 **By kind** — pie over `data.byKind`, filtered to `total_cost_usd > 0` so zero-cost kinds don't render a 0° slice (`:106`).
 
-**Top tasks by total cost** — horizontal bars (each with `N runs · N sub-tasks`) over `data.topTasks` (top 25 Tasks from the summary endpoint), scaled to the max in the set; row → `/analytics/task/:taskId`.
+**Top tasks by total cost** — horizontal bars in the one indigo accent (`brandBlue`, no gradient) (each with `N runs · N sub-tasks`) over `data.topTasks` (top 25 Tasks from the summary endpoint), scaled to the max in the set; row → `/analytics/task/:taskId`.
 - Caption: `Showing top N of {task_count} tasks — sorted by descendant-rolled cost.` (`:363`)
 - **View all {task_count} tasks** (`:513`) → flips `showAll`, which is what `enabled` on the paged query keys off. Nothing is fetched until the Owner asks.
 

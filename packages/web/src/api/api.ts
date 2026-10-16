@@ -867,8 +867,10 @@ export const api = {
             external_status?: NotificationDeliveryStatus;
             limit?: number;
             before?: number;
+            log?: boolean;
         }) => {
             const qs = new URLSearchParams();
+            if (opts?.log) qs.set('log', 'true');
             if (opts?.kind) qs.set('kind', opts.kind);
             if (opts?.external_status) qs.set('external_status', opts.external_status);
             if (opts?.limit) qs.set('limit', String(opts.limit));

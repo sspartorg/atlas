@@ -17,7 +17,8 @@ vi.mock('web-push', () => ({
     },
 }));
 
-import { sendWebPushForNotification, getVapidPublicKey, sendTestPush, _resetVapidCacheForTest } from './web-push.js';
+import { sendWebPushForNotification, flushDeferredPush, getVapidPublicKey, sendTestPush, _resetVapidCacheForTest } from './web-push.js';
+import { flushDeferredExternal } from './external-notifications.js';
 import { notificationsService } from './notifications.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 import { insertProject, insertItem } from '../../tests/_items.js';
@@ -702,5 +703,78 @@ describe('partial delivery failures', () => {
         // At least one delivery failed with a real error → failed status.
         expect(row2?.push_status).toBe('failed');
         expect(row2?.push_failure_reason).toContain('server crash');
+    });
+});
+
+describe('web push follows the outward rules (toggles + quiet hours)', () => {
+    async function quietHours() {
+        await testDb
+            .updateTable('settings')
+            .set({ quiet_hours_enabled: 1, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'UTC' })
+            .where('id', '=', 1)
+            .execute();
+    }
+    async function silentCreate(event_key: string | null) {
+        // No subscriptions yet, so create()'s own fan-out is a no-op.
+        const n = await notificationsService.create({ event_type: 'ci_failed', message: 'm', event_key });
+        // Let create()'s background fan-out finish (it reads settings + subs).
+        await new Promise((r) => setTimeout(r, 150));
+        await insertSub(SUB_A);
+        return n;
+    }
+
+    it('a toggled-off event is not pushed', async () => {
+        await testDb
+            .updateTable('settings')
+            .set({ external_notification_event_toggles: JSON.stringify({ 'ci.failed': false }) })
+            .where('id', '=', 1)
+            .execute();
+        const n = await silentCreate('ci.failed');
+        await sendWebPushForNotification(n.id, 'ci.failed');
+        expect(sendNotification).not.toHaveBeenCalled();
+        expect((await notificationsService.get(n.id))?.push_status).toBe('none');
+    });
+
+    it('inside quiet hours the push is held, then sent by the flush once the window ends', async () => {
+        await quietHours();
+        const n = await silentCreate('ci.failed');
+        await sendWebPushForNotification(n.id, 'ci.failed', new Date('2026-10-16T23:30:00Z'));
+        expect(sendNotification).not.toHaveBeenCalled();
+        const held = await testDb.selectFrom('notifications').select(['push_status', 'push_deferred_at']).where('id', '=', n.id).executeTakeFirstOrThrow();
+        expect(held.push_status).toBe('pending');
+        expect(held.push_deferred_at).not.toBeNull();
+
+        // Still inside the window: nothing goes out.
+        await expect(flushDeferredExternal(new Date('2026-10-17T07:59:00Z'))).resolves.toBe(0);
+        expect(sendNotification).not.toHaveBeenCalled();
+
+        await flushDeferredExternal(new Date('2026-10-17T08:00:00Z'));
+        expect(sendNotification).toHaveBeenCalledTimes(1);
+        const after = await testDb.selectFrom('notifications').select(['push_status', 'push_deferred_at']).where('id', '=', n.id).executeTakeFirstOrThrow();
+        expect(after.push_status).toBe('sent');
+        expect(after.push_deferred_at).toBeNull();
+        // A second flush sends nothing again.
+        await flushDeferredPush(new Date('2026-10-17T08:01:00Z'));
+        expect(sendNotification).toHaveBeenCalledTimes(1);
+    });
+
+    it('an event toggled off while its push was held is dropped at the flush', async () => {
+        await quietHours();
+        const n = await silentCreate('ci.failed');
+        await sendWebPushForNotification(n.id, 'ci.failed', new Date('2026-10-16T23:30:00Z'));
+        await testDb
+            .updateTable('settings')
+            .set({ external_notification_event_toggles: JSON.stringify({ 'ci.failed': false }) })
+            .where('id', '=', 1)
+            .execute();
+        await flushDeferredPush(new Date('2026-10-17T09:00:00Z'));
+        expect(sendNotification).not.toHaveBeenCalled();
+        expect((await notificationsService.get(n.id))?.push_status).toBe('none');
+    });
+
+    it('an in-app-only event (no key) is held only by quiet hours', async () => {
+        const n = await silentCreate(null);
+        await sendWebPushForNotification(n.id, null, new Date('2026-10-16T12:00:00Z'));
+        expect(sendNotification).toHaveBeenCalledTimes(1);
     });
 });

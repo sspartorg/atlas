@@ -228,11 +228,13 @@ test.describe('@live quiet hours on the real clock', () => {
         await expect
             .poll(() => received.filter((r) => r.path === path).length, { timeout: endsAt - Date.now() + 45_000, intervals: [2_000] })
             .toBeGreaterThanOrEqual(2);
-        const bodies = received.filter((r) => r.path === path).map((r) => r.body as { chat_id: string; text: string; parse_mode: string });
+        const bodies = received.filter((r) => r.path === path).map((r) => r.body as { chat_id: string; text: string; parse_mode?: string });
         for (const needle of [reminderLabel, mcpText]) {
             const hits = bodies.filter((b) => b.text.includes(needle));
             expect(hits).toHaveLength(1);
-            expect(hits[0]).toMatchObject({ chat_id: '42', parse_mode: 'Markdown' });
+            // Plain text: Telegram's Markdown parser 400'd unbalanced `_` / `*` / `[`.
+            expect(hits[0]).toMatchObject({ chat_id: '42' });
+            expect(hits[0]!.parse_mode).toBeUndefined();
             expect(hits[0]!.text).toMatch(/^Held during quiet hours · \d\d:\d\d\n/);
         }
         // eslint-disable-next-line no-console

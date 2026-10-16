@@ -39,6 +39,10 @@ const E2E_ENV_FILE = join(REPO_ROOT, 'e2e-logs', 'e2e.env');
 const FAKE_TELEGRAM_PORT = 6091;
 const LOG_DIR = join(REPO_ROOT, 'e2e-logs');
 const PID_FILE = join(LOG_DIR, 'pids.json');
+// flows/push-delivery.spec.ts runs a local HTTPS push service: web-push only
+// speaks HTTPS, so the API trusts this throwaway self-signed cert (and nothing
+// else changes — NODE_EXTRA_CA_CERTS adds to the system CAs).
+const PUSH_TLS_DIR = join(LOG_DIR, 'push-tls');
 
 async function dropAndCreateDb(): Promise<void> {
     // atlas user owns the cluster — we connect to `postgres` and
@@ -109,6 +113,20 @@ async function waitForUrl(url: string, label: string, maxMs = 60_000): Promise<v
     throw new Error(`[e2e] ${label} did not become ready at ${url}: ${String(lastErr).slice(0, 200)}`);
 }
 
+async function pushTls(): Promise<void> {
+    mkdirSync(PUSH_TLS_DIR, { recursive: true });
+    try {
+        await execFileP('openssl', [
+            'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '2',
+            '-keyout', join(PUSH_TLS_DIR, 'key.pem'), '-out', join(PUSH_TLS_DIR, 'cert.pem'),
+            '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1',
+        ]);
+    } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn(`[e2e] no openssl: push-delivery.spec.ts will fail (${String(err).slice(0, 120)})`);
+    }
+}
+
 function startApi(): ChildProcess {
     const logPath = join(LOG_DIR, 'api.log');
     const out = createWriteStream(logPath, { flags: 'w' });
@@ -171,6 +189,7 @@ function startApi(): ChildProcess {
                 ATLAS_DATA_DIR: E2E_DATA_DIR,
                 ATLAS_ENV_FILE: E2E_ENV_FILE,
                 ATLAS_TELEGRAM_API_BASE: `http://127.0.0.1:${FAKE_TELEGRAM_PORT}`,
+                ...(existsSync(join(PUSH_TLS_DIR, 'cert.pem')) ? { NODE_EXTRA_CA_CERTS: join(PUSH_TLS_DIR, 'cert.pem') } : {}),
                 // team-config.spec.ts publishes to a local bare repo over file://.
                 ATLAS_TEAM_CONFIG_ALLOW_FILE_URLS: '1',
             },
@@ -245,6 +264,7 @@ export default async function globalSetup(): Promise<void> {
 
     rmSync(E2E_DATA_DIR, { recursive: true, force: true });
     mkdirSync(E2E_DATA_DIR, { recursive: true });
+    await pushTls();
     writeFileSync(E2E_ENV_FILE, 'ATLAS_LOG_LEVEL=error\n');
 
     // eslint-disable-next-line no-console

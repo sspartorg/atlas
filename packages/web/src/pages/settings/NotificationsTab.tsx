@@ -636,14 +636,14 @@ export function NotificationsTab() {
 
             <SettingsSection
                 title="Browser Push"
-                subtitle="Get a native browser notification for every Atlas event on this device. No quiet hours, no filtering — wherever this browser is signed in, you'll get pinged."
+                subtitle="Get a native browser notification for Atlas events on this device. It follows the same per-event switches and quiet hours as Telegram and Teams."
             >
                 <WebPushRow />
             </SettingsSection>
 
             <SettingsSection
                 title="Per-Event Notifications"
-                subtitle="Agents won't ping you for events that are switched off. In-app notifications are always created — these toggles only gate the external notification channel."
+                subtitle="Each switch controls Telegram / Teams and browser push for that event. In-app notifications are always created; a send skipped here shows as Skipped in the Notification Log."
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {EXTERNAL_NOTIFICATION_EVENT_KEYS.map((key, i) => {
@@ -696,7 +696,7 @@ export function NotificationsTab() {
 
             <SettingsSection
                 title="Quiet Hours"
-                subtitle="During quiet hours, Telegram and Teams messages are held and sent when the window ends, marked with the time they were raised. In-app and push notifications on this device still arrive right away. Set From and To to the same time to turn the window off."
+                subtitle="During quiet hours, Telegram and Teams messages and browser push are held and sent when the window ends, marked with the time they were raised. In-app notifications still arrive right away. Set From and To to the same time to turn the window off."
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <Row label="Enable">

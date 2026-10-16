@@ -243,8 +243,13 @@ async function seed(): Promise<void> {
         for (let g = 0; g < n; g++) {
             const x = r();
             const verdict = test ? 'fail' : g < n - 1 ? 'fail' : x < 0.04 ? 'unavailable' : x < 0.07 ? 'needs_review' : 'pass';
+            // Red checks come from three scripts, so "Red checks by script" has rows to rank.
+            // Picked by position, not the RNG, so every other seeded number stays put.
+            const [script, command] = verdict === 'fail'
+                ? ([['tests', 'pnpm test'], ['lint', 'pnpm lint'], ['typecheck', 'pnpm typecheck']] as const)[gates.length % 3] ?? ['tests', 'pnpm test']
+                : (['tests', 'pnpm test'] as const);
             gates.push({
-                id: `an-gate-${gates.length + 1}`, workflow_run_id: runId, node_id: 'tests', script_id: 'tests', command: 'pnpm test', verdict,
+                id: `an-gate-${gates.length + 1}`, workflow_run_id: runId, node_id: 'tests', script_id: script, command, verdict,
                 exit_code: verdict === 'pass' ? 0 : verdict === 'unavailable' ? null : 1,
                 output_tail: verdict === 'pass' ? '212 passed' : verdict === 'fail' ? '3 failed, 209 passed' : null,
                 created_at: iso(at - (n - g) * 20 * MIN),

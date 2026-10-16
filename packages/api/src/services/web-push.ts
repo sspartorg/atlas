@@ -1,6 +1,7 @@
 import webpush, { type PushSubscription, type WebPushError } from 'web-push';
 import { db } from '../db/kysely-client.js';
 import { notificationsService } from './notifications.js';
+import { outwardGate } from './external-notifications.js';
 import { encrypt, decrypt } from './crypto.js';
 import { notificationLinkUrl, type IssueType } from '@atlas/shared';
 
@@ -13,7 +14,9 @@ import { notificationLinkUrl, type IssueType } from '@atlas/shared';
 // `vapidSubject` is a mailto: URL the browser's push service contacts in
 // case of abuse — `mailto:atlas@local` is fine for single-owner local use;
 // no Owner-facing config surface needed.
-const VAPID_SUBJECT = 'mailto:atlas@local';
+// Apple's push service rejects a VAPID JWT whose `sub` is not a reachable
+// contact (BadJwtToken); `mailto:atlas@local` worked for Chrome only.
+const VAPID_SUBJECT = 'https://github.com/sspartorg/atlas';
 
 // In-process cache: once we've loaded + bound the keys for this Node
 // process, skip the DB roundtrip on subsequent publish calls.
@@ -166,7 +169,16 @@ async function deliver(
  * Called from notificationsService.create() as a fire-and-forget side effect.
  * Internal errors are caught here — this function never throws.
  */
-export async function sendWebPushForNotification(notificationId: number): Promise<void> {
+/**
+ * `eventKey`: the same toggle that gates the outward send (null = an in-app-only
+ * event, which only quiet hours hold). Inside quiet hours the push is held
+ * (`push_deferred_at`) and `flushDeferredExternal` sends it afterwards.
+ */
+export async function sendWebPushForNotification(
+    notificationId: number,
+    eventKey: string | null = null,
+    now: Date = new Date(),
+): Promise<void> {
     if (!(await ensureVapid())) return;
     try {
         const notification = await db
@@ -193,6 +205,17 @@ export async function sendWebPushForNotification(notificationId: number): Promis
 
         if (subs.length === 0) {
             // Leave push_status='none' — the row hasn't been targeted at anyone.
+            return;
+        }
+
+        const gate = await outwardGate(eventKey, now);
+        if (gate === 'off') return;
+        if (gate === 'hold') {
+            await db
+                .updateTable('notifications')
+                .set({ push_status: 'pending', push_deferred_at: now.toISOString() })
+                .where('id', '=', notificationId)
+                .execute();
             return;
         }
 
@@ -291,4 +314,20 @@ export async function sendTestPush(): Promise<{
     const results = await Promise.all(subs.map((s) => deliver(s, payload)));
     const delivered = results.filter((r) => r.ok).length;
     return { ok: delivered > 0, subscriptions: subs.length, delivered };
+}
+
+/** Quiet hours are over: send every held push, oldest first (CAS claim, so a
+ *  concurrent tick never sends one twice). The toggle is re-checked. */
+export async function flushDeferredPush(now: Date = new Date()): Promise<number> {
+    const rows = await db
+        .updateTable('notifications')
+        .set({ push_deferred_at: null, push_status: 'none' })
+        .where('push_deferred_at', 'is not', null)
+        .returning(['id', 'external_event_key', 'created_at'])
+        .execute();
+    rows.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+    for (const r of rows) {
+        await sendWebPushForNotification(Number(r.id), r.external_event_key, now).catch(() => {});
+    }
+    return rows.length;
 }

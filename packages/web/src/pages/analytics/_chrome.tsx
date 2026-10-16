@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import type { AnalyticsWindow, IssueType } from '@atlas/shared';
+import type { AnalyticsWindow, IAnalyticsTrend, IssueType } from '@atlas/shared';
 import { ATLAS_PALETTE, CHART_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { formatCostUsd, formatTokenCount } from '../../utils/formatCost.js';
 import { formatSpan } from '../../utils/time.js';
@@ -72,15 +72,14 @@ export function MetricMarquee({
     label,
     value,
     sub,
-    accent,
 }: {
     label: string;
     value: ReactNode;
     sub?: ReactNode;
-    accent: string;
 }) {
+    // One accent for every marquee, the app's indigo: the numbers are a set, not a legend.
     return (
-        <Box sx={{ pl: 2, borderLeft: `2px solid ${accent}`, minWidth: 0 }}>
+        <Box sx={{ pl: 2, borderLeft: `2px solid ${ATLAS_PALETTE.brandBlue}`, minWidth: 0 }}>
             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, fontWeight: 500 }}>{label}</Typography>
             <Typography
                 sx={{
@@ -169,8 +168,8 @@ export function ChartTitle({
     );
 }
 
-// Hero band — a tinted accent surface (the sidenav's active-row family), so
-// it reads as part of the app in both modes instead of a contrasting slab.
+// Hero — a plain card like every other card in the app (white, slate10
+// border); the indigo accent is kept for the insight label and the marquees.
 export function Hero({
     breadcrumb,
     title,
@@ -188,9 +187,9 @@ export function Hero({
     return (
         <Box
             sx={{
-                background: ATLAS_PALETTE.accentSoft,
+                background: ATLAS_PALETTE.white,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                borderRadius: '16px',
+                borderRadius: '14px',
                 color: ATLAS_PALETTE.slate,
                 p: { xs: 2.5, md: 4 },
                 mb: { xs: 3, md: 4 },
@@ -240,7 +239,12 @@ export function Delta({
     /** For a rate (0–1): the change in percentage points, not a % of a %. */
     points?: boolean;
 }) {
-    if (cur === null || prev === null) return <>no earlier data</>;
+    if (cur === null || prev === null)
+        return (
+            <Box component="span" title="No earlier data to compare">
+                —
+            </Box>
+        );
     if (!points && prev === 0) return <>{cur === 0 ? 'same as before' : 'none before'}</>;
     const pct = points ? cur - prev : (cur - prev) / prev;
     if (Math.abs(pct) < 0.005) return <>same as before</>;
@@ -260,20 +264,107 @@ export function Delta({
     );
 }
 
+const SPARK_W = 72;
+const SPARK_H = 22;
+
+/**
+ * One series as a thin line, no axes: the shape of the window at a glance.
+ * A bucket with nothing to measure (null) breaks the line rather than
+ * pretending to be zero. The label carries the numbers for screen readers.
+ */
+export function Sparkline({ series, label }: { series: Array<number | null>; label: string }) {
+    const points = series.map((v, i) => ({ v, i })).filter((p): p is { v: number; i: number } => p.v !== null);
+    if (points.length < 2) return null;
+    const min = Math.min(...points.map((p) => p.v));
+    const max = Math.max(...points.map((p) => p.v));
+    const x = (i: number) => (series.length === 1 ? 0 : (i / (series.length - 1)) * SPARK_W);
+    const y = (v: number) => (max === min ? SPARK_H / 2 : SPARK_H - 2 - ((v - min) / (max - min)) * (SPARK_H - 4));
+    let d = '';
+    series.forEach((v, i) => {
+        if (v === null) return;
+        d += `${i > 0 && series[i - 1] !== null && series[i - 1] !== undefined ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `;
+    });
+    const last = points[points.length - 1];
+    return (
+        <Box
+            component="svg"
+            role="img"
+            aria-label={label}
+            viewBox={`-2 -2 ${SPARK_W + 4} ${SPARK_H + 4}`}
+            sx={{ width: SPARK_W, height: SPARK_H, flexShrink: 0, display: 'block' }}
+        >
+            <title>{label}</title>
+            <path d={d.trim()} fill="none" stroke={ATLAS_PALETTE.brandBlue} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+            {/* A value with empty buckets on both sides has no line to sit on: a dot keeps it visible. */}
+            {points
+                .filter((p) => p !== last && (series[p.i - 1] ?? null) === null && (series[p.i + 1] ?? null) === null)
+                .map((p) => (
+                    <circle key={p.i} cx={x(p.i)} cy={y(p.v)} r={1.25} fill={ATLAS_PALETTE.brandBlue} />
+                ))}
+            {last && <circle cx={x(last.i)} cy={y(last.v)} r={2.25} fill={ATLAS_PALETTE.brandBlue} />}
+        </Box>
+    );
+}
+
+/** A tile's comparison: the trend from the API, which way is good news, and what it compares against. */
+export interface TileTrend {
+    trend: IAnalyticsTrend;
+    goodWhen: 'up' | 'down';
+    /** For a rate (0–1): the change in points. */
+    points?: boolean;
+    /** "vs the 7 days before". */
+    vs: string;
+    /** Prints one series value for the sparkline's label ("$4.20", "3h"). */
+    format: (v: number) => string;
+    /** "day" / "week". */
+    unit: string;
+}
+
+/** Number formats for sparkline labels, matching how each tile prints its value. */
+export const FORMAT = {
+    count: (v: number) => Math.round(v).toLocaleString(),
+    decimal: (v: number) => v.toFixed(1),
+    usd: (v: number) => formatCostUsd(v),
+    span: (v: number) => formatSpan(v),
+    rate: (v: number) => formatRate(v),
+};
+
+/** A tile's trend in one call: the API's trend, the window it compares against, and how to print it. */
+export function trendFor(
+    trend: IAnalyticsTrend,
+    goodWhen: 'up' | 'down',
+    window: AnalyticsWindow,
+    bucket: 'day' | 'week',
+    format: (v: number) => string,
+    points = false,
+): TileTrend {
+    return { trend, goodWhen, vs: previousLabel(window), format, unit: bucket, ...(points ? { points } : {}) };
+}
+
+function sparkLabel(label: string, t: TileTrend): string {
+    const vals = t.trend.series.filter((v): v is number => v !== null);
+    if (vals.length === 0) return `${label}: nothing to plot`;
+    const last = vals[vals.length - 1] ?? 0;
+    return `${label} per ${t.unit}: lowest ${t.format(Math.min(...vals))}, highest ${t.format(Math.max(...vals))}, latest ${t.format(last)}`;
+}
+
 /**
  * A headline number with its definition one tap away (the info button is a
- * real button, so the tooltip reaches keyboard and touch too).
+ * real button, so the tooltip reaches keyboard and touch too), and, with a
+ * `trend`, its change against the previous window and a sparkline.
  */
 export function StatTile({
     label,
     value,
     definition,
     caption,
+    trend,
 }: {
     label: string;
     value: ReactNode;
     definition: string;
     caption?: ReactNode;
+    trend?: TileTrend;
 }) {
     return (
         <Box
@@ -330,6 +421,15 @@ export function StatTile({
                 <Typography component="div" sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, lineHeight: 1.4 }}>
                     {caption}
                 </Typography>
+            )}
+            {trend && (
+                <Box sx={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 1, mt: 'auto', pt: 0.5 }}>
+                    <Typography component="div" sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, lineHeight: 1.4, minWidth: 0 }}>
+                        <Delta cur={trend.trend.cur} prev={trend.trend.prev} goodWhen={trend.goodWhen} {...(trend.points ? { points: true } : {})} />{' '}
+                        {trend.vs}
+                    </Typography>
+                    <Sparkline series={trend.trend.series} label={sparkLabel(label, trend)} />
+                </Box>
             )}
         </Box>
     );
@@ -504,7 +604,9 @@ export const LEGEND_PROPS = {
 };
 
 // Axis and tooltip formatters, named so every chart shares (and tests) one copy.
-export const usdTick = (v: number) => `$${v}`;
+// Compact so a fixed-width axis never clips: $950, $1.2k, $15k.
+export const usdTick = (v: number) =>
+    Math.abs(v) >= 1000 ? `$${Number((v / 1000).toFixed(v >= 10_000 ? 0 : 1))}k` : `$${v}`;
 export const hourTick = (v: number) => `${v}h`;
 export const tokenTick = (v: number) => formatTokenCount(v);
 export const usdTooltip = (v: unknown) => formatCostUsd(Number(v));

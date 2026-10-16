@@ -1,8 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { goto } from '../helpers/nav.js';
+import { expectActionsOnTitleRow, expectBoxesContainTheirContent, noHorizontalOverflow } from '../helpers/layout.js';
 
-// Notifications at phone width (390px, the `mobile-chrome` project) plus the
+// Notifications at phone widths (390px, the `mobile-chrome` project, and 360px
+// via setViewportSize), on the iPad project (834px), plus the
 // click routing and an axe pass on both widths. The list is served from a
 // fixture through page.route so every card shape is present (held, failed,
 // long message, no item) without seeding producers that need a CLI, Jira or a
@@ -118,35 +120,35 @@ async function serveFixture(page: Page): Promise<void> {
     );
 }
 
-async function noHorizontalOverflow(page: Page): Promise<void> {
-    const { scroll, client } = await page.evaluate(() => ({
-        scroll: document.documentElement.scrollWidth,
-        client: document.documentElement.clientWidth,
-    }));
-    expect(scroll).toBeLessThanOrEqual(client);
-}
+const WIDTHS = [390, 360] as const;
 
 test.describe('/notifications @mobile', () => {
     test.beforeEach(async ({ page }) => {
         await serveFixture(page);
     });
 
-    test('header actions are icon buttons on one row @mobile', async ({ page }) => {
-        await goto(page, '/notifications');
-        const names = ['Refresh notifications', 'Notification settings', 'Mark all read'];
-        const tops: number[] = [];
-        for (const name of names) {
-            const btn = page.getByRole('button', { name, exact: true });
-            await expect(btn).toBeVisible();
-            tops.push(await btn.evaluate((el) => Math.round(el.getBoundingClientRect().top)));
-        }
-        expect(new Set(tops).size, `tops: ${tops.join(', ')}`).toBe(1);
-    });
+    for (const width of WIDTHS) {
+        test(`${width}px: header actions are icon buttons on the title's row @mobile`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 844 });
+            await goto(page, '/notifications');
+            const names = ['Refresh notifications', 'Notification settings', 'Mark all read'];
+            const tops: number[] = [];
+            for (const name of names) {
+                const btn = page.getByRole('button', { name, exact: true });
+                await expect(btn).toBeVisible();
+                tops.push(await btn.evaluate((el) => Math.round(el.getBoundingClientRect().top)));
+            }
+            expect(new Set(tops).size, `tops: ${tops.join(', ')}`).toBe(1);
+            await expectActionsOnTitleRow(page);
+            await noHorizontalOverflow(page);
+        });
+    }
 
-    for (const tab of ['external', 'in-app'] as const) {
-        test(`${tab} tab: no horizontal overflow, pills scroll in one row, cards line up @mobile`, async ({
+    for (const [tab, width] of (['external', 'in-app'] as const).flatMap((t) => WIDTHS.map((w) => [t, w] as const))) {
+        test(`${tab} tab at ${width}px: no horizontal overflow, pills scroll in one row, cards line up @mobile`, async ({
             page,
         }) => {
+            await page.setViewportSize({ width, height: 844 });
             await goto(page, `/notifications?tab=${tab}`);
             const cards = page.getByTestId('notification-card');
             await expect(cards.first()).toBeVisible();
@@ -178,18 +180,51 @@ test.describe('/notifications @mobile', () => {
             for (const b of boxes) expect(b).toEqual(boxes[0]);
             expect(boxes[0]?.icon).toBe(32);
             expect(boxes[0]?.action).toBe(40);
+
+            await expectBoxesContainTheirContent(cards);
+            // The title has the middle column to itself; the status chip sits on its own line below.
+            const clashes = await cards.evaluateAll((els) =>
+                els.flatMap((el, i) => {
+                    const title = el.children[1]?.firstElementChild?.getBoundingClientRect();
+                    const status = el.querySelector('[data-testid="notification-card-status"]')?.getBoundingClientRect();
+                    if (!title || !status) return [];
+                    const overlap = title.bottom > status.top && status.bottom > title.top && title.right > status.left && status.right > title.left;
+                    return overlap ? [`card ${i}`] : [];
+                })
+            );
+            expect(clashes).toEqual([]);
         });
     }
 
-    test('the held row says so and names its send time @mobile', async ({ page }) => {
-        await goto(page, '/notifications?tab=external');
-        const held = page
-            .getByTestId('notification-card')
-            .filter({ hasText: 'Held · quiet hours' });
-        await expect(held).toHaveCount(1);
-        await expect(held).toContainText('sends 08:00');
-        await expect(held.getByRole('button', { name: 'Cancel' })).toBeVisible();
+    for (const width of WIDTHS) {
+        test(`${width}px: the held row says so and its send time is fully visible @mobile`, async ({ page }) => {
+            await page.setViewportSize({ width, height: 844 });
+            await goto(page, '/notifications?tab=external');
+            const held = page.getByTestId('notification-card').filter({ hasText: 'Held · quiet hours' });
+            await expect(held).toHaveCount(1);
+            const sends = held.getByText('sends 08:00', { exact: true });
+            await expect(sends).toBeVisible();
+            // Not ellipsised: the text fits its own box.
+            expect(await sends.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+            await expect(held.getByRole('button', { name: 'Cancel' })).toBeVisible();
+        });
+    }
+});
+
+test.describe('/notifications @ipad', () => {
+    test.beforeEach(async ({ page }) => {
+        await serveFixture(page);
     });
+    for (const tab of ['external', 'in-app'] as const) {
+        test(`${tab} tab: header actions on the title row, cards contain their content @ipad`, async ({ page }) => {
+            await goto(page, `/notifications?tab=${tab}`);
+            const cards = page.getByTestId('notification-card');
+            await expect(cards.first()).toBeVisible();
+            await expectActionsOnTitleRow(page);
+            await expectBoxesContainTheirContent(cards);
+            await noHorizontalOverflow(page);
+        });
+    }
 });
 
 test.describe('/notifications feed routing', () => {

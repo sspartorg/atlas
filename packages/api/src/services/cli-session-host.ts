@@ -370,6 +370,7 @@ async function notifyTerminalWaiting(sessionId: string): Promise<void> {
         const created = await notificationsService.create({
             kind: 'needs_you',
             event_type: 'terminal.waiting_for_input',
+            event_key: 'terminal.waiting_for_input',
             message,
             // Null on a standalone session (migration 030 dropped NOT NULL) —
             // the notification is still worth firing, it just isn't filed

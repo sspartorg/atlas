@@ -9,27 +9,49 @@ import TableRow from '@mui/material/TableRow';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import type { AnalyticsWindow } from '@atlas/shared';
+import type { AnalyticsWindow, IAnalyticsWorkflows } from '@atlas/shared';
+import { CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip as ChartTooltip, XAxis, YAxis } from 'recharts';
 import { useAnalyticsWorkflows } from '../../hooks/useAnalytics.js';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
 import { formatCostUsd } from '../../utils/formatCost.js';
 import { formatSpan } from '../../utils/time.js';
 import { OUTCOMES, OutcomeBar } from '../agents/PerformanceTabContent.js';
 import {
+    AXIS_TICK,
     BarList,
+    bucketLabel,
     Card,
+    CHART_COLORS,
+    FORMAT,
+    TOOLTIP_STYLE,
+    trendFor,
+    usdTick,
     CardGrid,
     ChartEmpty,
     ChartTitle,
-    Delta,
     formatRate,
-    previousLabel,
     StatTile,
     TableScroll,
     TabSkeleton,
     TileGrid,
     stopRowClick,
 } from './_chrome.js';
+
+const pctTick = (v: number) => `${v}%`;
+
+/** The hovered agent: its name and both coordinates, in words. */
+function AgentDotTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { name: string; cost: number; applied: number; steps: number } }> }) {
+    const p = active ? payload?.[0]?.payload : undefined;
+    if (!p) return null;
+    return (
+        <Box sx={{ ...TOOLTIP_STYLE.contentStyle, px: 1.5, py: 1 }}>
+            <Typography sx={{ fontSize: 12.5, fontWeight: 600, color: ATLAS_PALETTE.slate }}>{p.name}</Typography>
+            <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate80 }}>
+                {formatCostUsd(p.cost)} a step · {p.applied}% applied first time · {p.steps} steps
+            </Typography>
+        </Box>
+    );
+}
 
 const HEAD_SX = { fontSize: 11.5, fontWeight: 600, color: ATLAS_PALETTE.slate60, whiteSpace: 'nowrap' as const };
 const NUM_SX = { fontFamily: TYPOGRAPHY.fontFamilyMono, fontSize: 12.5, whiteSpace: 'nowrap' as const };
@@ -41,34 +63,49 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
     if (!w) return <TabSkeleton />;
 
     const finished = w.runs.completed + w.runs.cancelled + w.runs.error;
+    const tr = (k: keyof IAnalyticsWorkflows['trends'], good: 'up' | 'down', f: (v: number) => string, points = false) =>
+        trendFor(w.trends[k], good, window, w.period.bucket, f, points);
+    const scatter = w.agents
+        .filter((a) => a.steps > 0 && a.per_step_usd !== null)
+        .map((a) => ({ name: a.name, cost: a.per_step_usd ?? 0, applied: Math.round((a.first_pass.applied / a.steps) * 100), steps: a.steps }));
     const gateTotal = w.gates.pass + w.gates.fail + w.gates.unavailable + w.gates.needs_review;
 
     return (
         <Box sx={{ display: 'grid', gap: { xs: 2, md: 3 } }}>
-            <TileGrid cols={4}>
+            <TileGrid cols={5}>
                 <StatTile
                     label="Success rate"
                     value={formatRate(w.runs.success_rate)}
                     definition="Completed ÷ finished workflow runs (completed, cancelled or error) started in this window. Runs still going or waiting for you are left out; agent tests are left out."
-                    caption={<>{w.runs.completed} of {finished} finished · <Delta cur={w.runs.success_rate} prev={w.previous.success_rate} goodWhen="up" points /></>}
+                    caption={`${w.runs.completed} of ${finished} finished`}
+                    trend={tr('success_rate', 'up', FORMAT.rate, true)}
                 />
                 <StatTile
                     label="Workflow runs"
                     value={w.runs.total.toLocaleString()}
                     definition="Top-level workflow runs started in this window. A sub-task's run is part of its Task's run and is not counted on its own."
-                    caption={<><Delta cur={w.runs.total} prev={w.previous.runs} goodWhen="up" /> {previousLabel(window)}</>}
+                    trend={tr('runs', 'up', FORMAT.count)}
                 />
                 <StatTile
                     label="Gate pass rate"
                     value={formatRate(w.gates.pass_rate)}
                     definition="Script-step checks that passed ÷ those that passed or failed in this window. A check that could not run is absence of evidence, not a failure, so it is left out."
                     caption={`${w.gates.pass} passed · ${w.gates.fail} failed`}
+                    trend={tr('gate_pass_rate', 'up', FORMAT.rate, true)}
                 />
                 <StatTile
                     label="Retries"
                     value={w.retries.retries.toLocaleString()}
                     definition="Agent runs started as a retry of an earlier run, out of every agent run created in this window."
                     caption={`${formatRate(w.retries.rate)} of ${w.retries.dispatches} agent runs`}
+                    trend={tr('retries', 'down', FORMAT.count)}
+                />
+                <StatTile
+                    label="Retries per Task"
+                    value={w.retries_per_task.rate === null ? '—' : w.retries_per_task.rate.toFixed(2)}
+                    definition="Agent-run retries in this window ÷ the Tasks those agent runs worked for (a sub-task's run counts for its Task). Agent runs with no Task and agent tests are left out of the Tasks."
+                    caption={w.retries_per_task.tasks === 0 ? 'no Tasks worked' : `${w.retries_per_task.retries} retries over ${w.retries_per_task.tasks} Tasks`}
+                    trend={tr('retries_per_task', 'down', FORMAT.decimal)}
                 />
             </TileGrid>
 
@@ -125,6 +162,58 @@ export function WorkflowsTab({ window }: { window: AnalyticsWindow }) {
                     )}
                 </Card>
 
+            </CardGrid>
+
+            <CardGrid>
+                <Card>
+                    <ChartTitle title="Red checks by script" sub="Script-step checks that failed in this window, most failures first. Runs counts the workflow runs (a Task's run with its sub-task runs) that hit the failure." />
+                    {w.gate_failures.length === 0 ? (
+                        <ChartEmpty label="No failed checks in this window" sub="A Script step that goes red is counted here under its check." />
+                    ) : (
+                        <TableScroll label="Red checks by script">
+                            <Table size="small" aria-label="Red checks by script" sx={{ minWidth: { xs: 0, sm: 360 } }}>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell sx={HEAD_SX}>Check</TableCell>
+                                        <TableCell sx={HEAD_SX} align="right">Failures</TableCell>
+                                        <TableCell sx={HEAD_SX} align="right">Runs</TableCell>
+                                        <TableCell sx={HEAD_SX} align="right">Last failed</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {w.gate_failures.map((g) => (
+                                        <TableRow key={g.script_id}>
+                                            <TableCell sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, fontWeight: 600 }}>{g.name}</TableCell>
+                                            <TableCell align="right" sx={NUM_SX}>{g.failures}</TableCell>
+                                            <TableCell align="right" sx={NUM_SX}>{g.runs}</TableCell>
+                                            <TableCell align="right" sx={NUM_SX}>{bucketLabel(g.last_at)}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableScroll>
+                    )}
+                </Card>
+
+                <Card>
+                    <ChartTitle
+                        title="Agents: cost vs first-attempt success"
+                        sub="Each dot is an agent: cost per step across, share of its steps applied on the first attempt up. A comparison, not a ranking: a reviewer that sends work back is doing its job, so a low dot is not a failing agent. The Agents table below has every number."
+                    />
+                    {scatter.length === 0 ? (
+                        <ChartEmpty label="No agent steps in this window" sub="Each agent that takes a workflow step appears here." />
+                    ) : (
+                        <ResponsiveContainer width="100%" height={240}>
+                            <ScatterChart margin={{ top: 8, right: 16, left: -8, bottom: 8 }}>
+                                <CartesianGrid stroke={CHART_COLORS.grid} />
+                                <XAxis type="number" dataKey="cost" name="Cost per step" tick={AXIS_TICK} axisLine={{ stroke: CHART_COLORS.rail }} tickLine={false} tickFormatter={usdTick} />
+                                <YAxis type="number" dataKey="applied" name="Applied first time" domain={[0, 100]} tick={AXIS_TICK} axisLine={false} tickLine={false} width={44} tickFormatter={pctTick} />
+                                <ChartTooltip {...TOOLTIP_STYLE} cursor={{ stroke: CHART_COLORS.rail }} content={<AgentDotTooltip />} />
+                                <Scatter data={scatter} name="Agents" fill={CHART_COLORS.cost} stroke={ATLAS_PALETTE.white} strokeWidth={2} />
+                            </ScatterChart>
+                        </ResponsiveContainer>
+                    )}
+                </Card>
             </CardGrid>
 
             <Card>

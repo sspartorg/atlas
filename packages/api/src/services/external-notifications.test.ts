@@ -51,6 +51,7 @@ import {
     deliverExternalNow,
     flushDeferredExternal,
     testExternalNotification,
+    outwardGate,
 } from './external-notifications.js';
 import { EXTERNAL_NOTIFICATION_EVENT_KEYS } from '@atlas/shared';
 import { settingsService } from './settings.js';
@@ -654,6 +655,52 @@ describe('every event key honours its own toggle', () => {
         const on = await notificationsService.create({ event_type: 'e', message: 'm' });
         await sendExternalForNotification(on.id, 'm', key);
         expect((await notificationsService.get(on.id))!.external_status).toBe('sent');
+    });
+
+    it('a send skipped by its toggle stays in the log with a reason naming the toggle', async () => {
+        await settingsService.updateNotifications({ external_notification_event_toggles: { 'ci.failed': false } });
+        const n = await notificationsService.create({ event_type: 'ci_failed', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', 'ci.failed');
+        const row = (await notificationsService.get(n.id))!;
+        expect(row.external_status).toBe('none');
+        expect(row.failure_reason).toBe('Skipped: "CI Failed" is turned off in Settings');
+        // A free-form MCP key has no label: the key itself is named.
+        await settingsService.updateNotifications({ external_notification_event_toggles: { 'agent.digest': false } });
+        const m = await notificationsService.create({ event_type: 'mcp_external', message: 'm', in_app: false });
+        await sendExternalForNotification(m.id, 'm', 'agent.digest');
+        expect((await notificationsService.get(m.id))!.failure_reason).toBe('Skipped: agent.digest is turned off in Settings');
+    });
+
+    it('outwardGate: off by toggle, held in quiet hours, otherwise send', async () => {
+        expect(await outwardGate('ci.failed', at('2026-10-16T12:00:00Z'))).toBe('send');
+        expect(await outwardGate(null, at('2026-10-16T12:00:00Z'))).toBe('send');
+        await settingsService.updateNotifications({ external_notification_event_toggles: { 'ci.failed': false } });
+        expect(await outwardGate('ci.failed')).toBe('off');
+        // Default-off key needs an explicit true.
+        expect(await outwardGate('terminal.waiting_for_input')).toBe('off');
+        const { db } = await import('../db/kysely-client.js');
+        await db
+            .updateTable('settings')
+            .set({ quiet_hours_enabled: 1, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'UTC' })
+            .where('id', '=', 1)
+            .execute();
+        expect(await outwardGate(null, at('2026-10-16T23:30:00Z'))).toBe('hold');
+        expect(await outwardGate('workflow.failed', at('2026-10-16T00:00:00Z'))).toBe('hold');
+        expect(await outwardGate('workflow.failed', at('2026-10-16T08:00:00Z'))).toBe('send');
+        // A toggled-off event is off even inside quiet hours (nothing to hold).
+        expect(await outwardGate('ci.failed', at('2026-10-16T23:30:00Z'))).toBe('off');
+    });
+
+    it('midnight is 00:00, never 24:00, so a window starting at 00:00 holds at midnight', async () => {
+        const { db } = await import('../db/kysely-client.js');
+        await db
+            .updateTable('settings')
+            .set({ quiet_hours_enabled: 1, quiet_hours_from: '00:00', quiet_hours_to: '06:00', quiet_hours_timezone: 'Asia/Kolkata' })
+            .where('id', '=', 1)
+            .execute();
+        // 18:30Z = 00:00 in Kolkata.
+        expect(await outwardGate(null, at('2026-10-16T18:30:00Z'))).toBe('hold');
+        expect(await outwardGate(null, at('2026-10-16T18:29:00Z'))).toBe('send');
     });
 
     it('the new failure keys default ON', () => {

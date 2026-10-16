@@ -458,7 +458,7 @@ export interface ItemsTable {
     // Migration 040 — a sub-task's hand-set run order within its Task.
     sort_order: IntN;
 
-    // Migration 016 — the item an agent test run acts on. Visible everywhere
+    // Migration 015.— the item an agent test run acts on. Visible everywhere
     // since migration 002 (the web tags it "Test"); still scopes the cleanup
     // when its test is deleted and keeps test PRs out of fleet delivery stats.
     is_test: ColumnType<boolean, boolean | undefined, boolean | undefined>;
@@ -702,6 +702,8 @@ export interface NotificationsTable {
     external_claimed_at: TSn;
     external_reclaimed: ColumnType<boolean, boolean | undefined, boolean>;
     in_app: ColumnType<boolean, boolean | undefined, boolean>;
+    // Migration 015.
+    push_deferred_at: TSn;
     created_at: CreatedAt;
 }
 
@@ -985,7 +987,7 @@ export interface DB {
     tool_catalog: ToolCatalogTable;
     guardrail_rules: GuardrailRulesTable;
     items: ItemsTable;
-    // Migration 016 — `items` minus the throwaway items agent test runs create.
+    // Migration 015.— `items` minus the throwaway items agent test runs create.
     // Every list, count, search and aggregate reads this; only by-id lookups
     // read `items` directly. Same shape, so the row type is the same.
     items_live: ItemsTable;

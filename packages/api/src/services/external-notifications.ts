@@ -3,6 +3,8 @@ import { settingsService } from './settings.js';
 import { notificationsService, SKIPPED_NO_CHANNEL, SKIPPED_WHILE_HELD } from './notifications.js';
 import { telegramTransport } from './transports/telegram.js';
 import { teamsTransport } from './transports/teams.js';
+import { flushDeferredPush } from './web-push.js';
+import { EXTERNAL_NOTIFICATION_EVENT_LABELS } from '@atlas/shared';
 import type {
     ISettings,
     ExternalNotificationEventKey,
@@ -38,7 +40,9 @@ function localHHMM(now: Date, tz: string | null): string {
             return new Intl.DateTimeFormat('en-GB', {
                 hour: '2-digit',
                 minute: '2-digit',
-                hour12: false,
+                // hourCycle, not hour12: some ICU builds render midnight as
+                // "24:00" under hour12:false, which breaks the string compare.
+                hourCycle: 'h23',
                 timeZone: tz,
             }).format(now);
         } catch {
@@ -88,6 +92,18 @@ function isEventEnabled(eventKey: string, settings: GatingSettings): boolean {
     // Default-off events require an explicit `true` toggle.
     if (toggles[eventKey] !== true && DEFAULT_OFF_EVENT_KEYS.has(eventKey as ExternalNotificationEventKey)) return false;
     return true;
+}
+
+function skippedTurnedOff(eventKey: string): string {
+    const label = (EXTERNAL_NOTIFICATION_EVENT_LABELS as Record<string, { title: string } | undefined>)[eventKey]?.title;
+    return `Skipped: ${label ? `"${label}"` : eventKey} is turned off in Settings`;
+}
+
+/** One rule for every channel the Owner is pinged on: off, held, or send now. */
+export async function outwardGate(eventKey: string | null, now: Date = new Date()): Promise<'off' | 'hold' | 'send'> {
+    const gating = await loadGatingSettings();
+    if (eventKey && !isEventEnabled(eventKey, gating)) return 'off';
+    return isInQuietHours(gating, now) ? 'hold' : 'send';
 }
 
 export function shouldSendForEvent(
@@ -185,7 +201,13 @@ export async function sendExternalForNotification(
     now: Date = new Date(),
 ): Promise<void> {
     const gating = await loadGatingSettings();
-    if (eventKey && !isEventEnabled(eventKey, gating)) return;
+    if (eventKey && !isEventEnabled(eventKey, gating)) {
+        // Leave a reason so the Notification Log shows it Skipped (with Send
+        // now) — a bare `none` hides the row and "why didn't I get it?" has no
+        // answer anywhere in the UI.
+        await notificationsService.updateExternalStatus(notificationId, 'none', skippedTurnedOff(eventKey));
+        return;
+    }
     if (isInQuietHours(gating, now)) {
         // Holding for a channel that isn't there would show "Held" for a send
         // that can never happen.
@@ -212,6 +234,7 @@ export const STUCK_SEND_MS = 10 * 60_000;
 export async function flushDeferredExternal(now: Date = new Date()): Promise<number> {
     const gating = await loadGatingSettings();
     if (isInQuietHours(gating, now)) return 0;
+    await flushDeferredPush(now);
     const held = await notificationsService.claimDeferred(now);
     const stuck = await notificationsService.reclaimStuck(new Date(now.getTime() - STUCK_SEND_MS), now);
     const jobs = [

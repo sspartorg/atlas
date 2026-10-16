@@ -38,7 +38,7 @@ describe('analytics chrome', () => {
 
     it('MetricMarquee renders label + value + optional sub', () => {
         renderWithProviders(
-            <MetricMarquee label="Cost" value="$1.23" sub="this month" accent="#fff" />
+            <MetricMarquee label="Cost" value="$1.23" sub="this month" />
         );
         expect(screen.getByText('Cost')).toBeInTheDocument();
         expect(screen.getByText('$1.23')).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe('analytics chrome', () => {
     });
 
     it('MetricMarquee omits sub when undefined', () => {
-        renderWithProviders(<MetricMarquee label="Cost" value="$1.23" accent="#fff" />);
+        renderWithProviders(<MetricMarquee label="Cost" value="$1.23" />);
         expect(screen.queryByText('this month')).not.toBeInTheDocument();
     });
 

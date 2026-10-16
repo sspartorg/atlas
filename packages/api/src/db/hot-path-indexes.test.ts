@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { testDb } from '../../tests/_pg-db.js';
 
-// Verifies that migration `021_hot_path_composites.ts` shipped the four
-// composite/partial indexes the audit surfaced and that each is picked
-// up by its target query pattern.
+// Verifies the composite/partial indexes the W3 hot-path audit surfaced (they
+// live in `001_baseline.sql` since the pre-publish consolidation; they were
+// added by the old migration 021, which no longer exists as a file) and the
+// later page / analytics indexes (migrations 002, 012, 016), each against its
+// target query pattern.
 //
 // This is a REGRESSION GATE, not a perf benchmark: EXPLAIN is asked for a
 // plan (not ANALYZE), so we don't need to seed massive volumes. The plan
@@ -20,7 +22,7 @@ const EXPECTED_INDEXES = [
     'idx_notifications_external_status',
 ];
 
-describe('W3 hot-path composite indexes (migration 021)', () => {
+describe('W3 hot-path composite indexes (baseline)', () => {
     it('all four indexes exist in pg_indexes', async () => {
         const db = testDb;
         const rows = await db
@@ -237,12 +239,12 @@ const PLAN_SEED = `
             workflow_run_events, jira_attachments;
 `;
 
-async function planWithoutSeqScan(query: string): Promise<string> {
+async function planWithoutSeqScan(query: string, extraSeed = ''): Promise<string> {
     let plan = '';
     await testDb
         .transaction()
         .execute(async (trx) => {
-            await sql.raw(PLAN_SEED).execute(trx);
+            await sql.raw(PLAN_SEED + extraSeed).execute(trx);
             await sql`SET LOCAL enable_seqscan = off`.execute(trx);
             const r = await sql.raw<{ 'QUERY PLAN': string }>(`EXPLAIN ${query}`).execute(trx);
             plan = r.rows.map((x) => x['QUERY PLAN']).join('\n');
@@ -331,7 +333,8 @@ describe('migration 012 — page indexes', () => {
         ],
         [
             'delivery status events by time',
-            'idx_issue_events_status_created_at',
+            // Either status-only partial index serves a whole-history pass.
+            'idx_issue_events_(?:status_created_at|item_status)',
             `SELECT item_id, min(created_at) FILTER (WHERE to_value = 'done') FROM issue_events
               WHERE field = 'status' AND created_at < now() GROUP BY item_id`,
         ],
@@ -381,4 +384,142 @@ describe('migration 012 — page indexes', () => {
                     AND NOT EXISTS (SELECT 1 FROM workflow_runs wr WHERE wr.status = 'running' AND wr.item_id = x.parent_id))`);
         expect(plan).not.toMatch(/Seq Scan on workflow_runs/);
     });
+});
+
+// ── Migration 016 — analytics test filter, keysets, PR lookup ──────────────
+//
+// The rewritten analytics queries are EXPLAINed in the shape the services
+// send them (literal bounds instead of parameters), so a later edit that
+// reverts a rewrite or loses an index fails here rather than in production.
+const ANALYTICS_INDEXES = [
+    'idx_items_is_test',
+    'idx_notifications_created_id',
+    'idx_reminders_history',
+    'idx_item_external_links_pr_url',
+    'idx_issue_events_item_status',
+];
+
+// Rows PLAN_SEED leaves out: a few agent-test items (as in a real workspace),
+// workflow steps on the runs, PR/Jira links and reminders of every status.
+const ANALYTICS_SEED = `
+    UPDATE items SET is_test = true WHERE id IN ('pln-5', 'pln-9', 'pln-13', 'pln-17');
+    UPDATE agent_runs SET workflow_run_id = 'plw-' || (1 + substr(id, 5)::int % 4000) WHERE id LIKE 'plr-%';
+    INSERT INTO item_external_links (item_id, link_kind, url)
+        SELECT 'pln-' || g, CASE WHEN g % 2 = 0 THEN 'pull_request' ELSE 'jira_issue' END, 'https://git.example/pr/' || g
+          FROM generate_series(1, 4000) g;
+    INSERT INTO reminders (label, schedule_kind, schedule_value, next_fire_at, status, updated_at)
+        SELECT 'r' || g, 'once', 'x', now() + g * interval '1 hour',
+               (ARRAY['active', 'paused', 'cancelled', 'completed'])[1 + g % 4], now() - g * interval '1 minute'
+          FROM generate_series(1, 4000) g;
+    ANALYZE items, agent_runs, item_external_links, reminders;
+`;
+
+const WINDOW = `now() - interval '30 days'`;
+const SHORT_WINDOW = `now() - interval '2 days'`;
+
+describe('migration 016 — analytics and keyset indexes', () => {
+    it('creates the five indexes and drops the single-column notifications index', async () => {
+        expect(await indexNames(ANALYTICS_INDEXES)).toEqual([...ANALYTICS_INDEXES].sort());
+        expect(await indexNames(['idx_notifications_created_at'])).toEqual([]);
+    });
+
+    const cases: Array<[label: string, mustUse: string[], query: string]> = [
+        [
+            'Analytics spend leaves agent tests out (notTestRun) via the partial index',
+            ['idx_items_is_test', 'idx_agent_runs_completed_cover'],
+            `SELECT sum(total_cost_usd), sum(input_tokens), count(*) FROM agent_runs
+              WHERE status = 'completed'
+                AND NOT EXISTS (SELECT 1 FROM items ti WHERE ti.id = agent_runs.item_id AND ti.is_test)
+                AND completed_at >= ${WINDOW}`,
+        ],
+        [
+            'scorecard roots: ScoredRun columns, NOT EXISTS test filter',
+            ['idx_items_is_test', 'idx_workflow_runs_top_started_at'],
+            `SELECT id, workflow_id, item_id, project_id, status, started_at, finished_at, loop_count,
+                    gate_rounds, park_reason, pr_url, pr_urls
+               FROM workflow_runs
+              WHERE parent_workflow_run_id IS NULL AND started_at >= ${WINDOW} AND started_at <= now()
+                AND NOT (EXISTS (SELECT 1 AS one FROM items AS ti WHERE ti.id = workflow_runs.item_id AND ti.is_test))
+              ORDER BY started_at`,
+        ],
+        [
+            'scorecard PR links by url',
+            ['idx_item_external_links_pr_url'],
+            `SELECT url, pr_state, created_at FROM item_external_links
+              WHERE link_kind = 'pull_request' AND url IN ('https://git.example/pr/2', 'https://git.example/pr/4')`,
+        ],
+        [
+            'notifications page keyset',
+            ['idx_notifications_created_id'],
+            `SELECT n.id FROM notifications n
+              WHERE (n.created_at, n.id) < (SELECT c.created_at, c.id FROM notifications c WHERE c.id = 3000)
+              ORDER BY n.created_at DESC, n.id DESC LIMIT 50`,
+        ],
+        [
+            'reminders history, newest first',
+            ['idx_reminders_history'],
+            `SELECT id FROM reminders WHERE status IN ('cancelled', 'completed')
+              ORDER BY updated_at DESC, id DESC LIMIT 50`,
+        ],
+        [
+            // A short window over a long history: the case the rewrite is for.
+            'delivery firstDoneIn: window Done events first, then their history by item',
+            // Either item-leading index serves the per-item probe.
+            ['idx_issue_events_status_created_at', 'idx_issue_events_item(?:_agent_event|_status)?'],
+            `SELECT e.item_id,
+                    MIN(e.created_at) FILTER (WHERE e.to_value = 'done') AS done_at,
+                    MIN(e.created_at) FILTER (WHERE e.to_value = 'in_progress') AS ip_at
+               FROM issue_events e
+              WHERE e.field = 'status' AND e.created_at < now()
+                AND e.item_id IN (
+                    SELECT d.item_id FROM issue_events d
+                     WHERE d.field = 'status' AND d.to_value = 'done'
+                       AND d.created_at >= ${SHORT_WINDOW} AND d.created_at < now())
+              GROUP BY e.item_id
+             HAVING MIN(e.created_at) FILTER (WHERE e.to_value = 'done') >= ${SHORT_WINDOW}`,
+        ],
+        [
+            // Per shipped item: did it leave Done later? Without the per-item
+            // status index this range-scanned every later status event (O(n²)).
+            'delivery reworked probe: one seek per item',
+            ['idx_issue_events_item_status'],
+            `SELECT f.item_id, EXISTS (SELECT 1 FROM issue_events r
+                                        WHERE r.item_id = f.item_id AND r.field = 'status' AND r.from_value = 'done'
+                                          AND r.created_at > f.done_at AND r.created_at < now()) AS reworked
+               FROM (SELECT d.item_id, MIN(d.created_at) AS done_at FROM issue_events d
+                      WHERE d.field = 'status' AND d.to_value = 'done' AND d.created_at >= ${WINDOW}
+                      GROUP BY d.item_id) f`,
+        ],
+        [
+            'delivery waits: status events bounded on both sides',
+            ['idx_issue_events_status_created_at'],
+            `SELECT e.to_value, e.created_at,
+                    LEAD(e.created_at) OVER (PARTITION BY e.item_id ORDER BY e.created_at, e.id) AS next_at
+               FROM issue_events e
+               JOIN items i ON i.id = e.item_id AND NOT i.is_test
+              WHERE e.field = 'status' AND e.created_at >= ${WINDOW} AND e.created_at < now()`,
+        ],
+        [
+            'workflows cost per run tree: UNION ALL of the runs and their children',
+            ['workflow_runs_parent_idx'],
+            `WITH runs AS (
+                 SELECT r.id FROM workflow_runs r
+                  WHERE r.parent_workflow_run_id IS NULL AND r.started_at >= ${WINDOW} AND r.started_at < now()),
+             tree AS (
+                 SELECT id AS run_id, id AS root FROM runs
+                 UNION ALL
+                 SELECT c.id, c.parent_workflow_run_id FROM workflow_runs c JOIN runs ON c.parent_workflow_run_id = runs.id)
+             SELECT tree.root, SUM(a.total_cost_usd) FROM tree
+               JOIN agent_runs a ON a.workflow_run_id = tree.run_id GROUP BY 1`,
+        ],
+    ];
+    for (const [label, mustUse, query] of cases) {
+        it(`${label} uses ${mustUse.join(' + ').replace('(?:_agent_event)?', '')}`, async () => {
+            const plan = await planWithoutSeqScan(query, ANALYTICS_SEED);
+            for (const index of mustUse) expect(plan).toMatch(new RegExp(`(using|Index Scan on) ${index}\\b`));
+            expect(plan).not.toMatch(/Seq Scan/);
+            // A keyset served by its index never sorts.
+            if (/LIMIT 50/.test(query)) expect(plan).not.toMatch(/Sort Key/);
+        });
+    }
 });

@@ -78,6 +78,36 @@ describe('telegramTransport.send', () => {
         expect(body.text).toBe('hello');
     });
 
+    // Regression: with parse_mode Markdown, Telegram 400'd every message that
+    // carried an unbalanced `_` / `*` / `[` ("can't parse entities") — paths,
+    // check names and error text in workflow parks never arrived.
+    it('sends plain text (no parse_mode) so markdown-ish characters reach Telegram verbatim', async () => {
+        await settingsService.updateExternalNotificationToken('123:abc');
+        await settingsService.updateExternalNotificationChatId('-100');
+        const fetchSpy = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValue(new Response('{}', { status: 200 }));
+        const msg = 'Build sub-task needs you on APL-8: checklist_failed: see src/my_file.ts [line *3';
+        await telegramTransport.send(msg, await settingsService.getWithSecrets());
+        const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+        const body = JSON.parse(init.body as string) as Record<string, unknown>;
+        expect(body['parse_mode']).toBeUndefined();
+        expect(body['text']).toBe(msg);
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('caps the text at Telegram\'s 4096-character limit', async () => {
+        await settingsService.updateExternalNotificationToken('123:abc');
+        await settingsService.updateExternalNotificationChatId('-100');
+        const fetchSpy = vi
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValue(new Response('{}', { status: 200 }));
+        await telegramTransport.send('x'.repeat(5000), await settingsService.getWithSecrets());
+        const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string) as { text: string };
+        expect(body.text).toHaveLength(4096);
+        expect(body.text.endsWith('…')).toBe(true);
+    });
+
     it('throws on non-2xx response (transport-level failure)', async () => {
         await settingsService.updateExternalNotificationToken('123:abc');
         await settingsService.updateExternalNotificationChatId('-100');

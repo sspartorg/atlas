@@ -68,6 +68,7 @@ interface RowActions {
 
 export function Reminders() {
     useSetPageTitle('Reminders');
+    const isMobile = useIsMobile();
     const toast = useToast();
     const [showHistory, setShowHistory] = useState(false);
     const [newOpen, setNewOpen] = useState(false);
@@ -160,7 +161,8 @@ export function Reminders() {
     };
 
     return (
-        <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
+        // Phones: room under the last card so the FAB never sits on its ⋮ button.
+        <Box sx={{ px: { xs: 3, md: 8 }, pt: 4, pb: { xs: 20, md: 4 } }}>
             <PageHeader
                 icon="alarm"
                 title="Reminders"
@@ -183,16 +185,19 @@ export function Reminders() {
                             tooltipLabel="Refresh reminders"
                         />
                         <FormControlLabel
+                            // Phones: the short label keeps the switch beside the title.
+                            sx={{ mr: 0, ml: 0, gap: 1, whiteSpace: 'nowrap' }}
                             control={
                                 <Switch
                                     size="small"
                                     checked={showHistory}
                                     onChange={(e) => setShowHistory(e.target.checked)}
+                                    slotProps={{ input: { 'aria-label': 'Show history' } }}
                                 />
                             }
                             label={
                                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                    Show history
+                                    {isMobile ? 'History' : 'Show history'}
                                 </Typography>
                             }
                         />
@@ -232,21 +237,30 @@ export function Reminders() {
             )}
 
             {showHistory && (
-                <Box component="section" aria-labelledby="reminders-history" sx={{ mt: 8 }}>
-                    <Typography
-                        id="reminders-history"
-                        component="h2"
-                        sx={{ fontSize: 15, fontWeight: 600, color: ATLAS_PALETTE.slate, mb: 3 }}
-                    >
-                        History
-                    </Typography>
+                <Box
+                    component="section"
+                    aria-labelledby="reminders-history"
+                    sx={{ mt: 8, pt: 6, borderTop: `1px solid ${ATLAS_PALETTE.slate10}` }}
+                >
+                    <Box sx={{ mb: 4 }}>
+                        <Typography
+                            id="reminders-history"
+                            component="h2"
+                            sx={{ fontSize: 16, fontWeight: 600, lineHeight: 1.4, color: ATLAS_PALETTE.slate }}
+                        >
+                            History
+                        </Typography>
+                        <Typography sx={{ mt: 0.5, fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
+                            Cancelled and completed reminders. Open one to see when it fired.
+                        </Typography>
+                    </Box>
                     {historyQuery.error ? (
                         <Alert severity="error">Could not load history: {historyQuery.error.message}</Alert>
                     ) : historyQuery.isLoading ? (
                         <Skeleton variant="rounded" height={72} />
                     ) : history.length === 0 ? (
                         <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                            No finished reminders yet. Cancelled and completed ones land here.
+                            No finished reminders yet.
                         </Typography>
                     ) : (
                         <ReminderList rows={history} actions={actions} />
@@ -344,7 +358,7 @@ function ConfirmDialog({
 
 function ReminderList({ rows, actions }: { rows: IReminder[]; actions: RowActions }) {
     return (
-        <Box component="ul" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, m: 0, p: 0, listStyle: 'none' }}>
+        <Box component="ul" sx={{ display: 'flex', flexDirection: 'column', gap: 2, m: 0, p: 0, listStyle: 'none' }}>
             {rows.map((r) => (
                 <ReminderRow key={r.id} reminder={r} actions={actions} />
             ))}
@@ -451,8 +465,8 @@ function ReminderRow({ reminder, actions }: { reminder: IReminder; actions: RowA
                 <Box sx={{ flex: 1, minWidth: 0 }}>{schedule}</Box>
                 <ChannelIcons channel={reminder.channel} />
             </Box>
-            {/* Room on the right for the ⋮ button pinned over this line. */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 28, pr: 6 }}>
+            {/* Room on the right for the ⋮ button pinned over this line: 12px pad + 32px clears its 8px inset + 30px box. */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minHeight: 28, pr: 8 }}>
                 {time}
                 {expandIcon}
             </Box>
@@ -675,7 +689,7 @@ function FireLog({ id, reminderId, timeZone }: { id: string; reminderId: number;
     return (
         <Box
             id={id}
-            sx={{ borderTop: `1px solid ${ATLAS_PALETTE.slate10}`, px: 3, py: 2.5 }}
+            sx={{ borderTop: `1px solid ${ATLAS_PALETTE.slate10}`, px: 3, py: 3 }}
         >
             {isLoading ? (
                 <Skeleton variant="text" width="60%" />
@@ -686,37 +700,120 @@ function FireLog({ id, reminderId, timeZone }: { id: string; reminderId: number;
                     No fires logged. Fires before the log existed aren&apos;t listed.
                 </Typography>
             ) : (
-                <Box component="ol" aria-label="Fire log" sx={{ m: 0, p: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    {data.map((f) => (
+                <Box
+                    component="ol"
+                    aria-label="Fire log"
+                    sx={{ m: 0, p: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' }}
+                >
+                    {data.map((f, i) => (
                         <Box
                             component="li"
                             key={f.notification_id}
+                            data-testid="reminder-fire"
                             sx={{
                                 display: 'flex',
-                                flexWrap: 'wrap',
-                                columnGap: 3,
-                                rowGap: 0.5,
-                                fontFamily: MONO,
-                                fontSize: 12,
-                                color: ATLAS_PALETTE.slate70,
+                                flexDirection: 'column',
+                                gap: 1,
+                                minWidth: 0,
+                                py: 2,
+                                ...(i > 0 && { borderTop: `1px solid ${ATLAS_PALETTE.slate06}` }),
+                                '&:first-of-type': { pt: 0 },
+                                '&:last-of-type': { pb: 0 },
                             }}
                         >
-                            <Box component="span" sx={{ color: ATLAS_PALETTE.slate }}>
-                                {formatAt(f.fired_at, timeZone)}
-                            </Box>
-                            <Box component="span">push {DELIVERY_TEXT[f.push_status]}</Box>
-                            <Box
-                                component="span"
-                                sx={{ color: f.external_status === 'failed' ? ATLAS_PALETTE.error : 'inherit' }}
+                            <Typography
+                                sx={{
+                                    fontFamily: MONO,
+                                    fontSize: 12,
+                                    color: ATLAS_PALETTE.slate,
+                                    fontVariantNumeric: 'tabular-nums',
+                                }}
                             >
-                                external {DELIVERY_TEXT[f.external_status]}
-                                {f.external_status === 'failed' && f.failure_reason ? ` · ${f.failure_reason}` : ''}
+                                {formatAt(f.fired_at, timeZone)}
+                            </Typography>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                                <DeliveryChip channel="Push" status={f.push_status} />
+                                <DeliveryChip channel="External" status={f.external_status} />
                             </Box>
+                            {f.external_status === 'failed' && f.failure_reason && (
+                                <FailureReason reason={f.failure_reason} />
+                            )}
                         </Box>
                     ))}
                 </Box>
             )}
         </Box>
+    );
+}
+
+function DeliveryChip({ channel, status }: { channel: string; status: IReminderFire['external_status'] }) {
+    const tone =
+        status === 'sent'
+            ? { bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg }
+            : status === 'failed'
+              ? { bg: ATLAS_PALETTE.dangerSoft, fg: ATLAS_PALETTE.dangerFg }
+              : status === 'pending'
+                ? { bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
+                : { bg: ATLAS_PALETTE.slate06, fg: ATLAS_PALETTE.slate70 };
+    return (
+        <Box
+            component="span"
+            sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 1,
+                px: 1.5,
+                borderRadius: '9999px',
+                bgcolor: tone.bg,
+                color: tone.fg,
+                fontSize: 11,
+                fontWeight: 600,
+                lineHeight: 1.7,
+                whiteSpace: 'nowrap',
+            }}
+        >
+            <Box component="span" sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: 'currentColor' }} />
+            {channel} {DELIVERY_TEXT[status]}
+        </Box>
+    );
+}
+
+/** Two lines of the reason; tap for the rest. */
+function FailureReason({ reason }: { reason: string }) {
+    const [full, setFull] = useState(false);
+    return (
+        <ButtonBase
+            onClick={() => setFull((v) => !v)}
+            aria-expanded={full}
+            sx={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                borderRadius: 1,
+                '&.Mui-focusVisible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}`, outlineOffset: 2 },
+            }}
+        >
+            <Typography
+                component="span"
+                sx={{
+                    fontFamily: MONO,
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                    color: ATLAS_PALETTE.error,
+                    overflowWrap: 'anywhere',
+                    ...(full
+                        ? { display: 'block' }
+                        : {
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              overflow: 'hidden',
+                          }),
+                }}
+            >
+                {reason}
+            </Typography>
+        </ButtonBase>
     );
 }
 

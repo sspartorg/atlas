@@ -1,5 +1,5 @@
 import { sql } from 'kysely';
-import type { AnalyticsWindow, IAnalyticsPeriod } from '@atlas/shared';
+import type { AnalyticsWindow, IAnalyticsPeriod, IAnalyticsTrend } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
 import { iso } from './agent-scorecard.js';
 
@@ -74,3 +74,50 @@ export async function resolveWindow(
 export function notTestRun(itemIdColumn: string) {
     return sql<boolean>`NOT EXISTS (SELECT 1 FROM items ti WHERE ti.id = ${sql.ref(itemIdColumn)} AND ti.is_test)`;
 }
+
+/** Zero-filled bucket keys (`YYYY-MM-DD`, Monday for weeks) across a window, in the viewer's tz. */
+export async function windowBuckets(period: IAnalyticsPeriod): Promise<string[]> {
+    const { tz, start, end, bucket: unit } = period;
+    const r = await sql<{ bucket: string }>`
+        SELECT to_char(d, 'YYYY-MM-DD') AS bucket
+          FROM generate_series(
+                   date_trunc(${unit}, ${start}::timestamptz AT TIME ZONE ${tz}),
+                   ${end}::timestamptz AT TIME ZONE ${tz},
+                   ('1 ' || ${unit})::interval) d
+    `.execute(db);
+    return r.rows.map((x) => x.bucket);
+}
+
+/** The bucket a timestamp falls in, in `tz`: the key Postgres `date_trunc(unit, at AT TIME ZONE tz)` gives. */
+export function bucketKey(at: string | Date, tz: string, unit: 'day' | 'week'): string {
+    const ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+        new Date(at),
+    );
+    if (unit === 'day') return ymd;
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+    dt.setUTCDate(dt.getUTCDate() - ((dt.getUTCDay() + 6) % 7));
+    return dt.toISOString().slice(0, 10);
+}
+
+type BucketFacts = Record<string, Array<{ bucket: string }>>;
+
+/** Every fact list cut down to one bucket, so a metric reads per bucket with the same code. */
+function sliceFacts<F extends BucketFacts>(facts: F, bucket: string): F {
+    return Object.fromEntries(Object.entries(facts).map(([k, rows]) => [k, rows.filter((r) => r.bucket === bucket)])) as F;
+}
+
+/**
+ * A metric over this window, the previous one, and each bucket of this one,
+ * from one function, so a tile, its delta and its sparkline cannot disagree.
+ */
+export function trendOf<F extends BucketFacts>(
+    cur: F,
+    prev: F,
+    buckets: string[],
+    metric: (f: F) => number | null,
+): IAnalyticsTrend {
+    return { cur: metric(cur), prev: metric(prev), series: buckets.map((b) => metric(sliceFacts(cur, b))) };
+}
+
+export const ratio = (n: number, d: number): number | null => (d === 0 ? null : n / d);

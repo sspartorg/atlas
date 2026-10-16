@@ -52,39 +52,73 @@ export function PageHeader({
     return (
         <Box component="header" sx={{ mb: 6 }}>
             {breadcrumbs && breadcrumbs.length > 0 && <Breadcrumb items={breadcrumbs} />}
+            {/* Desktop: a grid — title over subtitle on the left, the actions spanning
+                both on the right. Phones: title + actions are one row (the title wraps
+                between words beside them; the actions only drop when they can't fit next
+                to the title's longest word) and the subtitle runs full width below. The
+                title and subtitle used to share one box, so a long subtitle widened it
+                and pushed the actions under the subtitle. */}
             <Box
                 sx={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 4,
-                    flexWrap: 'wrap',
+                    display: { xs: 'block', md: 'grid' },
+                    gridTemplateColumns: 'minmax(0, 1fr) auto',
+                    gridTemplateAreas: '"title actions" "subtitle actions"',
+                    columnGap: 4,
                 }}
             >
-                <Box sx={{ minWidth: 0 }}>
-                    <Typography variant="h1" sx={PAGE_TITLE_SX}>
+                <Box
+                    data-testid="page-header-title-row"
+                    sx={{
+                        // `contents` on desktop: title and actions become the grid's items.
+                        display: { xs: 'flex', md: 'contents' },
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        columnGap: 2,
+                        rowGap: 2,
+                    }}
+                >
+                    <Typography
+                        variant="h1"
+                        sx={{
+                            ...PAGE_TITLE_SX,
+                            gridArea: 'title',
+                            // Basis 0 + the flex item's min-content floor: it gives up
+                            // width to the actions down to its longest word, then wraps.
+                            // The heavy grow weight keeps the free space on its side while
+                            // the actions share its line.
+                            flex: '999 1 0',
+                        }}
+                    >
                         {icon && <PageTitleIcon name={icon} />}
                         {title}
                     </Typography>
-                    {subtitle && (
-                        <Typography component="div" sx={PAGE_SUBTITLE_SX}>
-                            {subtitle}
-                        </Typography>
+                    {actions && (
+                        <Box
+                            data-testid="page-header-actions"
+                            sx={{
+                                gridArea: 'actions',
+                                display: hideActionsOnMobile ? { xs: 'none', md: 'flex' } : 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                flexWrap: { xs: 'nowrap', md: 'wrap' },
+                                gap: { xs: 1, md: 2 },
+                                ml: 'auto',
+                                // Dropped onto a line of their own, the actions fill it,
+                                // so a segmented control can stretch full width.
+                                flex: { xs: '1 0 auto', md: 'none' },
+                                alignSelf: { md: 'start' },
+                                // Desktop: centred on the title's line, not the whole block.
+                                minHeight: { md: 43 },
+                            }}
+                        >
+                            {actions}
+                        </Box>
                     )}
                 </Box>
-                {actions && (
-                    <Box
-                        sx={{
-                            display: hideActionsOnMobile ? { xs: 'none', md: 'flex' } : 'flex',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: 2,
-                            // Centred on the title's line, not the whole block.
-                            minHeight: { xs: 34, md: 43 },
-                        }}
-                    >
-                        {actions}
-                    </Box>
+                {subtitle && (
+                    <Typography component="div" sx={{ ...PAGE_SUBTITLE_SX, gridArea: 'subtitle' }}>
+                        {subtitle}
+                    </Typography>
                 )}
             </Box>
         </Box>

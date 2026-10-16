@@ -698,6 +698,9 @@ describe('workflow engine — delivery modes', () => {
         await finishStep('completed', 'done');
 
         expect(await runOf(runId)).toMatchObject({ status: 'completed' });
+        // Every finish goes outward: a PR under "In Review", anything else
+        // under "Task Finished" (it used to stay in-app only).
+        expect(sendExternal.mock.calls.at(-1)?.[2]).toBe(pr ? 'item.status_changed:in_review' : 'workflow.finished');
         if (pushed) expect(git.pushWorktree).toHaveBeenCalledWith('/tmp/atlas-wf-test', pushed, null, 'p1');
         else expect(git.pushWorktree).not.toHaveBeenCalled();
         expect(git.openPullRequest).toHaveBeenCalledTimes(pr ? 1 : 0);

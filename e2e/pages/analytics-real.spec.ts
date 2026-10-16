@@ -108,6 +108,126 @@ function parks(w: Win): Array<[string, string]> {
         .sort((a, b) => a[0].localeCompare(b[0]));
 }
 
+/** Shipped Tasks (first Done in the window), as a CTE other checks build on. */
+const SHIPPED_CTE = (w: Win) => `
+    f AS (SELECT item_id, MIN(created_at) FILTER (WHERE to_value = 'done') AS done_at
+            FROM issue_events WHERE field = 'status' GROUP BY item_id),
+    s AS (SELECT f.item_id, f.done_at FROM f JOIN items i ON i.id = f.item_id
+           WHERE i.type = 'task' AND NOT i.is_test AND f.done_at >= ${start(w)} AND f.done_at < now())`;
+
+/** Shipped Tasks' time In progress or In review ÷ all their status time before first Done. */
+function flowEfficiency(w: Win): string {
+    const [row] = sql(`
+        WITH ${SHIPPED_CTE(w)},
+        ev AS (SELECT e.item_id, e.from_value, e.to_value, e.created_at,
+                      LEAD(e.created_at) OVER x AS next_at, ROW_NUMBER() OVER x AS rn
+                 FROM issue_events e JOIN s ON s.item_id = e.item_id
+                WHERE e.field = 'status' AND e.created_at <= s.done_at
+               WINDOW x AS (PARTITION BY e.item_id ORDER BY e.created_at, e.id)),
+        iv AS (SELECT to_value AS st, created_at AS a, next_at AS b FROM ev WHERE to_value <> 'done'
+               UNION ALL
+               SELECT ev.from_value, i.created_at, ev.created_at FROM ev JOIN items i ON i.id = ev.item_id
+                WHERE ev.rn = 1 AND ev.from_value IS NOT NULL)
+        SELECT COALESCE(SUM(EXTRACT(EPOCH FROM b - a)) FILTER (WHERE st IN ('in_progress', 'in_review')), 0),
+               COALESCE(SUM(EXTRACT(EPOCH FROM b - a)), 0)
+          FROM iv WHERE b IS NOT NULL AND b > a`);
+    return rate(Number(row?.[0]), Number(row?.[1]));
+}
+
+/** Shipped Tasks that left Done again (after their first Done) ÷ shipped Tasks. */
+function rework(w: Win): string {
+    const [row] = sql(`
+        WITH ${SHIPPED_CTE(w)}
+        SELECT COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM issue_events r WHERE r.item_id = s.item_id AND r.field = 'status'
+                                                AND r.from_value = 'done' AND r.created_at > s.done_at)), COUNT(*)
+          FROM s`);
+    return rate(Number(row?.[0]), Number(row?.[1]));
+}
+
+/** Tasks shipped ÷ the window's length in weeks, to one decimal. */
+function weeklyThroughput(w: Win): string {
+    const days = Number(one(`SELECT EXTRACT(EPOCH FROM now() - ${start(w)}) / 86400`));
+    return ((shipped(w).count * 7) / days).toFixed(1);
+}
+
+/** Median park → that run's next resume, parks started in the window, sub-task copies and agent tests out. */
+function ownerResponse(w: Win): string {
+    const v = one(`
+        SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY s) FROM (
+            SELECT EXTRACT(EPOCH FROM (SELECT MIN(r.created_at) FROM workflow_run_events r
+                                        WHERE r.workflow_run_id = ev.workflow_run_id AND r.kind = 'resumed'
+                                          AND r.created_at >= ev.created_at AND r.created_at < now()) - ev.created_at) AS s
+              FROM workflow_run_events ev
+              JOIN workflow_runs wr ON wr.id = ev.workflow_run_id
+              LEFT JOIN items i ON i.id = wr.item_id
+              LEFT JOIN items t ON t.id = i.parent_id
+             WHERE ev.kind = 'parked' AND ev.park_kind <> 'subtask_waiting'
+               AND NOT COALESCE(t.is_test, i.is_test, false) AND ev.created_at >= ${start(w)}) x
+         WHERE s IS NOT NULL`);
+    return span(v ? Number(v) : null);
+}
+
+/** Runs started in the window whose every PR merged; clean = no retried step and no park in the run tree. */
+function firstAttempt(w: Win): string {
+    const [row] = sql(`
+        WITH r AS (SELECT r.id, r.pr_urls, r.pr_url FROM workflow_runs r LEFT JOIN items i ON i.id = r.item_id
+                    WHERE r.parent_workflow_run_id IS NULL AND NOT COALESCE(i.is_test, false)
+                      AND r.started_at >= ${start(w)} AND r.started_at <= now()),
+        u AS (SELECT r.id, x.url FROM r, LATERAL jsonb_array_elements_text(
+                  CASE WHEN jsonb_array_length(r.pr_urls) > 0 THEN r.pr_urls ELSE jsonb_build_array(r.pr_url) END) x(url)
+               WHERE x.url IS NOT NULL),
+        m AS (SELECT u.id FROM u LEFT JOIN item_external_links l ON l.url = u.url AND l.link_kind = 'pull_request'
+               GROUP BY u.id HAVING bool_and(COALESCE(l.pr_state = 'merged', false)))
+        SELECT COUNT(*) FILTER (WHERE NOT EXISTS (
+                   SELECT 1 FROM workflow_runs t JOIN agent_runs a ON a.workflow_run_id = t.id
+                    WHERE (t.id = m.id OR t.parent_workflow_run_id = m.id) AND a.parent_run_id IS NOT NULL)
+                 AND NOT EXISTS (
+                   SELECT 1 FROM workflow_runs t JOIN workflow_run_events ev ON ev.workflow_run_id = t.id
+                    WHERE (t.id = m.id OR t.parent_workflow_run_id = m.id) AND ev.kind = 'parked')),
+               COUNT(*)
+          FROM m`);
+    return rate(Number(row?.[0]), Number(row?.[1]));
+}
+
+/** Agent-run retries ÷ distinct Tasks those runs worked for (a sub-task's for its Task), agent tests out. */
+function retriesPerTask(w: Win): string {
+    const [row] = sql(`
+        SELECT COUNT(*) FILTER (WHERE a.parent_run_id IS NOT NULL),
+               COUNT(DISTINCT CASE WHEN i.type = 'sub_task' THEN i.parent_id ELSE i.id END)
+          FROM agent_runs a LEFT JOIN items i ON i.id = a.item_id
+         WHERE NOT COALESCE(i.is_test, false) AND a.created_at >= ${start(w)}`);
+    const tasks = Number(row?.[1]);
+    return tasks === 0 ? '—' : (Number(row?.[0]) / tasks).toFixed(2);
+}
+
+/** Red checks by script in the window: [name, failures] most first (ties by name). */
+function redChecks(w: Win): Array<[string, string]> {
+    return sql(`
+        SELECT COALESCE(s.name, g.script_id), COUNT(*)
+          FROM run_gate_results g JOIN workflow_runs r ON r.id = g.workflow_run_id
+          LEFT JOIN items i ON i.id = r.item_id LEFT JOIN guardrail_scripts s ON s.id = g.script_id
+         WHERE g.verdict = 'fail' AND NOT COALESCE(i.is_test, false) AND g.created_at >= ${start(w)}
+         GROUP BY g.script_id, s.name ORDER BY COUNT(*) DESC, 1 LIMIT 10`).map(([n, c]) => [String(n), String(c)]);
+}
+
+/** Per workflow: run-tree cost of runs started in the window ÷ the PRs they opened. */
+function costPerPr(w: Win): Array<[string, string]> {
+    return sql(`
+        WITH runs AS (SELECT r.id, r.workflow_id,
+                             CASE WHEN jsonb_array_length(r.pr_urls) > 0 THEN jsonb_array_length(r.pr_urls)
+                                  WHEN r.pr_url IS NOT NULL THEN 1 ELSE 0 END AS prs
+                        FROM workflow_runs r LEFT JOIN items i ON i.id = r.item_id
+                       WHERE r.parent_workflow_run_id IS NULL AND NOT COALESCE(i.is_test, false) AND r.started_at >= ${start(w)}),
+        cost AS (SELECT runs.id, COALESCE(SUM(a.total_cost_usd::numeric), 0) AS usd FROM runs
+                   LEFT JOIN workflow_runs t ON t.id = runs.id OR t.parent_workflow_run_id = runs.id
+                   LEFT JOIN agent_runs a ON a.workflow_run_id = t.id GROUP BY runs.id)
+        SELECT w.name, SUM(cost.usd), SUM(runs.prs) FROM runs JOIN cost ON cost.id = runs.id
+          JOIN workflows w ON w.id = runs.workflow_id GROUP BY w.name ORDER BY w.name`).map(([name, usdSum, prs]) => [
+        String(name),
+        Number(prs) === 0 ? '—' : usd(Number(usdSum) / Number(prs)),
+    ]);
+}
+
 // ── Reading the page ───────────────────────────────────────────────────────
 
 async function tile(page: Page, label: string): Promise<string> {
@@ -156,6 +276,64 @@ test.describe('/analytics over the realistic seed, against the real API', () => 
             const expected = parks(w);
             if (expected.length === 0) await expect(page.getByText('No parks in this window')).toBeVisible();
             else expect(await barList(page, 'Park reasons')).toEqual(expected);
+        });
+
+        test(`Flow, quality and cost efficiency match the seed (${w})`, async ({ page }) => {
+            const qs = w === 'month' ? '' : `&window=${w}`;
+            await goto(page, `/analytics?tab=delivery${qs}`);
+            expect.soft(await tile(page, 'Flow efficiency')).toBe(flowEfficiency(w));
+            expect.soft(await tile(page, 'Rework after Done')).toBe(rework(w));
+            expect.soft(await tile(page, 'Weekly throughput')).toBe(weeklyThroughput(w));
+            expect.soft(await tile(page, 'Your response to parks')).toBe(ownerResponse(w));
+            expect.soft(await tile(page, 'First-attempt merges')).toBe(firstAttempt(w));
+
+            await goto(page, `/analytics?tab=workflows${qs}`);
+            expect.soft(await tile(page, 'Retries per Task')).toBe(retriesPerTask(w));
+            const red = redChecks(w);
+            if (red.length === 0) await expect(page.getByText('No failed checks in this window')).toBeVisible();
+            else {
+                const rows = page.getByRole('table', { name: 'Red checks by script' }).locator('tbody tr');
+                // evaluateAll does not wait: let the tab's fetch fill the table first.
+                await expect(rows).toHaveCount(red.length);
+                const seen = await rows.evaluateAll((trs) => trs.map((tr) => [tr.children[0]?.textContent ?? '', tr.children[1]?.textContent ?? '']));
+                expect.soft(seen).toEqual(red);
+            }
+
+            await goto(page, `/analytics?tab=spend${qs}`);
+            const perPr = costPerPr(w);
+            if (perPr.length === 0) await expect(page.getByText('No workflow runs in this window')).toBeVisible();
+            else {
+                const rows = page.getByRole('table', { name: 'Cost per PR and Task by workflow' }).locator('tbody tr');
+                await expect(rows).toHaveCount(perPr.length);
+                const seen = await rows.evaluateAll((trs) => trs.map((tr) => [tr.children[0]?.textContent ?? '', tr.children[4]?.textContent ?? '']));
+                expect.soft(seen).toEqual(perPr);
+            }
+        });
+
+        test(`every tile's trend compares with the previous window (${w})`, async ({ page }) => {
+            await goto(page, `/analytics?tab=delivery${w === 'month' ? '' : `&window=${w}`}`);
+            const vs = w === 'month' ? 'vs the same days last month' : `vs the ${Number.parseInt(w, 10)} days before`;
+            await expect(page.getByText(vs)).toHaveCount(13);
+            // Tasks shipped: the delta is this window against the one before, in plain SQL.
+            const prevStart = w === 'month'
+                ? `((date_trunc('month', now() AT TIME ZONE 'UTC') - interval '1 month') AT TIME ZONE 'UTC')`
+                : `(${start(w)} - interval '${Number.parseInt(w, 10)} days')`;
+            const prevEnd = w === 'month' ? `(now() - interval '1 month')` : start(w);
+            const prev = Number(one(`
+                WITH f AS (SELECT item_id, MIN(created_at) FILTER (WHERE to_value = 'done') AS done_at
+                             FROM issue_events WHERE field = 'status' GROUP BY item_id)
+                SELECT COUNT(*) FROM f JOIN items i ON i.id = f.item_id
+                 WHERE i.type = 'task' AND NOT i.is_test AND f.done_at >= ${prevStart} AND f.done_at < ${prevEnd}`));
+            const cur = shipped(w).count;
+            const info = page.getByRole('button', { name: 'How Tasks shipped is measured', exact: true });
+            const trendRow = info.locator('xpath=../..').locator(':scope > *').last();
+            const text = (await trendRow.innerText()).replace(/\s+/g, ' ');
+            if (prev === 0) expect.soft(text).toContain(cur === 0 ? 'same as before' : 'none before');
+            else {
+                const pct = (cur - prev) / prev;
+                if (Math.abs(pct) < 0.005) expect.soft(text).toContain('same as before');
+                else expect.soft(text).toContain(`${pct > 0 ? 'up' : 'down'} ${Math.abs(pct * 100).toFixed(0)}%`);
+            }
         });
     }
 

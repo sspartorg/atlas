@@ -28,7 +28,7 @@ describe('analytics chrome helpers', () => {
         rerender(<Delta cur={0.9} prev={0.8} goodWhen="up" points />);
         expect(screen.getByText(/up 10/)).toHaveTextContent('pts');
         rerender(<Delta cur={5} prev={null} goodWhen="down" />);
-        expect(screen.getByText('no earlier data')).toBeInTheDocument();
+        expect(screen.getByTitle('No earlier data to compare')).toHaveTextContent('—');
         rerender(<Delta cur={5} prev={0} goodWhen="down" />);
         expect(screen.getByText('none before')).toBeInTheDocument();
         rerender(<Delta cur={0} prev={0} goodWhen="down" />);
@@ -58,6 +58,10 @@ describe('analytics chrome helpers', () => {
 
     it('chart formatters print units the way the tiles do', () => {
         expect(usdTick(12)).toBe('$12');
+        expect(usdTick(950)).toBe('$950');
+        expect(usdTick(1200)).toBe('$1.2k');
+        expect(usdTick(1000)).toBe('$1k');
+        expect(usdTick(15_000)).toBe('$15k');
         expect(hourTick(4)).toBe('4h');
         expect(tokenTick(1_500_000)).toBe(tokenTooltip('1500000'));
         expect(usdTooltip('2.5')).toBe('$2.50');

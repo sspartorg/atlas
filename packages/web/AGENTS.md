@@ -148,7 +148,7 @@ Do not invent a new subtitle shape (no status pills, no bold-keyword paragraphs 
 
 ## Page titles
 
-- List and settings pages render their top with `<PageHeader>` (`components/PageHeader.tsx`): icon + title (`h1`), one subtitle, actions on the right. Detail pages that lay out their own header still use `PAGE_TITLE_SX` on an `h1` — one title size everywhere; never hand-roll `fontSize` on a page title.
+- List and settings pages render their top with `<PageHeader>` (`components/PageHeader.tsx`): icon + title (`h1`), one subtitle, actions on the right. On phones the actions stay on the title's row (the title wraps between words beside them) and the subtitle runs full width below; actions only drop to their own line when they can't fit next to the title's longest word — keep phone actions compact (icon buttons, short labels) so they don't. Detail pages that lay out their own header still use `PAGE_TITLE_SX` on an `h1` — one title size everywhere; never hand-roll `fontSize` on a page title.
 - Breadcrumbs (`components/Breadcrumb.tsx`, `Parent › Page`) only on pages with a parent: sub-pages (MCP Tools, Credentials, New task) and detail pages. Top-level pages have none — the sidenav already says where you are. No "Back" buttons alongside or instead of a breadcrumb.
 - A page's title starts with `<PageTitleIcon name="…" />` (`components/PageTitleIcon.tsx`), using the same Material Symbol as the page's sidenav entry (`components/Sidenav.tsx`). Pages without a nav entry pick the closest glyph (Credentials `key`, Fleet performance `speed`). Detail pages titled with an entity's name (an agent, a workflow) keep that entity's own glyph instead.
 

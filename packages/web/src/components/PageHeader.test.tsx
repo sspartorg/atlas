@@ -18,6 +18,20 @@ describe('PageHeader', () => {
         expect(screen.getByRole('button', { name: 'New project' })).toBeInTheDocument();
     });
 
+    it('keeps the actions in the title row and the subtitle outside it', () => {
+        renderWithProviders(
+            <PageHeader
+                title="Reminders"
+                subtitle="A long line about schedules"
+                actions={<button type="button">Refresh</button>}
+            />
+        );
+        const row = screen.getByTestId('page-header-title-row');
+        expect(row).toContainElement(screen.getByRole('heading', { level: 1 }));
+        expect(row).toContainElement(screen.getByRole('button', { name: 'Refresh' }));
+        expect(row).not.toContainElement(screen.getByText('A long line about schedules'));
+    });
+
     it('shows a breadcrumb only when given one', () => {
         const { unmount } = renderWithProviders(<PageHeader title="Projects" />);
         expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();

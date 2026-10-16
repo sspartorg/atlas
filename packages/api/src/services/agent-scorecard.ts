@@ -171,20 +171,32 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
     // 1. Root runs in scope. A Task's sub-task runs are children (ADR 0015) and
     //    are pulled in via the tree below, never selected directly — otherwise
     //    a sub-task run would be counted as its own delivery.
+    // Only the ScoredRun columns: `graph_snapshot` (the whole workflow graph
+    // per run) is the bulk of the row and nothing here reads it.
     let q = db
         .selectFrom('workflow_runs')
-        .selectAll()
+        .select([
+            'id', 'workflow_id', 'item_id', 'project_id', 'status', 'started_at', 'finished_at',
+            'loop_count', 'gate_rounds', 'park_reason', 'pr_url', 'pr_urls',
+        ])
         .where('parent_workflow_run_id', 'is', null);
     if (args.runs.length > 0) q = q.where('id', 'in', args.runs);
     if (args.since) q = q.where('started_at', '>=', args.since);
     if (args.until) q = q.where('started_at', '<=', args.until);
     if (args.project) q = q.where('project_id', '=', args.project);
     if (scope.exclude_test_items) {
-        q = q.where((eb) =>
-            eb.or([
-                eb('item_id', 'is', null),
-                eb('item_id', 'not in', eb.selectFrom('items').select('id').where('is_test', '=', true)),
-            ]),
+        // NOT EXISTS, not NOT IN: one probe of idx_items_is_test per run, and
+        // a run with no item matches nothing, so it stays in.
+        q = q.where(({ not, exists, selectFrom }) =>
+            not(
+                exists(
+                    selectFrom('items as ti')
+                        .select(sql`1`.as('one'))
+                        .whereRef('ti.id', '=', 'workflow_runs.item_id')
+                        // Bare column, so the planner matches the partial index predicate.
+                        .where(sql<boolean>`ti.is_test`),
+                ),
+            ),
         );
     }
     const roots = await q.orderBy('started_at', 'asc').execute();
@@ -201,7 +213,7 @@ export async function scoreAgents(scope: ScorecardScope = {}): Promise<Scorecard
     const rootIds = roots.map((r) => r.id);
     const children = await db
         .selectFrom('workflow_runs')
-        .selectAll()
+        .select(['id', 'parent_workflow_run_id'])
         .where('parent_workflow_run_id', 'in', rootIds)
         .execute();
 
@@ -439,7 +451,7 @@ function addFirstPass(into: FirstPass, routing: RoutedStep['routing'], detail: s
     void detail;
 }
 
-function percentile(sorted: number[], p: number): number | null {
+export function percentile(sorted: number[], p: number): number | null {
     if (sorted.length === 0) return null;
     return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1))] ?? null;
 }
@@ -698,7 +710,23 @@ function urlsOf(run: ScoredRun): string[] {
     return urls.length > 0 ? urls : run.pr_url ? [run.pr_url] : [];
 }
 
-export async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
+/** One live (non-test) root run's PRs: how many it opened, how many merged, and its time to the first one. */
+export interface RunPrs {
+    run_id: string;
+    item_id: string | null;
+    started_at: string | null;
+    opened: number;
+    merged: number;
+    /** Run start → its first PR's link row; null with no PR. */
+    s_to_pr: number | null;
+}
+
+/**
+ * Per-run PR facts over a scorecard's roots, agent tests left out. The
+ * fleet's delivery numbers are sums of these; Analytics buckets them by
+ * the run's start.
+ */
+export async function runPrs(card: Scorecard): Promise<RunPrs[]> {
     const itemIds = [...new Set(card.roots.map((r) => r.item_id).filter((v): v is string => v !== null))];
     const testItems = new Set(
         itemIds.length === 0
@@ -714,15 +742,6 @@ export async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
     );
     const live = card.roots.filter((r) => !(r.item_id && testItems.has(r.item_id)));
 
-    // A run's cost is its whole tree: the Task run's steps plus every sub-task
-    // run's, whatever status each step ended in. A failed step was still paid
-    // for, and a cost per merge that left it out would flatter the fleet.
-    const treeCost = new Map<string, number>();
-    for (const r of card.routed) {
-        const root = card.rootOf.get(r.workflow_run_id ?? '') ?? '';
-        treeCost.set(root, (treeCost.get(root) ?? 0) + (r.total_cost_usd ?? 0));
-    }
-
     const allUrls = live.flatMap(urlsOf);
     const links = new Map<string, { pr_state: string | null; created_at: string | null }>();
     if (allUrls.length > 0) {
@@ -735,26 +754,52 @@ export async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
         for (const row of rows) links.set(row.url, { pr_state: row.pr_state, created_at: iso(row.created_at) });
     }
 
+    return live.map((run) => {
+        const urls = urlsOf(run);
+        // The link row is written the moment the PR opens; a run whose link
+        // write failed still finished right after opening it.
+        const openedAt = links.get(urls[0] ?? '')?.created_at ?? iso(run.finished_at);
+        const s = urls.length === 0 ? 0 : seconds(iso(run.started_at), openedAt);
+        return {
+            run_id: run.id,
+            item_id: run.item_id,
+            started_at: iso(run.started_at),
+            opened: urls.length,
+            merged: urls.filter((u) => links.get(u)?.pr_state === 'merged').length,
+            s_to_pr: s > 0 ? s : null,
+        };
+    });
+}
+
+/** `perRun` is `runPrs(card)` when the caller already has it. */
+export async function fleetDelivery(card: Scorecard, perRunIn?: RunPrs[]): Promise<FleetDelivery> {
+    const perRun = perRunIn ?? (await runPrs(card));
+    const liveIds = new Set(perRun.map((r) => r.run_id));
+    const live = card.roots.filter((r) => liveIds.has(r.id));
+
+    // A run's cost is its whole tree: the Task run's steps plus every sub-task
+    // run's, whatever status each step ended in. A failed step was still paid
+    // for, and a cost per merge that left it out would flatter the fleet.
+    const treeCost = new Map<string, number>();
+    for (const r of card.routed) {
+        const root = card.rootOf.get(r.workflow_run_id ?? '') ?? '';
+        treeCost.set(root, (treeCost.get(root) ?? 0) + (r.total_cost_usd ?? 0));
+    }
+
     let opened = 0;
     let merged = 0;
     let tasksMerged = 0;
     let mergedCost = 0;
     const toPr: number[] = [];
-    for (const run of live) {
-        const urls = urlsOf(run);
-        if (urls.length === 0) continue;
-        opened += urls.length;
-        const m = urls.filter((u) => links.get(u)?.pr_state === 'merged').length;
-        merged += m;
-        if (m === urls.length) {
+    for (const run of perRun) {
+        if (run.opened === 0) continue;
+        opened += run.opened;
+        merged += run.merged;
+        if (run.merged === run.opened) {
             tasksMerged += 1;
-            mergedCost += treeCost.get(run.id) ?? 0;
+            mergedCost += treeCost.get(run.run_id) ?? 0;
         }
-        // The link row is written the moment the PR opens; a run whose link
-        // write failed still finished right after opening it.
-        const openedAt = links.get(urls[0] ?? '')?.created_at ?? iso(run.finished_at);
-        const s = seconds(iso(run.started_at), openedAt);
-        if (s > 0) toPr.push(s);
+        if (run.s_to_pr !== null) toPr.push(run.s_to_pr);
     }
 
     const migrated = await sql<{ migration_time: unknown }>`

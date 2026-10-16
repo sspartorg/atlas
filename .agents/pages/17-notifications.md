@@ -16,7 +16,7 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 - **Refresh** icon button → invalidates notifications, agents, settings
 - **Notification Settings** button → `/settings?tab=notifications`
 - **Mark All Read** button → `markAllRead.mutate()` → toast with count ("Marked N notifications read"); a failure toasts "Could not mark notifications read"
-- On phones (`useIsMobile()`, below `md`) the three actions are icon-only `IconButton`s with a Tooltip + `aria-label` (`Refresh notifications`, `Notification settings`, `Mark all read`), all on one row.
+- On phones (`useIsMobile()`, below `md`) the three actions are icon-only `IconButton`s with a Tooltip + `aria-label` (`Refresh notifications`, `Notification settings`, `Mark all read`), all on one row — the title's row (`PageHeader` keeps phone actions beside the title and puts the subtitle full width underneath; before 2026-10-16 the long subtitle pushed them onto a line of their own below it).
 - **Tabs** (controlled via `?tab=`): Notification Log (default) / In-App Feed
 - **Load more** (below either tab, only while the last page came back full): both tabs read one feed, 200 rows a page (`useNotificationFeed`, `useInfiniteQuery`); the button fetches the next 200 with `?before=<last id>`.
 
@@ -35,13 +35,13 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
     - Pending (held or in flight) → **Cancel** → `POST /api/notifications/:id/cancel` → toast "Cancelled pending delivery"; the row stays, chip **Cancelled**, reason "Cancelled by you", action Send now. A refused cancel toasts "Cancel failed" + reason
     - Skipped / Cancelled → **Send now** → `POST /api/notifications/:id/resend`
     - Resend / Retry / Send now with no channel connected → toast "Resend failed" + "No external channel is connected. Set one up in Settings → Notifications." (409; the row is left as it was)
-- **Phones**: one `NotificationCard` per row (`pages/notifications/NotificationCard.tsx`), a 3-zone grid shared with the feed: fixed 32px event icon · middle (event label + status chip on one line, message clamped to 2 lines, mono meta `item id · time · day[ · sends HH:MM]`, failure reason on its own clamped line) · fixed 40px action (Resend / Retry / Cancel). A held card has a gold edge bar.
+- **Phones**: one `NotificationCard` per row (`pages/notifications/NotificationCard.tsx`), a 3-zone grid shared with the feed: fixed 32px event icon · middle (event label alone on the first line, message clamped to 2 lines, a status line — the chip, plus `sends HH:MM` for a held row — then mono meta `item id · time · day`, failure reason on its own clamped line) · fixed 40px action (Resend / Retry / Cancel). A held card has a gold edge bar. The chip used to share the title's line, so "Held · quiet hours" crushed the title at 360px and `sends HH:MM` was ellipsised off the meta line.
 
 ### In-App Feed tab (`InAppFeedTab`)
 - Shows only `in_app` rows: an external-only reminder fire and an MCP `send-external` (`mcp_external`) are log-only and appear on the Notification Log tab alone. Counts and the unread badge leave them out too.
 - Top alert when `needs_you > 0` ("{N} items need you. Click any rowâ€¦")
 - Filter pills: All / Needs You / Updates / System — same sideways-scrolling `PillRow` ("Filter notifications")
-- Each row is a `NotificationCard` (all widths): event icon (`EventTypeIcon`) · event label + **Needs you** chip, message (2 lines), mono meta `item id · type · agent · age` · chevron. Unread rows have a blue edge bar. The card is a focusable `role="button"` (Enter/Space open it).
+- Each row is a `NotificationCard` (all widths): event icon (`EventTypeIcon`) · event label, message (2 lines), **Needs you** chip on its own status line, mono meta `item id · type · agent · age` · chevron. Unread rows have a blue edge bar. The card is a focusable `role="button"` (Enter/Space open it).
 - Clicking marks it read and opens `notificationLinkUrl(row)` (@atlas/shared) — the same chain the web-push click uses: stored `link_url` → `/tasks/:id` · `/sub-tasks/:id` → `/reminders` → `/settings?tab=jira` → `/projects/:id` → `/notifications`. Producers stamp `link_url` at create time (workflow runs `/workflows/:id/runs/:runId`, standalone agent runs `/agents/:id/runs/:runId`, terminal `/terminal/:id`; migration 010 backfilled older rows).
 - A reminder card whose row carries `reminder_id` (fires since migration 011) swaps the chevron for a **Snooze reminder** button: Snooze 10 minutes / 1 hour / until tomorrow 9:00 (Owner zone) + **Open Reminders**. Snoozing marks it read. The card itself isn't clickable then (no button inside a button). See [Reminders](21-reminders.md).
 - `EventTypeIcon` has an entry per produced `event_type`: `workflow_run`, `agent_completed(_no_item)`, `agent_error(_no_item)`, `ci_failed`, `reminder`, `jira_sync`, `mcp_external` (send glyph, "Sent by Claude"), `terminal.waiting_for_input`, `autofetch_*` (success/skipped/failed/conflict/disabled). Fills are theme soft tokens, so they flip with dark mode.
@@ -67,7 +67,7 @@ None.
 - `useIsMobile` (header icon buttons, log cards)
 
 ## API endpoints touched
-- `GET /api/notifications?limit=200[&before=<id>]` (feed pages) and `?external_status=sent&limit=1` (last delivery)
+- `GET /api/notifications?limit=200[&before=<id>]` (In-App Feed pages) and `?log=true&limit=200[&before=<id>]` (Notification Log pages: every row with an outward send or a reason, **including** needs-you rows whose item moved on — a delivered park stays in the delivery history; before 2026-10-17 both tabs shared the feed query and such rows vanished from the Log) and `?external_status=sent&limit=1` (last delivery)
 - `POST /api/notifications/:id/resend`
 - `POST /api/notifications/:id/cancel`
 - `POST /api/notifications/mark-all-read`
@@ -80,23 +80,36 @@ None.
 
 ## Notification dispatch model
 - **In-app notifications are always created** for every run completion (item-attached or freedom-mode, success or error). They appear in the In-App Feed regardless of any toggle. The "always published" invariant. The two log-only producers (external-only reminders, MCP `send-external`) are the exception by design: an outward message, not an inbox item.
-- **external notification delivery is gated by two checks:**
-  1. Per-event toggle in `settings.external_notification_event_toggles` (see Settings → Notifications). Off → the row stays `none`.
-  2. `settings.quiet_hours_enabled` — when `1`, a send inside the `quiet_hours_from` / `quiet_hours_to` window is **held** (`pending` + `external_deferred_at`) and the minute tick sends it once the window ends, prefixed `Held during quiet hours · HH:MM`. Nothing is dropped. `from == to` means no window. The flush re-checks the event toggle: one turned off while the row was held is **Skipped** (`none`), not sent. MCP `send-external` gets a log-only row, so it is held like everything else (before 2026-10-16 quiet hours dropped it).
-- **Workflow failures** (a run parked because something broke, or a queued Task that could not be dispatched) go out as `workflow.failed`; **Jira sync failures** as `jira.sync_failed`. Reminders (no event key; opt-in per reminder) and auto-fetch failures go through the same held path on their own row.
-- **Item-attached runs** map the external-notification event key from the item's final post-handoff status:
-  - `waiting_for_info` â†’ `item.status_changed:waiting_for_info`
-  - `in_review` â†’ `item.status_changed:in_review`
-  - any other status (e.g. `done`, `in_progress`) â†’ no external notification, in-app only.
-- **Freedom-mode runs** (no item attached) emit an external notification under `agent.run_finished_no_item` for both success and error paths.
-- **Errored runs** on item-attached agents emit under `agent.failed`.
+- **Outward delivery (Telegram / Teams) and web push follow one rule** (`outwardGate`, `services/external-notifications.ts`):
+  1. Per-event toggle in `settings.external_notification_event_toggles` (Settings → Notifications). Off → the row is `none` with reason `Skipped: "<toggle title>" is turned off in Settings`, so the Log shows it **Skipped** with **Send now** (before 2026-10-17 it was a bare `none` and the row vanished). Web push for that row is not sent.
+  2. Quiet hours (`quiet_hours_enabled = 1`, Owner zone `quiet_hours_timezone`): a send inside the window is **held** (`pending` + `external_deferred_at`), and its web push too (`push_deferred_at`, migration 015). The minute tick sends both once the window ends; the outward text is prefixed `Held during quiet hours · HH:MM`. Nothing is dropped. `from == to` = no window. The flush re-checks the toggle: turned off while held → **Skipped**. An in-app-only event (no key) is held by quiet hours only.
+- **Which events go outward** (Owner decision 2026-10-17: needs-you, failures and every Task finish):
+
+  | Event | event_type | Toggle key |
+  |---|---|---|
+  | Workflow parks on an item or project (question / rejection) | `workflow_run` | `item.status_changed:waiting_for_info` |
+  | Workflow park because something broke; queued Task could not start | `workflow_run` | `workflow.failed` |
+  | Workflow finished a Task with a PR | `workflow_run` | `item.status_changed:in_review` |
+  | Workflow finished a Task without a PR, or a project-level run | `workflow_run` | `workflow.finished` |
+  | Direct (non-workflow) agent run finished on an item | `agent_completed` | `workflow.finished` |
+  | Direct agent run errored on an item | `agent_error` | `agent.failed` |
+  | Standalone agent run finished / errored | `agent_completed_no_item` / `agent_error_no_item` | `agent.run_finished_no_item` / `agent.failed_no_item` |
+  | CI failed on a Task's PR | `ci_failed` | `ci.failed` |
+  | Jira sync failed (once per new failure) | `jira_sync` | `jira.sync_failed` |
+  | Auto-fetch failed (incl. no / missing / unreadable credential), conflict-abort, auto-disabled | `autofetch_failed` / `_conflict` / `_disabled` | `autofetch.failed` |
+  | Reminder fired with channel External or Both | `reminder` | `reminder.fired` |
+  | Terminal idle (default OFF) | `terminal.waiting_for_input` | `terminal.waiting_for_input` |
+  | MCP `send-external` | `mcp_external` (log-only) | its own free-form `event_key`, if any |
+
+  In-app only (no outward send): Jira imports / moves, sub-task done, auto-fetch success / skipped.
+- **Telegram is sent as plain text** (no `parse_mode`), capped at 4096 characters. With `parse_mode: 'Markdown'` Telegram rejected every message carrying an unbalanced `_` / `*` / `[` (paths, check names, error text) with 400 "can't parse entities" — most workflow parks never arrived (fixed 2026-10-17). Both transports time out after 15 s, so a hung send cannot stall the minute tick.
 - **Test Message** (`POST /api/settings/external-notification/test`) deliberately bypasses both checks â€” the Owner pressed Send Test, so a silent success would be indistinguishable from misconfiguration.
 
 ## Edge cases / quirks
 - The header "last delivery" age uses `useNow` to tick every minute â€” UI updates without refetch.
 - Marking all read does **not** mark externally delivered notifications as cancelled â€” it's a separate read-state field.
-- Quiet hours hold external notifications only — in-app notifications and web push keep arriving.
-- An off event toggle or an unconfigured channel leaves the row at `external_status='none'` — it never shows **Sent** unless a transport actually delivered. A quiet-hours send shows **Held** until the flush (2026-10-16; before, it was dropped to `none`).
+- Quiet hours hold outward sends and web push; in-app rows still arrive in the feed.
+- An unconfigured channel leaves the row at `external_status='none'` (not listed); an off toggle leaves `none` + a Skipped reason (listed). A row never shows **Sent** unless a transport actually delivered. A quiet-hours send shows **Held** until the flush (2026-10-16; before, it was dropped to `none`).
 - **Resend / Retry** send immediately, even inside quiet hours.
 - A send left in flight by a server that died mid-send is retried by the minute tick after 10 minutes, once; stuck again, it shows **Failed** ("Send interrupted twice … Press Retry").
 - Clicking a web-push notification marks it read (`sw.js` → `POST /api/notifications/:id/read`) before navigating.

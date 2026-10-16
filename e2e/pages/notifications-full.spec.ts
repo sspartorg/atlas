@@ -20,6 +20,13 @@ test.beforeAll(async () => {
         req.on('data', (c) => (body += c));
         req.on('end', () => {
             const m = /^\/bot([^/]+)\/(sendMessage|getMe)/.exec(req.url ?? '');
+            // Like the real Bot API: with a parse_mode, an unbalanced entity is
+            // a 400 — the bug that kept every workflow park off Telegram.
+            if (m?.[2] === 'sendMessage' && unparseable(body)) {
+                res.writeHead(400, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error_code: 400, description: "Bad Request: can't parse entities" }));
+                return;
+            }
             res.writeHead(m && m[1] !== 'bad' ? 200 : 401, { 'content-type': 'application/json' });
             if (m?.[2] === 'sendMessage' && m[1] !== 'bad') sent.push(body);
             res.end(JSON.stringify(m && m[1] !== 'bad' ? { ok: true, result: { username: 'e2e_fake_bot' } } : { ok: false, description: 'Unauthorized' }));
@@ -27,6 +34,13 @@ test.beforeAll(async () => {
     });
     await new Promise<void>((r) => fake.listen(FAKE_TELEGRAM_PORT, '127.0.0.1', () => r()));
 });
+
+function unparseable(body: string): boolean {
+    const { text, parse_mode } = JSON.parse(body || '{}') as { text?: string; parse_mode?: string };
+    if (!parse_mode || !text) return false;
+    const odd = (ch: string) => text.split(ch).length % 2 === 0;
+    return odd('_') || odd('*') || odd('`') || text.split('[').length !== text.split(']').length;
+}
 
 async function telegram(request: APIRequestContext, token: string | null): Promise<void> {
     const res = await request.patch(`${API}/api/settings/external-notification`, {
@@ -263,7 +277,7 @@ test.describe('/notifications — empty, error and the header', () => {
     });
 
     test('a failed load is an error, not an empty state', async ({ page }) => {
-        await page.route(/\/api\/notifications\?limit=200/, (r) => r.fulfill({ status: 500, json: { error: 'database is down', kind: 'internal_error' } }));
+        await page.route(/\/api\/notifications\?(log=true&)?limit=200/, (r) => r.fulfill({ status: 500, json: { error: 'database is down', kind: 'internal_error' } }));
         await goto(page, '/notifications', { allow: [/500|Internal Server Error/] });
         await expect(page.getByRole('alert')).toContainText('Could not load notifications: database is down');
         await expect(page.getByText('No External Channel Yet')).toHaveCount(0);
@@ -335,8 +349,12 @@ test.describe('/notifications — In-App Feed', () => {
         await page.getByRole('button', { name: 'Load more' }).click();
         await expect(page.getByTestId('notification-card')).toHaveCount(205);
         await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0);
+        // The Log pages its own rows (every outward send, stale or not).
         await page.getByRole('tab', { name: 'Notification Log' }).click();
+        await expect(page.getByTestId('notification-log-row')).toHaveCount(200);
+        await page.getByRole('button', { name: 'Load more' }).click();
         await expect(page.getByTestId('notification-log-row')).toHaveCount(205);
+        await expect(page.getByRole('button', { name: 'Load more' })).toHaveCount(0);
         await expect(page.getByRole('group', { name: 'Filter deliveries' }).getByRole('button', { name: /^Sent/ })).toContainText('205');
     });
 
@@ -440,5 +458,65 @@ test.describe('/notifications — live', () => {
         await expect(parked).toHaveCount(0, { timeout: 30_000 });
         await expect(page.getByRole('alert')).toHaveCount(0);
         await expect.poll(async () => (await apiGet<{ status: string }>(request, `/api/tasks/${task.id}`)).status).toBe('done');
+    });
+});
+
+test.describe('/notifications — outward delivery from real producers', () => {
+    test.describe.configure({ timeout: 150_000 });
+    test.beforeEach(async ({ request }) => {
+        await telegram(request, 'good-token');
+        await quietNow(request, false);
+        await request.patch(`${API}/api/settings/notifications`, { data: { external_notification_event_toggles: {} } });
+    });
+    test.afterEach(async ({ request }) => {
+        await request.patch(`${API}/api/settings/notifications`, { data: { external_notification_event_toggles: {} } });
+    });
+
+    async function parkThenReply(request: APIRequestContext, name: string) {
+        const wf = await createWorkflow(request, name, chainGraph({ type: 'owner' }));
+        const task = await createTask(request, `${name} task`);
+        const queued = await request.put(`${API}/api/items/${task.id}/workflow`, { data: { workflow_id: wf.id } });
+        expect(queued.status(), await queued.text()).toBeLessThan(300);
+        await apiPost(request, `/api/workflows/${wf.id}/runs`, { item_id: task.id });
+        await expect.poll(() => sent.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
+        await apiPost(request, '/api/comments', { author: 'owner', issue_type: 'task', issue_id: task.id, body: 'Carry on.' });
+        await expect.poll(async () => (await apiGet<{ status: string }>(request, `/api/tasks/${task.id}`)).status, { timeout: 30_000 }).toBe('done');
+        return task;
+    }
+
+    test('a park and the finish both reach Telegram verbatim, markdown-ish characters and all', async ({ page, request }) => {
+        // `_`, `*` and `[` unbalanced: Telegram's Markdown parser rejected exactly this.
+        const name = `E2E_out *${Date.now()} [x`;
+        const task = await parkThenReply(request, name);
+        await expect.poll(() => sent.length, { timeout: 30_000 }).toBe(2);
+        const bodies = sent.map((b) => JSON.parse(b) as { text: string; parse_mode?: string });
+        expect(bodies.every((b) => b.parse_mode === undefined)).toBe(true);
+        expect(bodies[0]!.text).toContain(`${name} needs you on ${task.id}`);
+        expect(bodies[1]!.text).toContain(`${name} finished ${task.id}`);
+
+        await goto(page, '/notifications');
+        await expect(logRow(page, `${name} needs you`)).toContainText('Sent');
+        await expect(logRow(page, `${name} finished`)).toContainText('Sent');
+    });
+
+    test('a finish whose toggle is off stays in the log as Skipped, naming the toggle, and Send now sends it', async ({ page, request }) => {
+        await request.patch(`${API}/api/settings/notifications`, { data: { external_notification_event_toggles: { 'workflow.finished': false } } });
+        const name = `E2E skip ${Date.now()}`;
+        await parkThenReply(request, name);
+        await goto(page, '/notifications');
+        const row = logRow(page, `${name} finished`);
+        await expect(row).toContainText('Skipped');
+        await expect(row).toContainText('"Task Finished" is turned off in Settings');
+        expect(sent).toHaveLength(1); // the park only
+        await row.getByRole('button', { name: /Send now/ }).click();
+        await expect(row).toContainText('Sent');
+        expect(sent).toHaveLength(2);
+    });
+
+    test('Settings lists every outward event with its own switch', async ({ page }) => {
+        await goto(page, '/settings?tab=notifications');
+        for (const title of ['Task Finished', 'Agent Run Failed (no item)', 'CI Failed', 'Auto-fetch Failed', 'Reminders', 'Workflow Failed', 'Jira Sync Failed']) {
+            await expect(page.getByRole('main').getByText(title, { exact: true })).toBeVisible();
+        }
     });
 });

@@ -116,7 +116,8 @@ describe('auto-fetch-runner', () => {
         await runAutoFetch('r1');
         expect(sendExternalForNotification).toHaveBeenCalledWith(
             1,
-            'Auto-fetch on "Demo/demo": fetch failed: remote hung up.'
+            'Auto-fetch on "Demo/demo": fetch failed: remote hung up.',
+            'autofetch.failed',
         );
     });
 
@@ -129,7 +130,8 @@ describe('auto-fetch-runner', () => {
         await runAutoFetch('r1');
         expect(sendExternalForNotification).toHaveBeenCalledWith(
             1,
-            expect.stringContaining('Auto-fetch disabled on "Demo/demo"')
+            expect.stringContaining('Auto-fetch disabled on "Demo/demo"'),
+            'autofetch.failed',
         );
     });
 });

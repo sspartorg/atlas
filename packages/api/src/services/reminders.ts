@@ -388,10 +388,13 @@ async function fireOne(r: IReminder): Promise<void> {
         link_url: '/reminders',
         reminder_id: r.id,
         in_app: r.channel !== 'external',
+        // An in-app-only reminder is the Owner's explicit ask: its push is
+        // held only by quiet hours, never by the External toggle.
+        event_key: r.channel === 'notification' ? null : 'reminder.fired',
     });
     if (r.channel === 'external' || r.channel === 'both') {
         try {
-            await sendExternalForNotification(n.id, message);
+            await sendExternalForNotification(n.id, message, 'reminder.fired');
         } catch {
             /* External notification optional. */
         }

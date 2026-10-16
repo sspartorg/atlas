@@ -1047,6 +1047,13 @@ describe('GET /api/analytics — window', () => {
             ['claude-sonnet-5', 1],
         ]);
         expect(w.shipped_tasks).toBe(0);
+        // The tiles' trends agree with the figures they sit beside.
+        expect(w.trends.spend.cur).toBeCloseTo(w.summary.total_cost_usd + w.terminalSummary.total_cost_usd, 9);
+        expect(w.trends.cache_savings.cur).toBeCloseTo(w.cache_savings_usd, 9);
+        expect(w.trends.cache_hit_rate.cur).toBeCloseTo(w.cacheEfficiency, 9);
+        expect(w.trends.cost_per_task.cur).toBeNull();
+        expect(w.buckets).toHaveLength(30);
+        expect(w.trends.spend.series).toHaveLength(30);
     });
 
     it('rejects an unknown window with 400', async () => {

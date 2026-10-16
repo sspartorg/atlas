@@ -108,6 +108,17 @@ describe('NotificationLogTabContent', () => {
         expect(screen.getByText('atlas_bot')).toBeInTheDocument();
     });
 
+    // A label left behind after the token was cleared must not claim "online"
+    // under a "not connected" subtitle.
+    it('hides the endpoint identity when the active provider is not connected', () => {
+        const rows = [makeNotification({ id: 1, external_status: 'sent', message: 'msg' })];
+        renderWithProviders(
+            <NotificationLogTabContent settings={{ ...settings, external_notification_token_set: false }} allRows={rows} />,
+        );
+        expect(screen.queryByText('atlas_bot')).not.toBeInTheDocument();
+        expect(screen.queryByText('online')).not.toBeInTheDocument();
+    });
+
     it('clicks "Resend" on a sent row to fire the resend mutation', async () => {
         let resent = false;
         server.use(

@@ -77,7 +77,7 @@ export function Notifications() {
     // For the "last delivery" stamp at the top — peek at the most-recent sent row.
     const { data: recentSent = [] } = useNotifications({ external_status: 'sent', limit: 1 });
     // Lifted from per-tab containers — both tabs read the same rows, 200 per page.
-    const feed = useNotificationFeed();
+    const feed = useNotificationFeed(tab === 'external');
     const allRows = feed.rows;
     // InAppFeedTab needs the agent dictionary to resolve avatars; lift it too.
     const { data: agents = [] } = useAgents();

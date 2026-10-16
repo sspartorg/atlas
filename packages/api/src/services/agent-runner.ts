@@ -56,6 +56,7 @@ import {
     CLI_DIALECT,
     type AgentCli,
     type ApiErrorKind,
+    type ExternalNotificationEventKey,
     type IAgent,
     type IRunOutcome,
     type IssueType,
@@ -434,8 +435,10 @@ async function createAgentNotification(opts: {
     agentId: string;
     runId: string;
     kind: 'needs_you' | 'update';
+    eventKey: ExternalNotificationEventKey;
 }): Promise<number> {
     const row = await notificationsService.create({
+        event_key: opts.eventKey,
         event_type: opts.eventType,
         message: opts.message,
         issue_type: opts.issueType,
@@ -548,6 +551,26 @@ export async function completeRun(
         } catch {
             /* run-info pin is best-effort */
         }
+        if (!inWorkflow) {
+            // A workflow step reports through its run's park / End; a direct
+            // run on an item has only this to tell the Owner it finished.
+            const doneMessage = `Agent "${agent?.name ?? agentId}" finished its run on ${issueType} ${issueId}.`;
+            const doneId = await createAgentNotification({
+                eventType: 'agent_completed',
+                message: doneMessage,
+                issueType,
+                issueId,
+                agentId,
+                runId,
+                kind: 'update',
+                eventKey: 'workflow.finished',
+            });
+            try {
+                await sendExternalForNotification(doneId, doneMessage, 'workflow.finished');
+            } catch {
+                /* External notification optional. */
+            }
+        }
     } else if (!inWorkflow) {
         // Workflow steps notify at park / End; a standalone run has no one
         // else to tell the Owner it finished.
@@ -560,6 +583,7 @@ export async function completeRun(
             agentId,
             runId,
             kind: 'update',
+            eventKey: 'agent.run_finished_no_item',
         });
         try {
             await sendExternalForNotification(
@@ -692,12 +716,13 @@ async function errorRun(
             agentId,
             runId,
             kind: 'needs_you',
+            eventKey: issueId ? 'agent.failed' : 'agent.failed_no_item',
         });
         try {
             await sendExternalForNotification(
                 notificationId,
                 message,
-                issueId ? 'agent.failed' : 'agent.run_finished_no_item',
+                issueId ? 'agent.failed' : 'agent.failed_no_item',
             );
         } catch {
             /* non-fatal */
