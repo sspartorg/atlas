@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    AnalyticsQuerySchema,
     CreateJiraSourceSchema,
     JiraStatusMapSchema,
     UpdateExternalNotificationSchema,
@@ -63,6 +64,7 @@ import {
     UpdateScratchPadSchema,
     ReplyToItemSchema,
 } from './index.js';
+import { ANALYTICS_WINDOWS } from '../types/index.js';
 
 // Each schema gets at least one happy-path parse + one sad-path rejection.
 // Happy paths drive the .refine() bodies and z.coerce conversions; sad paths
@@ -1108,3 +1110,18 @@ describe('JiraStatusMapSchema', () => {
     });
 });
 
+
+describe('AnalyticsQuerySchema', () => {
+    it('defaults to month in UTC and accepts every window', () => {
+        expect(AnalyticsQuerySchema.parse({})).toEqual({ tz: 'UTC', window: 'month' });
+        for (const window of ANALYTICS_WINDOWS) {
+            expect(AnalyticsQuerySchema.parse({ tz: 'Asia/Kolkata', window }).window).toBe(window);
+        }
+    });
+
+    it('rejects an unknown zone, window or key', () => {
+        expect(AnalyticsQuerySchema.safeParse({ tz: 'Mars/Olympus' }).success).toBe(false);
+        expect(AnalyticsQuerySchema.safeParse({ window: '1y' }).success).toBe(false);
+        expect(AnalyticsQuerySchema.safeParse({ days: '30' }).success).toBe(false);
+    });
+});

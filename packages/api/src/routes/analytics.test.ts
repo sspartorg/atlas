@@ -980,3 +980,89 @@ describe('GET /api/analytics/task/:taskId/children — limit clamp', () => {
         expect(res.json().limit).toBe(100);
     });
 });
+
+describe('GET /api/analytics — window', () => {
+    const daysAgo = (d: number) => new Date(Date.now() - d * 86_400_000).toISOString();
+
+    async function seedRuns(): Promise<void> {
+        const ids = await seedFullTree();
+        await testDb
+            .insertInto('agent_runs')
+            .values([
+                { id: 'w-now', agent_id: 'agent-coder', item_id: ids.taskId, status: 'completed', total_cost_usd: 1, model: 'claude-sonnet-5', cli: 'claude', cache_read_tokens: 1_000_000, completed_at: new Date().toISOString() },
+                { id: 'w-10d', agent_id: 'agent-coder', item_id: ids.taskId, status: 'completed', total_cost_usd: 2, model: 'haiku', cli: 'claude', cache_read_tokens: 500, completed_at: daysAgo(10) },
+                { id: 'w-40d', agent_id: 'agent-coder', item_id: ids.taskId, status: 'completed', total_cost_usd: 4, completed_at: daysAgo(40) },
+            ] as never)
+            .execute();
+    }
+
+    it('defaults to month and returns exactly what window=month returns', async () => {
+        await seedRuns();
+        const a = (await app.inject({ method: 'GET', url: '/api/analytics?tz=UTC' })).json();
+        const b = (await app.inject({ method: 'GET', url: '/api/analytics?tz=UTC&window=month' })).json();
+        expect(a.period.window).toBe('month');
+        expect(a.summary).toEqual(b.summary);
+        const now = new Date();
+        expect(a.period.start).toBe(
+            new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().replace('.000', ''),
+        );
+    });
+
+    it('honours 7d / 90d and reports the previous window spend', async () => {
+        await seedRuns();
+        const w7 = (await app.inject({ method: 'GET', url: '/api/analytics?tz=UTC&window=7d' })).json();
+        expect(w7.summary.total_cost_usd).toBe(1);
+        // The 10-day-old run sits in the 7 days before this window.
+        expect(w7.previous.total_cost_usd).toBe(2);
+        const w90 = (await app.inject({ method: 'GET', url: '/api/analytics?tz=UTC&window=90d' })).json();
+        expect(w90.summary.total_cost_usd).toBe(7);
+    });
+
+    it('prices cache savings per model and counts what it cannot price', async () => {
+        await seedRuns();
+        const w = (await app.inject({ method: 'GET', url: '/api/analytics?tz=UTC&window=30d' })).json();
+        // Sonnet 5: 1M cache reads × ($2.00 input − $0.20 cache read) = $1.80. `haiku` is an alias with no price.
+        expect(w.cache_savings_usd).toBeCloseTo(1.8, 6);
+        expect(w.cache_savings_unpriced_tokens).toBe(500);
+        expect(w.byModel.map((m: { model: string; total_cost_usd: number }) => [m.model, m.total_cost_usd])).toEqual([
+            ['haiku', 2],
+            ['claude-sonnet-5', 1],
+        ]);
+        expect(w.shipped_tasks).toBe(0);
+    });
+
+    it('rejects an unknown window with 400', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/analytics?window=1y' });
+        expect(res.statusCode).toBe(400);
+    });
+
+    it('falls back to UTC for a well-formed but unknown zone instead of a 500', async () => {
+        const res = await app.inject({ method: 'GET', url: '/api/analytics?tz=Mars/Olympus' });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().period.tz).toBe('UTC');
+    });
+});
+
+describe('GET /api/analytics/delivery and /workflows — params', () => {
+    for (const path of ['/api/analytics/delivery', '/api/analytics/workflows']) {
+        it(`${path} defaults to month in UTC`, async () => {
+            const res = await app.inject({ method: 'GET', url: path });
+            expect(res.statusCode).toBe(200);
+            expect(res.json().period).toMatchObject({ window: 'month', tz: 'UTC', bucket: 'day' });
+        });
+
+        it(`${path} accepts a real zone and window`, async () => {
+            const res = await app.inject({ method: 'GET', url: `${path}?tz=Asia/Kolkata&window=90d` });
+            expect(res.statusCode).toBe(200);
+            expect(res.json().period).toMatchObject({ window: '90d', tz: 'Asia/Kolkata', bucket: 'week' });
+        });
+
+        for (const bad of ['window=1y', 'tz=Mars/Olympus', 'days=30']) {
+            it(`${path}?${bad} is a 400`, async () => {
+                const res = await app.inject({ method: 'GET', url: `${path}?${bad}` });
+                expect(res.statusCode).toBe(400);
+                expect(res.json().kind).toBe('validation_error');
+            });
+        }
+    }
+});

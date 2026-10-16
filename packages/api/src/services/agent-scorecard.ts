@@ -685,7 +685,7 @@ function urlsOf(run: ScoredRun): string[] {
     return urls.length > 0 ? urls : run.pr_url ? [run.pr_url] : [];
 }
 
-async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
+export async function fleetDelivery(card: Scorecard): Promise<FleetDelivery> {
     const itemIds = [...new Set(card.roots.map((r) => r.item_id).filter((v): v is string => v !== null))];
     const testItems = new Set(
         itemIds.length === 0

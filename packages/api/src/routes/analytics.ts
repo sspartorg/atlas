@@ -2,8 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
-import { asAgentCli, ISSUE_TYPES } from '@atlas/shared';
+import { z } from 'zod';
+import { ANALYTICS_WINDOWS, AnalyticsQuerySchema, asAgentCli, ISSUE_TYPES } from '@atlas/shared';
 import { costRollupForRoot, costRowsForRoot } from '../services/item-cost-tree.js';
+import { countShippedTasks, deliveryAnalytics } from '../services/analytics-delivery.js';
+import { workflowAnalytics } from '../services/analytics-workflows.js';
+import { resolveWindow } from '../services/analytics-window.js';
+import { lookupClaudePrices } from '../services/claude-model-pricing.js';
 import type { ItemType } from '../db/types.js';
 
 // Allow `Area/Location` style IANA names plus UTC. Anything else falls back to UTC.
@@ -11,7 +16,13 @@ const TZ_RE = /^[A-Za-z_+\-/]{1,64}$/;
 
 function normalizeTz(raw: unknown): string {
     if (typeof raw !== 'string' || !TZ_RE.test(raw)) return 'UTC';
-    return raw;
+    // A well-formed but unknown zone would otherwise reach Postgres as a 500.
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: raw });
+        return raw;
+    } catch {
+        return 'UTC';
+    }
 }
 
 // Cost data changes only when a run completes, which fires an SSE event that
@@ -97,17 +108,48 @@ async function fetchSubagentsBySession(
     return out;
 }
 
+// The base summary keeps its lenient tz (an unknown zone reads as UTC, as it
+// always has); only `window` is validated.
+const SummaryWindowSchema = z.object({ window: z.enum(ANALYTICS_WINDOWS).default('month') });
+
+/** Cache reads cost a fraction of fresh input; the saving is the difference, priced per model. */
+function cacheSavings(rows: Array<{ model: string | null; cache_read_tokens: number }>) {
+    let usd = 0;
+    let unpriced = 0;
+    for (const r of rows) {
+        const p = r.model ? lookupClaudePrices(r.model) : null;
+        if (p) usd += (r.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
+        else unpriced += r.cache_read_tokens;
+    }
+    return { usd, unpriced };
+}
+
 export async function analyticsRoutes(app: FastifyInstance) {
+    app.get('/api/analytics/delivery', async (req, reply) => {
+        reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
+        return reply.send(await deliveryAnalytics(AnalyticsQuerySchema.parse(req.query ?? {})));
+    });
+
+    app.get('/api/analytics/workflows', async (req, reply) => {
+        reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
+        return reply.send(await workflowAnalytics(AnalyticsQuerySchema.parse(req.query ?? {})));
+    });
+
     app.get('/api/analytics', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
         const tz = normalizeTz((req.query as { tz?: string } | undefined)?.tz);
+        const { window } = SummaryWindowSchema.parse(req.query ?? {});
+        const win = await resolveWindow(tz, window);
 
-        // Use a CTE to compute the month-start / 12-month-start in the requester's
-        // timezone, so day and month buckets always reflect the viewer's wall clock.
-        // We re-use these via the kysely raw `sql` template throughout.
-        const monthStartSql = sql<string>`(date_trunc('month', (now() AT TIME ZONE ${tz})) AT TIME ZONE ${tz})`;
+        // `window=month` (the default) is the month start in the viewer's tz —
+        // exactly what this endpoint always used, so the Dashboard's month
+        // spend still reconciles. The 12-month ladder ignores the window.
+        const monthStartSql = sql<string>`${win.start}::timestamptz`;
         const twelveStartSql = sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) - interval '11 months') AT TIME ZONE ${tz})`;
-        const monthEndSql = sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) + interval '1 month' - interval '1 millisecond') AT TIME ZONE ${tz})`;
+        const monthEndSql =
+            window === 'month'
+                ? sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) + interval '1 month' - interval '1 millisecond') AT TIME ZONE ${tz})`
+                : sql<string>`${win.end}::timestamptz`;
 
         // For period.start / period.end response fields, fetch the resolved
         // boundaries as ISO strings in one tiny query so the FE can display them.
@@ -369,6 +411,64 @@ export async function analyticsRoutes(app: FastifyInstance) {
                     .execute(),
             ]);
 
+        const [prevAgent, prevTerminal, agentByModel, terminalByModel, shippedTasks] = await Promise.all([
+            db
+                .selectFrom('agent_runs')
+                .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
+                .where('status', '=', 'completed')
+                .where(sql`completed_at`, '>=', sql`${win.previous_start}::timestamptz`)
+                .where(sql`completed_at`, '<', sql`${win.previous_end}::timestamptz`)
+                .executeTakeFirst(),
+            db
+                .selectFrom('cli_sessions')
+                .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
+                .where('status', '=', 'closed')
+                .where(sql`closed_at`, '>=', sql`${win.previous_start}::timestamptz`)
+                .where(sql`closed_at`, '<', sql`${win.previous_end}::timestamptz`)
+                .executeTakeFirst(),
+            db
+                .selectFrom('agent_runs')
+                .select(({ fn }) => [
+                    'cli',
+                    'model',
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.countAll<string>().as('count'),
+                ])
+                .where('status', '=', 'completed')
+                .where(sql`completed_at`, '>=', monthStartSql)
+                .groupBy(['cli', 'model'])
+                .execute(),
+            db
+                .selectFrom('cli_sessions')
+                .select(({ fn }) => [
+                    'cli',
+                    'model',
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.countAll<string>().as('count'),
+                ])
+                .where('status', '=', 'closed')
+                .where(sql`closed_at`, '>=', monthStartSql)
+                .groupBy(['cli', 'model'])
+                .execute(),
+            countShippedTasks(win.start, win.end),
+        ]);
+        const byModel = [
+            ...agentByModel.map((r) => ({ source: 'agentic' as const, r })),
+            ...terminalByModel.map((r) => ({ source: 'terminal' as const, r })),
+        ]
+            .map(({ source, r }) => ({
+                source,
+                cli: asAgentCli(r.cli),
+                model: (r.model as string | null) ?? null,
+                total_cost_usd: Number(r.total_cost_usd ?? 0),
+                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
+                count: Number(r.count),
+            }))
+            .sort((a, b) => b.total_cost_usd - a.total_cost_usd);
+        const savings = cacheSavings(byModel);
+
         const inputTok = Number(summaryRow?.input_tokens ?? 0);
         const cacheRead = Number(summaryRow?.cache_read_tokens ?? 0);
         const totalContextForEfficiency = inputTok + cacheRead;
@@ -467,7 +567,18 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 /* v8 ignore next */
                 end: (periodRow?.end as string | undefined) ?? '',
                 tz,
+                window,
+                previous_start: win.previous_start,
+                previous_end: win.previous_end,
             },
+            previous: {
+                total_cost_usd: Number(prevAgent?.usd ?? 0),
+                terminal_total_cost_usd: Number(prevTerminal?.usd ?? 0),
+            },
+            byModel,
+            cache_savings_usd: savings.usd,
+            cache_savings_unpriced_tokens: savings.unpriced,
+            shipped_tasks: shippedTasks,
             summary: {
                 total_cost_usd: Number(summaryRow?.total_cost_usd ?? 0),
                 input_tokens: inputTok,

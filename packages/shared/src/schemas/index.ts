@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AGENT_KIND_SLUGS } from '../types/index.js';
+import { AGENT_KIND_SLUGS, ANALYTICS_WINDOWS } from '../types/index.js';
 import { AGENT_CLIS } from '../cli/index.js';
 import { normalizeStatusInput } from '../status-machine/index.js';
 
@@ -1006,5 +1006,14 @@ export const CliSessionStandaloneCreateSchema = z
         initial_prompt: z.string().max(8_000).optional(),
         model: z.string().min(1).max(80).optional(),
         cli: AgentCliSchema.default('claude'),
+    })
+    .strict();
+
+// `GET /api/analytics/delivery` and `/workflows`. A bad tz is a 400 here rather
+// than Postgres's "time zone not recognized" 500.
+export const AnalyticsQuerySchema = z
+    .object({
+        tz: TimeZoneSchema.default('UTC'),
+        window: z.enum(ANALYTICS_WINDOWS).default('month'),
     })
     .strict();
