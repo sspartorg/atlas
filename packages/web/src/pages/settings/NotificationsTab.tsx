@@ -265,6 +265,9 @@ export function NotificationsTab() {
         }
     }, [settings?.id]);
 
+    // Quiet hours, reminders' daily / weekly / cron schedules and every time
+    // the Reminders page shows run in this zone.
+    const savedZone = settings?.quiet_hours_timezone ?? detectedTimezone;
     const [quietFrom, setQuietFrom] = useState(settings?.quiet_hours_from ?? '22:00');
     const [quietTo, setQuietTo] = useState(settings?.quiet_hours_to ?? '08:00');
     const quietEnabled = settings?.quiet_hours_enabled === 1;
@@ -758,18 +761,43 @@ export function NotificationsTab() {
                             sx={{
                                 display: 'flex',
                                 alignItems: 'center',
+                                flexWrap: 'wrap',
                                 gap: 2,
-                                opacity: quietEnabled ? 1 : 0.5,
                             }}
                         >
                             <Typography
+                                data-testid="owner-timezone"
                                 sx={{ fontFamily: MONO, fontSize: 13, color: ATLAS_PALETTE.slate }}
                             >
-                                {settings?.quiet_hours_timezone ?? detectedTimezone}
+                                {savedZone}
                             </Typography>
-                            <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                                (detected from system)
-                            </Typography>
+                            {savedZone === detectedTimezone ? (
+                                <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                                    (this device&apos;s zone)
+                                </Typography>
+                            ) : (
+                                <>
+                                    <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
+                                        (this device is in {detectedTimezone})
+                                    </Typography>
+                                    <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() =>
+                                            updateNotifications.mutate(
+                                                { quiet_hours_timezone: detectedTimezone },
+                                                {
+                                                    onSuccess: () =>
+                                                        toast.show({ message: `Time zone set to ${detectedTimezone}` }),
+                                                },
+                                            )
+                                        }
+                                        sx={{ textTransform: 'none' }}
+                                    >
+                                        Use {detectedTimezone}
+                                    </Button>
+                                </>
+                            )}
                         </Box>
                     </Row>
                 </Box>

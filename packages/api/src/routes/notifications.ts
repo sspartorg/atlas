@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { NotificationFilterSchema } from '@atlas/shared';
 import { z } from 'zod';
 import { notificationsService } from '../services/notifications.js';
-import { deliverExternalNow, sendOwnerExternalMessage } from '../services/external-notifications.js';
+import { channelConfigured, deliverExternalNow, sendOwnerExternalMessage } from '../services/external-notifications.js';
 
 // A09 — body shape for the MCP-callable external-notification passthrough.
 // Manual validation here avoids adding a zod dep to @atlas/api just for one
@@ -67,6 +67,14 @@ export async function notificationsRoutes(app: FastifyInstance) {
         if (n === null) return reply.status(400).send({ error: 'invalid id', kind: 'validation_error' });
         const row = await notificationsService.get(n);
         if (!row) return reply.status(404).send({ error: 'Notification not found' });
+        // Without a channel the send can only end at `none`: the toast would
+        // say "Resent" and the row would drop out of the log.
+        if (!(await channelConfigured())) {
+            return reply.status(409).send({
+                error: 'No external channel is connected. Set one up in Settings → Notifications.',
+                kind: 'credentials_missing',
+            });
+        }
         try {
             // The Owner pressed Resend/Retry: send now, quiet hours or not.
             await deliverExternalNow(row.id, row.message);

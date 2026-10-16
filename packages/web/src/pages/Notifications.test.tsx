@@ -344,3 +344,18 @@ describe('Notifications page', () => {
         await waitFor(() => expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument());
     });
 });
+
+describe('Notifications page — loading and error', () => {
+    it('a failed feed is an error, not an empty state', async () => {
+        server.use(http.get(`${BASE}/notifications`, () => HttpResponse.json({ error: 'db down' }, { status: 500 })), ...defaultHandlers);
+        renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
+        expect(await screen.findByRole('alert')).toHaveTextContent('Could not load notifications');
+        expect(screen.queryByText('No External Channel Yet')).not.toBeInTheDocument();
+    });
+
+    it('shows a busy skeleton while the first page loads', () => {
+        server.use(http.get(`${BASE}/notifications`, () => new Promise(() => {})), ...defaultHandlers);
+        renderWithProviders(<Notifications />, { initialEntries: ['/notifications'] });
+        expect(screen.getByLabelText('Loading notifications')).toHaveAttribute('aria-busy', 'true');
+    });
+});

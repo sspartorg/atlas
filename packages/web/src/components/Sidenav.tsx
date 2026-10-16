@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -232,7 +233,16 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                                     // decorative accent bar, so a screen reader had no way to
                                     // announce which section the Owner is in.
                                     aria-current={isActive ? 'page' : undefined}
-                                    onClick={() => go(item.path)}
+                                    // A real link: Tab reaches it, Enter follows it, and a
+                                    // modified click opens a new tab. A bare Box with onClick
+                                    // was unreachable from the keyboard.
+                                    component="a"
+                                    href={item.path}
+                                    onClick={(e: MouseEvent<HTMLAnchorElement>) => {
+                                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+                                        e.preventDefault();
+                                        go(item.path);
+                                    }}
                                     onPointerEnter={() => prefetchRoute(item.key)}
                                     sx={{
                                         height: 36,
@@ -263,6 +273,11 @@ export function Sidenav({ onNavigate }: SidenavProps = {}) {
                                         },
                                         mb: 0.5,
                                         overflow: 'hidden',
+                                        textDecoration: 'none',
+                                        '&:focus-visible': {
+                                            outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                                            outlineOffset: -2,
+                                        },
                                     }}
                                 >
                                     {/* Active left accent bar */}

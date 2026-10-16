@@ -43,6 +43,11 @@ interface ListFilter {
 
 export const SKIPPED_WHILE_HELD = 'Skipped: event turned off while held';
 export const INTERRUPTED_TWICE = 'Send interrupted twice (the server stopped mid-send). Press Retry to send it.';
+// A cancelled send stays in the Notification Log (`none` + this reason) with
+// Send now, instead of vanishing. The web keys its "Cancelled" chip off the
+// leading word.
+export const CANCELLED_BY_OWNER = 'Cancelled by you';
+export const SKIPPED_NO_CHANNEL = 'Skipped: no channel was connected when it was due';
 
 interface ClaimedRow {
     id: number;
@@ -374,10 +379,24 @@ export const notificationsService = {
         await this.updateExternalStatus(id, 'sent', null);
     },
 
+    /** CAS on `pending`, so a flush that claimed the row first is never undone. */
     async cancel(id: number): Promise<boolean> {
-        const row = await this.get(id);
-        if (!row || row.external_status !== 'pending') return false;
-        await this.updateExternalStatus(id, 'none', null);
+        const r = await db
+            .updateTable('notifications')
+            .set({
+                external_status: 'none',
+                failure_reason: CANCELLED_BY_OWNER,
+                sent_external: 0,
+                external_deferred_at: null,
+                external_claimed_at: null,
+                external_reclaimed: false,
+            })
+            .where('id', '=', id)
+            .where('external_status', '=', 'pending')
+            .executeTakeFirst();
+        /* v8 ignore next */
+        if (Number(r.numUpdatedRows ?? 0) === 0) return false;
+        broadcastSSE({ type: 'notification_updated', notificationId: id });
         return true;
     },
 

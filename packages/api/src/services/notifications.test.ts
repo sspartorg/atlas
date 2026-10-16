@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 
-import { plainNotice, notificationsService } from './notifications.js';
+import { plainNotice, notificationsService, CANCELLED_BY_OWNER } from './notifications.js';
 import { broadcastSSE } from '../routes/events.js';
 import { closeTestDb, truncateAll, testDb } from '../../tests/_pg-db.js';
 import { insertItem, insertProject } from '../../tests/_items.js';
@@ -189,7 +189,13 @@ describe('notificationsService', () => {
             });
             const ok = await notificationsService.cancel(n.id);
             expect(ok).toBe(true);
-            expect((await notificationsService.get(n.id))!.external_status).toBe('none');
+            // It stays in the log, marked cancelled, rather than vanishing.
+            expect(await notificationsService.get(n.id)).toMatchObject({
+                external_status: 'none',
+                failure_reason: CANCELLED_BY_OWNER,
+            });
+            // A second cancel finds nothing pending.
+            expect(await notificationsService.cancel(n.id)).toBe(false);
         });
 
         it('cancel returns false when the row is missing or not pending', async () => {

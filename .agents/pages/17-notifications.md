@@ -6,32 +6,35 @@
 Two-tab notifications hub. The **Notification Log** tab is the delivery queue (sent / failed / pending) with retry/cancel/resend controls. The **In-App Feed** tab lists `needs_you` / `update` / `system` items with row-click navigation.
 
 ## States
-- Per-tab loading + empty + populated states (no page-level loading).
-- A metadata subtitle line shows external notification channel status, bot username, and last delivery age.
+- Loading: three skeleton rows (`aria-busy`) while the first feed page loads — never the empty state.
+- Error: `Alert` "Could not load notifications: <message>" in place of both tabs (before 2026-10-16 a failed load read as "No External Channel Yet" / "Nothing here yet.").
+- Per-tab empty + populated states.
+- A metadata subtitle line shows the channel: "connected to <endpoint> · last delivery <age>"; "<Telegram|Teams> set up, not tested yet · last delivery …" when the active provider has credentials but no endpoint label yet; or red **not connected** with a **Settings → Notifications** link (a real router link, keyboard-focusable). "Connected" means the ACTIVE provider has its credentials (`isExternalChannelConnected`: Telegram token + chat id, Teams webhook) — a Telegram token left behind after switching to Teams does not count.
 
 ## UI elements
 **Page header**
 - **Refresh** icon button → invalidates notifications, agents, settings
 - **Notification Settings** button → `/settings?tab=notifications`
-- **Mark All Read** button → `markAllRead.mutate()` → toast with count
+- **Mark All Read** button → `markAllRead.mutate()` → toast with count ("Marked N notifications read"); a failure toasts "Could not mark notifications read"
 - On phones (`useIsMobile()`, below `md`) the three actions are icon-only `IconButton`s with a Tooltip + `aria-label` (`Refresh notifications`, `Notification settings`, `Mark all read`), all on one row.
 - **Tabs** (controlled via `?tab=`): Notification Log (default) / In-App Feed
 - **Load more** (below either tab, only while the last page came back full): both tabs read one feed, 200 rows a page (`useNotificationFeed`, `useInfiniteQuery`); the button fetches the next 200 with `?before=<last id>`.
 
 ### Notification Log tab (`NotificationLogTab`)
-- Lists every row with an outward send (`external_status != 'none'`, plus skipped rows), including log-only rows (`in_app=false`: external-only reminders, MCP sends) that the feed hides.
+- Lists every row with an outward send (`external_status != 'none'`, plus skipped / cancelled rows — `none` with a reason), including log-only rows (`in_app=false`: external-only reminders, MCP sends) that the feed hides.
 - Filter pills: All / Sent / Failed / Pending (with counts), in one row that scrolls sideways instead of wrapping (`PillRow`, `role="group"` "Filter deliveries"). Pending counts held rows too.
-- **Empty state**: "external notification Is Configured but Quiet" + **Send a Test Message** button (lines 438-534) â†’ `POST /api/settings/external-notification/test`
+- **Empty state**: "External Channel Is Configured but Quiet" (channel connected) or "No External Channel Yet", + **Send a Test Message** (enabled whenever the active provider is connected — it used to need an endpoint label and a chat id, so it was always disabled for Teams and before the first test) → `POST /api/settings/external-notification/test` → toast "Test message sent" / "Test failed" + reason (a network error toasts too) and refreshes settings so the subtitle and topbar update
 - Table columns:
   - Timestamp (time + relative day)
   - Event Type (icon + label + `event_type` code)
   - Item (`issue_id` + message; failure reason if failed)
   - Status badge: Sent / Failed / Pending, or **Held · quiet hours** (clock glyph) with `sends HH:MM` under it when `external_deferred_at` is set — the planned time is `settings.quiet_hours_to` — or **Skipped** (grey) for a held row whose event toggle was off when the window ended (`none` + reason "Skipped: event turned off while held", shown muted under the message)
   - Action buttons per status:
-    - Sent â†’ **Resend** (line 364) â†’ `POST /api/notifications/:id/resend`
-    - Failed â†’ **Retry** (line 375) â†’ same endpoint
-    - Pending (held or in flight) â†’ **Cancel** → `POST /api/notifications/:id/cancel`
-    - Skipped → **Send now** → `POST /api/notifications/:id/resend`
+    - Sent → **Resend** → `POST /api/notifications/:id/resend` → toast "Resent external notification"
+    - Failed → **Retry** → same endpoint
+    - Pending (held or in flight) → **Cancel** → `POST /api/notifications/:id/cancel` → toast "Cancelled pending delivery"; the row stays, chip **Cancelled**, reason "Cancelled by you", action Send now. A refused cancel toasts "Cancel failed" + reason
+    - Skipped / Cancelled → **Send now** → `POST /api/notifications/:id/resend`
+    - Resend / Retry / Send now with no channel connected → toast "Resend failed" + "No external channel is connected. Set one up in Settings → Notifications." (409; the row is left as it was)
 - **Phones**: one `NotificationCard` per row (`pages/notifications/NotificationCard.tsx`), a 3-zone grid shared with the feed: fixed 32px event icon · middle (event label + status chip on one line, message clamped to 2 lines, mono meta `item id · time · day[ · sends HH:MM]`, failure reason on its own clamped line) · fixed 40px action (Resend / Retry / Cancel). A held card has a gold edge bar.
 
 ### In-App Feed tab (`InAppFeedTab`)
@@ -49,6 +52,9 @@ Two-tab notifications hub. The **Notification Log** tab is the delivery queue (s
 - **Send a Test Message (empty state)** â€” External notification silence is ambiguous (working but quiet vs. misconfigured); the test resolves it.
 - **Top alert for `needs_you > 0`** â€” Surfaces urgency without forcing a row scan; matches the dashboard's "awaiting you" signal.
 - **Mark All Read** â€” In-app feeds accumulate update/system rows the Owner already saw elsewhere; bulk-clear avoids per-row dismissal.
+
+## Topbar Notifications pill (every desktop page)
+- The pill's dot is green when the active provider is connected (`isExternalChannelConnected`), red when not. Click / Enter / Space opens `NotificationStatusPopover` (`role=dialog`, "Notifications status"): **Sending via Telegram | Microsoft Teams** (or **No external channel**), "Connected to <endpoint>." / "Set up, not tested yet.", the unread count from `/api/counts` ("N unread notifications" / "No unread notifications" — the same number as the sidenav badge, so Mark All Read empties both), and two links: **Open notifications** (`/notifications?tab=in-app`) and **Settings** (`/settings?tab=notifications`). Escape closes it. Before 2026-10-16 it said "Teams is the only supported channel" whatever the provider.
 
 ## Modals / drawers
 None.
@@ -94,7 +100,7 @@ None.
 - **Resend / Retry** send immediately, even inside quiet hours.
 - A send left in flight by a server that died mid-send is retried by the minute tick after 10 minutes, once; stuck again, it shows **Failed** ("Send interrupted twice … Press Retry").
 - Clicking a web-push notification marks it read (`sw.js` → `POST /api/notifications/:id/read`) before navigating.
-- A `needs_you` completion row (`event_type='agent_completed'`) drops out of the In-App Feed and the unread count once its item leaves `waiting_for_info` / `in_review`. `agent_error`, terminal-idle, and item-less `needs_you` rows are unaffected.
+- A `needs_you` completion row (`event_type='agent_completed'` or `workflow_run`) drops out of the In-App Feed and the unread count once its item leaves `waiting_for_info` / `in_review` (or a newer one on the same item supersedes it). An open page drops it live: `counts_changed` (broadcast on every item status write) now refetches `['notifications']` as well as the badge. `agent_error`, terminal-idle, and item-less `needs_you` rows are unaffected.
 
 ## Connectivity
 - **Pages**: [Settings â†’ external notification](19-settings.md) â€” header CTA target for configuring the bridge; [Task Detail](07-task-detail.md) and [Sub-task Detail](10-sub-task-detail.md) â€” row "Open" navigation when the notification references an item.

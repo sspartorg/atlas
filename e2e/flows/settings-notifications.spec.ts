@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
 import { API, apiGet, FAKE_TELEGRAM_PORT } from '../helpers/api.js';
+import { EXTERNAL_NOTIFICATION_EVENT_KEYS, EXTERNAL_NOTIFICATION_EVENT_LABELS } from '../../packages/shared/src/types/index.js';
 
 // Settings → Notifications without sending anything: event toggles persist,
 // quiet hours save and refuse a bad time visibly, idle threshold bounds.
@@ -40,10 +41,10 @@ test.beforeAll(async () => {
 test.afterAll(async ({ request }) => {
     fake.close();
     await request.patch(`${API}/api/settings/external-notification`, {
-        data: { external_notification_provider: 'telegram', external_notification_chat_id: null },
+        data: { external_notification_provider: 'telegram', external_notification_chat_id: null, external_notification_token: null, external_notification_webhook_url: null },
     });
     await request.patch(`${API}/api/settings/notifications`, {
-        data: { quiet_hours_enabled: 0, quiet_hours_from: '22:00', quiet_hours_to: '08:00', terminal_idle_notify_seconds: 300, external_notification_event_toggles: {} },
+        data: { quiet_hours_enabled: 0, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'UTC', terminal_idle_notify_seconds: 300, external_notification_event_toggles: {} },
     });
 });
 
@@ -164,3 +165,48 @@ test('Teams: a good webhook connects, a failing one says why; Telegram settings 
     });
 });
 
+
+test('every event toggle persists both ways; quiet hours To, the same-time copy and the time zone persist', async ({ page, request }) => {
+    await request.patch(`${API}/api/settings/notifications`, { data: { external_notification_event_toggles: {}, quiet_hours_enabled: 1, quiet_hours_from: '22:00', quiet_hours_to: '08:00', quiet_hours_timezone: 'Pacific/Chatham' } });
+    await goto(page, '/settings?tab=notifications');
+    const toggles = async () => JSON.parse((await settings(request)).external_notification_event_toggles || '{}') as Record<string, boolean>;
+    for (const key of EXTERNAL_NOTIFICATION_EVENT_KEYS) {
+        const sw = page.getByRole('switch', { name: EXTERNAL_NOTIFICATION_EVENT_LABELS[key].title, exact: true });
+        const was = await sw.isChecked();
+        await sw.click();
+        await expect.poll(async () => (await toggles())[key]).toBe(!was);
+        await page.reload();
+        await expect(page.getByRole('switch', { name: EXTERNAL_NOTIFICATION_EVENT_LABELS[key].title, exact: true })).toBeChecked({ checked: !was });
+        await page.getByRole('switch', { name: EXTERNAL_NOTIFICATION_EVENT_LABELS[key].title, exact: true }).click();
+        await expect.poll(async () => (await toggles())[key]).toBe(was);
+    }
+
+    const to = page.getByLabel('Quiet hours to');
+    await to.fill('06:45');
+    await to.blur();
+    await expect(page.getByText('Quiet hours saved')).toBeVisible();
+    await expect.poll(async () => (await apiGet<{ quiet_hours_to: string }>(request, '/api/settings')).quiet_hours_to).toBe('06:45');
+    await page.reload();
+    await expect(page.getByLabel('Quiet hours to')).toHaveValue('06:45');
+
+    await page.getByLabel('Quiet hours from').fill('06:45');
+    await expect(page.getByText('From and To are the same, so there is no quiet window.')).toBeVisible();
+    await page.getByLabel('Quiet hours from').blur();
+    await expect.poll(async () => (await apiGet<{ quiet_hours_from: string }>(request, '/api/settings')).quiet_hours_from).toBe('06:45');
+
+    // The saved zone is not this browser's: say so, and offer to switch.
+    const device = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+    await expect(page.getByTestId('owner-timezone')).toHaveText('Pacific/Chatham');
+    await expect(page.getByText(`(this device is in ${device})`)).toBeVisible();
+    await page.getByRole('button', { name: `Use ${device}` }).click();
+    await expect(page.getByText(`Time zone set to ${device}`)).toBeVisible();
+    await expect.poll(async () => (await apiGet<{ quiet_hours_timezone: string }>(request, '/api/settings')).quiet_hours_timezone).toBe(device);
+    await page.reload();
+    await expect(page.getByText("(this device's zone)")).toBeVisible();
+
+    // Turning quiet hours off says so and disables the times.
+    await page.getByRole('switch', { name: 'Quiet hours' }).click();
+    await expect(page.getByText('Off — external notifications deliver at any hour.')).toBeVisible();
+    await expect(page.getByLabel('Quiet hours from')).toBeDisabled();
+    await expect.poll(async () => (await apiGet<{ quiet_hours_enabled: number }>(request, '/api/settings')).quiet_hours_enabled).toBe(0);
+});

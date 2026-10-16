@@ -161,3 +161,14 @@ describe('Sidenav', () => {
         expect(navigateSpy).toHaveBeenCalledWith('/settings');
     });
 });
+
+describe('Sidenav — keyboard reachable', () => {
+    it('every entry is a real link to its page', async () => {
+        const { renderWithProviders: r } = await import('../test-utils/renderWithProviders.js');
+        const { Sidenav: S } = await import('./Sidenav.js');
+        r(<S />);
+        const n = (await import('@testing-library/react')).screen.getByTestId('nav-item-notifications');
+        expect(n.tagName).toBe('A');
+        expect(n).toHaveAttribute('href', '/notifications');
+    });
+});

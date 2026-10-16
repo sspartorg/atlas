@@ -727,3 +727,43 @@ describe('NotificationLogTabContent', () => {
         });
     });
 });
+
+describe('NotificationLogTabContent — cancelled rows and refusals', () => {
+    it('a cancelled row stays, chip Cancelled, reason shown, Send now offered', () => {
+        const rows = [makeNotification({ id: 7, message: 'Stopped one', external_status: 'none', failure_reason: 'Cancelled by you' })];
+        renderWithProviders(<NotificationLogTabContent settings={settings} allRows={rows} />);
+        expect(screen.getByText('Cancelled', { exact: true })).toBeInTheDocument();
+        expect(screen.getByText('Cancelled by you')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument();
+    });
+
+    it('a refused cancel toasts the reason', async () => {
+        server.use(http.post(`${BASE}/notifications/9/cancel`, () => HttpResponse.json({ error: 'Only pending deliveries can be cancelled' }, { status: 409 })));
+        const rows = [makeNotification({ id: 9, message: 'In flight', external_status: 'pending' })];
+        renderWithProviders(
+            <>
+                <NotificationLogTabContent settings={settings} allRows={rows} />
+                <Toast />
+            </>
+        );
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(await screen.findByText('Cancel failed')).toBeInTheDocument();
+    });
+
+    it('Send a Test Message is enabled for a connected Teams channel and toasts a network error', async () => {
+        vi.spyOn(apiModule.api.settings, 'testExternalNotification').mockRejectedValueOnce(new Error('offline'));
+        renderWithProviders(
+            <>
+                <NotificationLogTabContent
+                    settings={{ ...settings, external_notification_provider: 'teams', external_notification_token_set: false, external_notification_webhook_url_set: true, external_notification_chat_id: null, external_notification_endpoint_label: null }}
+                    allRows={[]}
+                />
+                <Toast />
+            </>
+        );
+        const btn = screen.getByRole('button', { name: 'Send a Test Message' });
+        expect(btn).toBeEnabled();
+        fireEvent.click(btn);
+        expect(await screen.findByText('Test failed')).toBeInTheDocument();
+    });
+});

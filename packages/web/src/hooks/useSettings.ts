@@ -21,14 +21,16 @@ import { api } from '../api/api.js';
 // happen during the initial render). Mutations still keep the cache
 // authoritative for the owner-controlled fields.
 /**
- * Is an outbound channel configured? The API masks the token and webhook URL
- * to null, so only the `_set` flags can answer this.
+ * Is the ACTIVE provider's channel configured (Telegram: token + chat id;
+ * Teams: webhook)? The API masks the token and webhook URL to null, so only
+ * the `_set` flags can answer this. A Telegram token left behind after a
+ * switch to Teams does not count.
  */
 export function isExternalChannelConnected(settings: ISettings | undefined): boolean {
-    return (
-        !!settings?.external_notification_token_set ||
-        !!settings?.external_notification_webhook_url_set
-    );
+    if (!settings) return false;
+    return settings.external_notification_provider === 'teams'
+        ? !!settings.external_notification_webhook_url_set
+        : !!settings.external_notification_token_set && !!settings.external_notification_chat_id;
 }
 
 export function useSettings() {

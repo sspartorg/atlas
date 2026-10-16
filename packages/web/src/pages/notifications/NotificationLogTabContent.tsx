@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -274,6 +275,7 @@ function useRowActions(row: INotification) {
         cancel: () =>
             cancel.mutate(row.id, {
                 onSuccess: () => toast.show({ message: 'Cancelled pending delivery' }),
+                onError: (err) => toast.show({ message: 'Cancel failed', detail: err.message }),
             }),
     };
 }
@@ -336,6 +338,8 @@ function RowAction({ row, size }: { row: INotification; size: 'small' | 'medium'
 const isHeld = (row: INotification) =>
     row.external_status === 'pending' && row.external_deferred_at !== null;
 const isSkipped = (row: INotification) => row.external_status === 'none' && row.failure_reason !== null;
+// The API's CANCELLED_BY_OWNER reason ("Cancelled by you"): a skipped row the Owner stopped.
+const isCancelled = (row: INotification) => isSkipped(row) && (row.failure_reason ?? '').startsWith('Cancelled');
 /** The reason line under the message: why it failed, or why it was skipped. */
 const reasonOf = (row: INotification) =>
     row.external_status === 'failed' || isSkipped(row) ? row.failure_reason : null;
@@ -347,7 +351,7 @@ function NotificationLogCard({ row, heldUntil }: { row: INotification; heldUntil
         <NotificationCard
             icon={<EventTypeIcon eventType={row.event_type} size={32} />}
             title={meta.label}
-            chip={<StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} />}
+            chip={<StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} cancelled={isCancelled(row)} />}
             message={row.message}
             meta={
                 <>
@@ -383,6 +387,7 @@ function NotificationLogRow({
 
     return (
         <Box
+            data-testid="notification-log-row"
             sx={{
                 gridColumn: '1 / -1',
                 display: 'grid',
@@ -488,7 +493,7 @@ function NotificationLogRow({
                 )}
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
-                <StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} />
+                <StatusChip status={row.external_status} held={held} skipped={isSkipped(row)} cancelled={isCancelled(row)} />
                 {held && heldUntil && (
                     <Typography
                         sx={{ fontFamily: MONO, fontSize: 10, color: ATLAS_PALETTE.slate60 }}
@@ -508,15 +513,17 @@ function StatusChip({
     status,
     held = false,
     skipped = false,
+    cancelled = false,
 }: {
     status: NotificationDeliveryStatus;
     held?: boolean;
     skipped?: boolean;
+    cancelled?: boolean;
 }) {
     const style = held
         ? { label: 'Held · quiet hours', bg: ATLAS_PALETTE.warnSoft, fg: ATLAS_PALETTE.warnFg }
         : skipped
-          ? { label: 'Skipped', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 }
+          ? { label: cancelled ? 'Cancelled' : 'Skipped', bg: ATLAS_PALETTE.slate08, fg: ATLAS_PALETTE.slate60 }
           : status === 'sent'
           ? { label: 'Sent', bg: ATLAS_PALETTE.successSoft, fg: ATLAS_PALETTE.successFg }
           : status === 'failed'
@@ -559,6 +566,7 @@ function StatusChip({
 
 function EmptyState({ settings }: { settings: ISettings | undefined }) {
     const toast = useToast();
+    const queryClient = useQueryClient();
     const [testing, setTesting] = useState(false);
     const endpointLabel = settings?.external_notification_endpoint_label ?? null;
     const chatId = settings?.external_notification_chat_id ?? null;
@@ -575,7 +583,11 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
                         ? { message: 'Test failed', detail: r.error }
                         : { message: 'Test failed' }
                 );
+        } catch (err) {
+            toast.show({ message: 'Test failed', detail: err instanceof Error ? err.message : String(err) });
         } finally {
+            // The test result moves the connection pill and endpoint label.
+            void queryClient.invalidateQueries({ queryKey: ['settings'] });
             setTesting(false);
         }
     }
@@ -629,7 +641,7 @@ function EmptyState({ settings }: { settings: ISettings | undefined }) {
                         color="success"
                         startIcon={<SendRounded sx={{ fontSize: 16 }} />}
                         onClick={() => void handleSendTest()}
-                        disabled={testing || !endpointLabel || !chatId}
+                        disabled={testing || !connected}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
                         {testing ? 'Sending…' : 'Send a Test Message'}

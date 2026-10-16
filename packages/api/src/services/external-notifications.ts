@@ -1,6 +1,6 @@
 import { db } from '../db/kysely-client.js';
 import { settingsService } from './settings.js';
-import { notificationsService, SKIPPED_WHILE_HELD } from './notifications.js';
+import { notificationsService, SKIPPED_NO_CHANNEL, SKIPPED_WHILE_HELD } from './notifications.js';
 import { telegramTransport } from './transports/telegram.js';
 import { teamsTransport } from './transports/teams.js';
 import type {
@@ -132,7 +132,7 @@ async function transportSend(message: string): Promise<boolean> {
     return true;
 }
 
-async function channelConfigured(): Promise<boolean> {
+export async function channelConfigured(): Promise<boolean> {
     const settings = await settingsService.getWithSecrets();
     return transports[settings.external_notification_provider].isConfigured(settings);
 }
@@ -141,14 +141,25 @@ async function channelConfigured(): Promise<boolean> {
  * Deliver a notification row now, ignoring quiet hours — Resend/Retry (the
  * Owner pressed it) and the deferred flush. pending → sent | none | failed.
  */
-export async function deliverExternalNow(notificationId: number, message: string): Promise<void> {
+export async function deliverExternalNow(
+    notificationId: number,
+    message: string,
+    // Why the row ends at `none` when no channel is connected. A held row
+    // keeps a reason so the log shows it Skipped (with Send now) instead of
+    // the hold silently vanishing.
+    noChannelReason: string | null = null,
+): Promise<void> {
     await notificationsService.updateExternalStatus(notificationId, 'pending');
     try {
         // An unconfigured skip is not a delivery — revert to 'none' (the
-        // schema's "no external delivery" value, same as cancel) so the
-        // Notification Log never claims "Sent" with no channel connected.
+        // schema's "no external delivery" value) so the Notification Log
+        // never claims "Sent" with no channel connected.
         const delivered = await transportSend(message);
-        await notificationsService.updateExternalStatus(notificationId, delivered ? 'sent' : 'none');
+        await notificationsService.updateExternalStatus(
+            notificationId,
+            delivered ? 'sent' : 'none',
+            delivered ? null : noChannelReason,
+        );
     } catch (err) {
         await notificationsService.updateExternalStatus(
             notificationId,
@@ -216,7 +227,7 @@ export async function flushDeferredExternal(now: Date = new Date()): Promise<num
             continue;
         }
         try {
-            await deliverExternalNow(row.id, text);
+            await deliverExternalNow(row.id, text, SKIPPED_NO_CHANNEL);
         } catch {
             /* row is marked failed; keep flushing the rest */
         }

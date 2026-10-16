@@ -11,6 +11,7 @@ vi.mock('../routes/events.js', () => ({
 // Mock external notification delivery so tests don't hit real services
 vi.mock('../services/external-notifications.js', () => ({
     deliverExternalNow: vi.fn().mockResolvedValue(undefined),
+    channelConfigured: vi.fn().mockResolvedValue(true),
     sendOwnerExternalMessage: vi.fn().mockResolvedValue({ notification_id: 1, external_status: 'none', held: false }),
 }));
 
@@ -171,6 +172,17 @@ describe('POST /api/notifications/:id/resend', () => {
         });
         // External delivery is mocked; should succeed
         expect(res.statusCode).toBe(200);
+    });
+
+    it('returns 409 and leaves the row alone when no channel is connected', async () => {
+        const { channelConfigured, deliverExternalNow } = await import('../services/external-notifications.js');
+        vi.mocked(channelConfigured).mockResolvedValueOnce(false);
+        vi.mocked(deliverExternalNow).mockClear();
+        const id = await insertNotification({ message: 'No channel' });
+        const res = await app.inject({ method: 'POST', url: `/api/notifications/${id}/resend` });
+        expect(res.statusCode).toBe(409);
+        expect(JSON.parse(res.body)).toMatchObject({ kind: 'credentials_missing', error: expect.stringMatching(/No external channel/) });
+        expect(deliverExternalNow).not.toHaveBeenCalled();
     });
 
     it('returns 502 when deliverExternalNow throws (lines 51-55)', async () => {

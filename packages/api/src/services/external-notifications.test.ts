@@ -54,7 +54,7 @@ import {
 } from './external-notifications.js';
 import { EXTERNAL_NOTIFICATION_EVENT_KEYS } from '@atlas/shared';
 import { settingsService } from './settings.js';
-import { notificationsService, SKIPPED_WHILE_HELD, INTERRUPTED_TWICE } from './notifications.js';
+import { notificationsService, SKIPPED_WHILE_HELD, INTERRUPTED_TWICE, CANCELLED_BY_OWNER, SKIPPED_NO_CHANNEL } from './notifications.js';
 import { truncateAll, closeTestDb, testDb } from '../../tests/_pg-db.js';
 
 const baseGating = {
@@ -419,9 +419,19 @@ describe('quiet hours defer outward sends (held → flushed)', () => {
         await expect(notificationsService.cancel(n.id)).resolves.toBe(true);
         const got = (await notificationsService.get(n.id))!;
         expect(got.external_status).toBe('none');
+        expect(got.failure_reason).toBe(CANCELLED_BY_OWNER);
         expect(got.external_deferred_at).toBeNull();
         await expect(flushDeferredExternal(at('2026-10-17T09:00:00Z'))).resolves.toBe(0);
         expect(mocks.telegramSend).not.toHaveBeenCalled();
+    });
+
+    it('a held row whose channel was removed meanwhile is Skipped with a reason, not dropped', async () => {
+        await overnightQuietHours();
+        const n = await notificationsService.create({ event_type: 'e', message: 'm' });
+        await sendExternalForNotification(n.id, 'm', undefined, at('2026-10-16T23:30:00Z'));
+        mocks.telegramIsConfigured.mockReturnValue(false);
+        await expect(flushDeferredExternal(at('2026-10-17T08:01:00Z'))).resolves.toBe(1);
+        expect(await notificationsService.get(n.id)).toMatchObject({ external_status: 'none', failure_reason: SKIPPED_NO_CHANNEL });
     });
 
     it('turning quiet hours off releases held rows on the next flush', async () => {
