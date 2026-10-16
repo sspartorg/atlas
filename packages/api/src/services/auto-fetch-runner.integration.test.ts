@@ -4,10 +4,12 @@ import type { AutoFetchCode, AutoFetchResult } from './auto-fetch.js';
 vi.mock('./agent-activity.js', () => ({ isAnyAgentActiveForProject: vi.fn(() => false) }));
 vi.mock('../routes/events.js', () => ({ broadcastSSE: vi.fn() }));
 vi.mock('./external-notifications.js', () => ({
-    sendExternalNotification: vi.fn(async () => {}),
+    sendExternalForNotification: vi.fn(async () => {}),
 }));
 vi.mock('./notifications.js', () => ({
-    notificationsService: { create: vi.fn(() => ({ id: 1 })) },
+    notificationsService: {
+        create: vi.fn((d: { message: string }) => ({ id: 1, message: d.message })),
+    },
 }));
 
 const projectStub = { id: 'p1', name: 'Demo' } as const;
@@ -100,5 +102,34 @@ describe('auto-fetch-runner', () => {
         await runAutoFetch('r1');
         await runAutoFetch('r1');
         expect(vi.mocked(schedulesService.disable)).toHaveBeenCalledWith('r1');
+    });
+
+    // Outward sends go through the row the run just created, so the
+    // Notification Log tracks them (and quiet hours hold them).
+    it('a failed fetch sends outward on its own notification row; a success does not', async () => {
+        const { sendExternalForNotification } = await import('./external-notifications.js');
+        vi.mocked(sendExternalForNotification).mockClear();
+        scriptedResult = { code: 'OK_UPDATED', detail: 'x' };
+        await runAutoFetch('r1');
+        expect(sendExternalForNotification).not.toHaveBeenCalled();
+        scriptedResult = { code: 'FETCH_FAILED', detail: 'remote hung up' };
+        await runAutoFetch('r1');
+        expect(sendExternalForNotification).toHaveBeenCalledWith(
+            1,
+            'Auto-fetch on "Demo/demo": fetch failed: remote hung up.'
+        );
+    });
+
+    it('the auth-failure disable is tracked on its row too', async () => {
+        const { sendExternalForNotification } = await import('./external-notifications.js');
+        const { schedulesService } = await import('./schedules.js');
+        vi.mocked(sendExternalForNotification).mockClear();
+        vi.mocked(schedulesService.incrementAuthFailure).mockReturnValueOnce(3);
+        scriptedResult = { code: 'AUTH_FAILED', detail: 'fatal: Authentication failed' };
+        await runAutoFetch('r1');
+        expect(sendExternalForNotification).toHaveBeenCalledWith(
+            1,
+            expect.stringContaining('Auto-fetch disabled on "Demo/demo"')
+        );
     });
 });

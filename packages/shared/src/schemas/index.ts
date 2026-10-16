@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AGENT_KIND_SLUGS } from '../types/index.js';
+import { AGENT_KIND_SLUGS, ANALYTICS_WINDOWS } from '../types/index.js';
 import { AGENT_CLIS } from '../cli/index.js';
 import { normalizeStatusInput } from '../status-machine/index.js';
 
@@ -627,6 +627,19 @@ export const UpdateProjectRepoSchema = z
 const HexColorSchema = z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Expected hex color like #2E2E2E');
 const HHMMSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'HH:MM 24-hour required');
 
+// Not `Intl.supportedValuesOf('timeZone')`: that list is canonical names only
+// and (Node 24 / V8) omits `UTC` and `Asia/Kolkata`, which browsers report.
+// The formatter accepts exactly the zones the quiet-hours math can use.
+function isValidTimeZone(tz: string): boolean {
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: tz });
+        return true;
+    } catch {
+        return false;
+    }
+}
+const TimeZoneSchema = z.string().refine(isValidTimeZone, 'Unknown IANA time zone');
+
 export const UpdateProfileSchema = z.object({
     owner_name: z.string().min(1).max(100).optional(),
     accent_color: HexColorSchema.optional(),
@@ -684,7 +697,7 @@ export const UpdateNotificationsSchema = z.object({
     external_notification_event_toggles: z.record(z.string(), z.boolean()).optional(),
     quiet_hours_from: HHMMSchema.nullable().optional(),
     quiet_hours_to: HHMMSchema.nullable().optional(),
-    quiet_hours_timezone: z.string().nullable().optional(),
+    quiet_hours_timezone: TimeZoneSchema.nullable().optional(),
     quiet_hours_enabled: z.coerce.number().int().min(0).max(1).optional(),
     // Terminal v2: idle-notification threshold in seconds. Clamped 60-3600
     // (1 min - 1 hr) to prevent both spam and silent forever-waits.
@@ -915,11 +928,19 @@ export const UpdateReminderSchema = z
         body: z.string().optional(),
         schedule: ReminderScheduleSchema.optional(),
         channel: ReminderChannelSchema.optional(),
+        // Pause / resume. Resume recomputes next_fire_at from now.
+        status: z.enum(['active', 'paused']).optional(),
     })
     .refine((v) => Object.keys(v).length > 0, {
         message: 'At least one field must be provided',
     });
 export type UpdateReminderInput = z.infer<typeof UpdateReminderSchema>;
+
+// Snooze: fire again `minutes` from now (max 30 days), then back to the schedule.
+export const SnoozeReminderSchema = z.object({
+    minutes: z.number().int().min(1).max(43_200),
+});
+export type SnoozeReminderInput = z.infer<typeof SnoozeReminderSchema>;
 
 // P12 — Scratch Pad schemas. Free-form markdown tiles for the Owner. Title
 // and body are both optional on create (a brand-new tile starts blank); the
@@ -985,5 +1006,14 @@ export const CliSessionStandaloneCreateSchema = z
         initial_prompt: z.string().max(8_000).optional(),
         model: z.string().min(1).max(80).optional(),
         cli: AgentCliSchema.default('claude'),
+    })
+    .strict();
+
+// `GET /api/analytics/delivery` and `/workflows`. A bad tz is a 400 here rather
+// than Postgres's "time zone not recognized" 500.
+export const AnalyticsQuerySchema = z
+    .object({
+        tz: TimeZoneSchema.default('UTC'),
+        window: z.enum(ANALYTICS_WINDOWS).default('month'),
     })
     .strict();

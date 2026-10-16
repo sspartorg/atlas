@@ -56,7 +56,7 @@ search) pay a much smaller schema-load tax per prompt.
 | AGENTS | 3 | `tools/agents.ts` | `crud_agent` (op: search\|get\|create\|update\|delete) + `agent_memory` (op: get\|update) + `marketplace_agent` (op: search\|get) |
 | ITEMS | 5 | `tools/items.ts` | `search_item` + `create_item` (issue_type: task\|sub_task; a sub-task needs `payload.task_id`) + `get_item` (always full envelope: the item under `task` / `sub_task` + parent `task` or child `sub_tasks` + project + comments + related_links + external_links + activity) + `update_item` (action: patch_fields\|change_status\|assign\|add_comment\|add_link\|remove_link\|add_external_link\|remove_external_link) + `delete_item` |
 | PROJECTS | 2 | `tools/projects.ts` | `listProjects`, `getProject` |
-| REMINDERS | 2 | `tools/reminders.ts` | `crud_reminder` (op: create\|update\|cancel) + `search_reminder` (optional filters: status\|channel\|since) |
+| REMINDERS | 2 | `tools/reminders.ts` | `crud_reminder` (op: create\|update\|cancel\|pause\|resume\|snooze — snooze takes `minutes`) + `search_reminder` (optional filters: status\|channel\|since) |
 | NOTIFICATIONS | 1 | `tools/notifications.ts` | `sendExternalNotification` (A09) |
 
 Deleted outright in the consolidation: `listAgentRuns` (zero agent-prompt

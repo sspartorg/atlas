@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { useLocation } from 'react-router-dom';
 import { server } from '../../test-setup.js';
@@ -11,7 +11,7 @@ import { makeAgent, makeNotification } from '../../test-utils/factories.js';
 // where the navigation actually landed.
 function LocationDisplay() {
     const loc = useLocation();
-    return <div data-testid="location">{loc.pathname}</div>;
+    return <div data-testid="location">{loc.pathname + loc.search}</div>;
 }
 
 const BASE = 'http://localhost:3000/api';
@@ -138,7 +138,7 @@ describe('InAppFeedTabContent', () => {
         fireEvent.click(el);
     });
 
-    it('falls back to /tasks when nothing else matches', () => {
+    it('falls back to /notifications when nothing else matches (same as a push click)', () => {
         const rows = [
             makeNotification({
                 id: 201,
@@ -156,7 +156,7 @@ describe('InAppFeedTabContent', () => {
             </>
         );
         fireEvent.click(screen.getByText('Lonely system message'));
-        expect(screen.getByTestId('location').textContent).toBe('/tasks');
+        expect(screen.getByTestId('location').textContent).toBe('/notifications');
     });
 
     it('routes reminder notifications to /reminders, not /tasks', () => {
@@ -271,5 +271,188 @@ describe('InAppFeedTabContent', () => {
         fireEvent.click(screen.getByText('Updates'));
         expect(screen.getByText('Update notification')).toBeInTheDocument();
         expect(screen.queryByText('Action needed')).not.toBeInTheDocument();
+    });
+
+    // Every producer's row lands where the push click would (notificationLinkUrl).
+    it.each([
+        [
+            'workflow run',
+            {
+                event_type: 'workflow_run',
+                link_url: '/workflows/wf1/runs/run1',
+                issue_type: 'task',
+                issue_id: 'ATL-1',
+            },
+            '/workflows/wf1/runs/run1',
+        ],
+        [
+            'standalone agent run',
+            {
+                event_type: 'agent_completed_no_item',
+                link_url: '/agents/a1/runs/r1',
+                issue_type: null,
+                issue_id: null,
+                project_id: null,
+            },
+            '/agents/a1/runs/r1',
+        ],
+        [
+            'item',
+            { event_type: 'ci_failed', issue_type: 'task', issue_id: 'ATL-7' },
+            '/tasks/ATL-7',
+        ],
+        [
+            'sub-task',
+            { event_type: 'agent_error', issue_type: 'sub_task', issue_id: 'ATL-7-1' },
+            '/sub-tasks/ATL-7-1',
+        ],
+        [
+            'jira',
+            { event_type: 'jira_sync', issue_type: null, issue_id: null, project_id: null },
+            '/settings?tab=jira',
+        ],
+        [
+            'terminal',
+            {
+                event_type: 'terminal.waiting_for_input',
+                link_url: '/terminal/s1',
+                issue_type: null,
+                issue_id: null,
+            },
+            '/terminal/s1',
+        ],
+        [
+            'autofetch',
+            { event_type: 'autofetch_failed', issue_type: null, issue_id: null, project_id: 'p1' },
+            '/projects/p1',
+        ],
+    ] as const)('a %s row opens %s', (_name, over, path) => {
+        const rows = [makeNotification({ id: 900, message: 'Route me', ...over })];
+        renderWithProviders(
+            <>
+                <InAppFeedTabContent allRows={rows} agents={[]} />
+                <LocationDisplay />
+            </>
+        );
+        fireEvent.click(screen.getByText('Route me'));
+        expect(screen.getByTestId('location').textContent).toBe(path);
+    });
+
+    it('opens from the keyboard and renders each row as a 3-zone card', () => {
+        const rows = [makeNotification({ id: 901, message: 'Key me', link_url: '/reminders' })];
+        renderWithProviders(
+            <>
+                <InAppFeedTabContent allRows={rows} agents={[]} />
+                <LocationDisplay />
+            </>
+        );
+        const card = screen.getByTestId('notification-card');
+        expect(card).toHaveAttribute('tabindex', '0');
+        fireEvent.keyDown(card, { key: 'Enter' });
+        expect(screen.getByTestId('location').textContent).toBe('/reminders');
+    });
+
+    it('keeps the filter pills on one scrollable row', () => {
+        renderWithProviders(<InAppFeedTabContent allRows={[makeNotification()]} agents={[]} />);
+        const group = screen.getByRole('group', { name: 'Filter notifications' });
+        expect(group).toHaveStyle({ flexWrap: 'nowrap', overflowX: 'auto' });
+    });
+
+    describe('snooze from a reminder card', () => {
+        const reminderRow = (over: Parameters<typeof makeNotification>[0] = {}) =>
+            makeNotification({
+                id: 400,
+                event_type: 'reminder',
+                kind: 'system',
+                issue_type: null,
+                issue_id: null,
+                project_id: null,
+                link_url: '/reminders',
+                message: 'Drink water',
+                reminder_id: 12,
+                read_at: null,
+                ...over,
+            });
+
+        it('snoozes the reminder that fired, marks the card read, and keeps the way to Reminders', async () => {
+            const snoozed: unknown[] = [];
+            const read: string[] = [];
+            server.use(
+                http.get(`${BASE}/settings`, () => HttpResponse.json({ quiet_hours_timezone: 'UTC' })),
+                http.post(`${BASE}/reminders/12/snooze`, async ({ request }) => {
+                    snoozed.push(await request.json());
+                    return HttpResponse.json({ id: 12, next_fire_at: new Date(Date.now() + 3_600_000).toISOString() });
+                }),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(
+                <>
+                    <InAppFeedTabContent allRows={[reminderRow()]} agents={[]} />
+                    <LocationDisplay />
+                </>
+            );
+            // The card is not a button (it holds one); the snooze button is the action.
+            expect(screen.queryByRole('button', { name: /Drink water/ })).toBeNull();
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            const menu = await screen.findByRole('menu');
+            expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+                'Snooze 10 minutes',
+                'Snooze 1 hour',
+                'Snooze until tomorrow 9:00',
+                'Open Reminders',
+            ]);
+            fireEvent.click(within(menu).getByRole('menuitem', { name: 'Snooze 1 hour' }));
+            await waitFor(() => expect(snoozed).toEqual([{ minutes: 60 }]));
+            await waitFor(() => expect(read).toEqual(['400']));
+
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Open Reminders' }));
+            expect(screen.getByTestId('location').textContent).toBe('/reminders');
+        });
+
+        it('a failed snooze leaves the card unread', async () => {
+            const read: string[] = [];
+            server.use(
+                http.post(`${BASE}/reminders/12/snooze`, () => HttpResponse.json({ error: 'cancelled' }, { status: 409 })),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(<InAppFeedTabContent allRows={[reminderRow()]} agents={[]} />);
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Snooze 10 minutes' }));
+            await new Promise((r) => setTimeout(r, 50));
+            expect(read).toEqual([]);
+        });
+
+        it('an already-read reminder card snoozes without marking read again', async () => {
+            const read: string[] = [];
+            server.use(
+                http.post(`${BASE}/reminders/12/snooze`, () =>
+                    HttpResponse.json({ id: 12, next_fire_at: new Date().toISOString() }),
+                ),
+                http.post(`${BASE}/notifications/:id/read`, ({ params }) => {
+                    read.push(String(params['id']));
+                    return HttpResponse.json({ ok: true });
+                }),
+            );
+            renderWithProviders(
+                <InAppFeedTabContent allRows={[reminderRow({ read_at: '2026-10-16T00:00:00Z' })]} agents={[]} />
+            );
+            fireEvent.click(screen.getByRole('button', { name: 'Snooze reminder' }));
+            fireEvent.click(await screen.findByRole('menuitem', { name: 'Snooze 10 minutes' }));
+            await new Promise((r) => setTimeout(r, 50));
+            expect(read).toEqual([]);
+        });
+
+        it('a reminder fire from before the fire log (no reminder_id) stays a plain link card', () => {
+            renderWithProviders(<InAppFeedTabContent allRows={[reminderRow({ reminder_id: null })]} agents={[]} />);
+            expect(screen.queryByRole('button', { name: 'Snooze reminder' })).toBeNull();
+            expect(screen.getByRole('button', { name: /Drink water/ })).toBeInTheDocument();
+        });
     });
 });

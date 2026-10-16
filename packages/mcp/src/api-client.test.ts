@@ -692,6 +692,15 @@ describe('createApiClient — reminders + notifications', () => {
         expect((init as RequestInit).method).toBe('DELETE');
     });
 
+    it('snoozeReminder POSTs the minutes to /snooze', async () => {
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(okJson({ id: 1 }));
+        await createApiClient(config).snoozeReminder(1, 10);
+        const [url, init] = fetchSpy.mock.calls[0]!;
+        expect(url).toBe('http://api.test/api/reminders/1/snooze');
+        expect((init as RequestInit).method).toBe('POST');
+        expect(JSON.parse((init as RequestInit).body as string)).toEqual({ minutes: 10 });
+    });
+
     it('listReminders GETs /api/reminders (no filter args = empty query string)', async () => {
         const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(okJson([]));
         await createApiClient(config).listReminders();

@@ -8,6 +8,9 @@ vi.mock('../routes/events.js', () => ({
     broadcastSSE: vi.fn(),
 }));
 
+const sendExternal = vi.hoisted(() => vi.fn(async (_id: number, _m: string, _k?: string) => {}));
+vi.mock('./external-notifications.js', () => ({ sendExternalForNotification: sendExternal }));
+
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
 import { commentsService } from './comments.js';
@@ -737,6 +740,37 @@ describe('jira bridge failures', () => {
         expect(cfg.last_sync_ok).toBe(false);
         expect(cfg.last_sync_message).toContain('rejected the credentials');
         expect(cfg.last_sync_at).not.toBeNull();
+    });
+
+    it('a new sync failure opens Settings → Jira and goes outward as jira.sync_failed, once', async () => {
+        await configure();
+        sendExternal.mockClear();
+        failStatus = 401;
+        await expect(jiraSync.syncNow()).rejects.toBeTruthy();
+        const rows = await testDb
+            .selectFrom('notifications')
+            .select(['id', 'link_url', 'message'])
+            .where('event_type', '=', 'jira_sync')
+            .execute();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]?.link_url).toBe('/settings?tab=jira');
+        expect(sendExternal).toHaveBeenCalledWith(Number(rows[0]?.id), rows[0]?.message, 'jira.sync_failed');
+        // The same failure again is not news.
+        await expect(jiraSync.syncNow()).rejects.toBeTruthy();
+        expect(sendExternal).toHaveBeenCalledTimes(1);
+    });
+
+    it('import notifications open the imported Task', async () => {
+        issues = [issue('ATL-1', ['development'])];
+        await configure();
+        await jiraSync.syncNow();
+        const t1 = await taskFor('ATL-1');
+        const row = await testDb
+            .selectFrom('notifications')
+            .select('link_url')
+            .where('item_id', '=', t1.id)
+            .executeTakeFirstOrThrow();
+        expect(row.link_url).toBe(`/tasks/${t1.id}`);
     });
 
     it('fetches the comments a search result capped, so the snapshot is complete', async () => {

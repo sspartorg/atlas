@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sql } from 'kysely';
 import { testDb } from '../../tests/_pg-db.js';
 
 // Verifies that migration `021_hot_path_composites.ts` shipped the four
@@ -130,5 +131,254 @@ describe('migration 002 — items.repo_ids GIN', () => {
         const def = (rows[0] as { indexdef: string }).indexdef;
         expect(def).toMatch(/USING gin/i);
         expect(def).toMatch(/jsonb_path_ops/i);
+    });
+});
+
+// ── Migration 012 — page indexes + FK coverage ─────────────────────────────
+//
+// Each index is asserted by name, and the query it was added for is EXPLAINed
+// with seq scans priced out (`enable_seqscan = off`, transaction-local): an
+// empty test table would otherwise always seq-scan, so this proves the index
+// *can* serve the query shape, not the row-count-dependent choice.
+const PAGE_INDEXES = [
+    'idx_agent_runs_completed_cover',
+    'idx_agent_runs_item_completed_cover',
+    'idx_cli_sessions_closed_cover',
+    'idx_items_status_updated_at',
+    'idx_items_type_status_updated_at',
+    'idx_notifications_needs_you_item',
+    'idx_issue_events_status_created_at',
+    'idx_jira_attachments_key_created',
+    'idx_workflow_runs_top_started_at',
+    'idx_run_gate_results_created_at',
+    'idx_workflow_run_events_parked_created_at',
+    'idx_workflow_runs_item_id',
+    'idx_workflows_project_id',
+    'idx_agent_test_runs_item_id',
+    'idx_cli_sessions_credential_id',
+    'idx_cli_sessions_repo_id',
+    'idx_project_repos_credential_id',
+    'idx_team_config_credential_id',
+    'idx_agent_tests_project_id',
+    'idx_agent_tests_repo_id',
+    'idx_project_schedules_project_id',
+    'idx_agents_cli_model',
+    'idx_projects_default_workflow_id',
+    'idx_jira_sources_workflow_id',
+    'idx_agent_memory_last_run_id',
+];
+// Exact prefixes of another index on the same table.
+const DROPPED_INDEXES = [
+    'idx_items_status',
+    'idx_items_type_status',
+    'idx_items_project_type',
+    'idx_agent_runs_status_completed_at',
+    'idx_agent_prompt_versions_agent',
+    'idx_cli_session_subagents_session',
+    'idx_item_external_links_item_id',
+    'idx_project_env_vars_project',
+    'idx_project_repos_project_id',
+];
+
+async function indexNames(names: string[]): Promise<string[]> {
+    const rows = await sql<{ indexname: string }>`
+        SELECT indexname FROM pg_indexes
+         WHERE schemaname = 'public' AND indexname IN (${sql.join(names)})
+    `.execute(testDb);
+    return rows.rows.map((r) => r.indexname).sort();
+}
+
+// Enough rows, spread like real data, for the planner's costs to mean
+// something. Inserted and ANALYZEd inside the EXPLAIN's transaction, which is
+// rolled back, so sibling suites never see them.
+const PLAN_SEED = `
+    INSERT INTO projects (id, name, issue_key_prefix) VALUES ('plan-p', 'Plan', 'PLN');
+    INSERT INTO agents (id, name, category, cli, model)
+        SELECT 'plan-a', 'Plan agent', 'software-dev', cli, model_name FROM cli_models LIMIT 1;
+    INSERT INTO items (id, project_id, type, parent_id, title, status, updated_at, created_at)
+        SELECT 'pln-' || g, 'plan-p', CASE WHEN g % 4 = 1 THEN 'task' ELSE 'sub_task' END,
+               CASE WHEN g % 4 <> 1 THEN 'pln-' || (g - (g - 1) % 4) END, 'Item ' || g,
+               -- Mostly done, as a workspace ages: live statuses are the rare ones.
+               COALESCE((ARRAY['draft','ready','in_progress','in_review','waiting_for_info'])[1 + g % 40], 'done'),
+               now() - g * interval '1 hour', now() - g * interval '1 hour'
+          FROM generate_series(1, 4000) g;
+    INSERT INTO agent_runs (id, agent_id, item_id, status, completed_at, total_cost_usd, input_tokens)
+        SELECT 'plr-' || g, 'plan-a', 'pln-' || (1 + g % 4000),
+               CASE WHEN g % 10 = 0 THEN 'error' ELSE 'completed' END,
+               now() - g * interval '2 hours', 0.01 * (g % 50), g
+          FROM generate_series(1, 6000) g;
+    INSERT INTO cli_sessions (id, project_id, title, status, model, cli, closed_at, total_cost_usd)
+        SELECT 'pls-' || g, 'plan-p', 'S' || g, CASE WHEN g % 5 = 0 THEN 'active' ELSE 'closed' END, 'm', 'claude',
+               CASE WHEN g % 5 <> 0 THEN now() - g * interval '3 hours' END, 0.1
+          FROM generate_series(1, 4000) g;
+    INSERT INTO notifications (event_type, message, item_id, kind, created_at)
+        SELECT (ARRAY['agent_completed','workflow_run','agent_error','reminder'])[1 + g % 4], 'n',
+               'pln-' || (1 + g % 4000), (ARRAY['needs_you','update','system'])[1 + g % 3], now() - g * interval '1 minute'
+          FROM generate_series(1, 6000) g;
+    INSERT INTO issue_events (item_id, event_type, field, from_value, to_value, created_at)
+        SELECT 'pln-' || (1 + g % 4000), CASE WHEN g % 3 = 0 THEN 'comment_added' ELSE 'status_changed' END,
+               CASE WHEN g % 3 = 0 THEN NULL ELSE 'status' END, 'ready', 'done', now() - g * interval '30 minutes'
+          FROM generate_series(1, 12000) g;
+    INSERT INTO workflows (id, project_id, name, graph) VALUES ('plan-w', 'plan-p', 'Plan wf', '{"nodes":[],"edges":[]}');
+    INSERT INTO workflow_runs (id, workflow_id, item_id, project_id, status, graph_snapshot, started_at, parent_workflow_run_id)
+        SELECT 'plw-' || g, 'plan-w', 'pln-' || (1 + g % 4000), 'plan-p', 'completed', '{}', now() - g * interval '2 hours',
+               CASE WHEN g % 3 = 0 AND g > 1 THEN 'plw-' || (g - 1) END
+          FROM generate_series(1, 4000) g;
+    INSERT INTO run_gate_results (id, workflow_run_id, script_id, verdict, created_at)
+        SELECT 'plg-' || g, 'plw-' || (1 + g % 4000), 'gate', 'pass', now() - g * interval '1 hour'
+          FROM generate_series(1, 6000) g;
+    INSERT INTO workflow_run_events (id, workflow_run_id, kind, created_at)
+        SELECT 'ple-' || g, 'plw-' || (1 + g % 4000), CASE WHEN g % 2 = 0 THEN 'parked' ELSE 'resumed' END,
+               now() - g * interval '1 hour'
+          FROM generate_series(1, 6000) g;
+    INSERT INTO jira_attachments (id, jira_key, filename, created_at)
+        SELECT 'plj-' || g, 'PLN-' || (g % 500), 'f', now() - g * interval '1 hour' FROM generate_series(1, 4000) g;
+    ANALYZE items, agent_runs, cli_sessions, notifications, issue_events, workflow_runs, run_gate_results,
+            workflow_run_events, jira_attachments;
+`;
+
+async function planWithoutSeqScan(query: string): Promise<string> {
+    let plan = '';
+    await testDb
+        .transaction()
+        .execute(async (trx) => {
+            await sql.raw(PLAN_SEED).execute(trx);
+            await sql`SET LOCAL enable_seqscan = off`.execute(trx);
+            const r = await sql.raw<{ 'QUERY PLAN': string }>(`EXPLAIN ${query}`).execute(trx);
+            plan = r.rows.map((x) => x['QUERY PLAN']).join('\n');
+            throw new RolledBack();
+        })
+        .catch((e: unknown) => {
+            if (!(e instanceof RolledBack)) throw e;
+        });
+    return plan;
+}
+
+class RolledBack extends Error {}
+
+describe('migration 012 — page indexes', () => {
+    it('creates every page and FK index', async () => {
+        expect(await indexNames(PAGE_INDEXES)).toEqual([...PAGE_INDEXES].sort());
+    });
+
+    it('drops the redundant prefix indexes', async () => {
+        expect(await indexNames(DROPPED_INDEXES)).toEqual([]);
+    });
+
+    it('leaves no FK column without a leading index', async () => {
+        // A partial index counts only when its predicate is `col IS NOT NULL`,
+        // which every FK lookup (`col = $1`) implies.
+        const gaps = await sql<{ tbl: string; conname: string }>`
+            SELECT c.conrelid::regclass::text AS tbl, c.conname
+              FROM pg_constraint c
+             WHERE c.contype = 'f' AND c.connamespace = 'public'::regnamespace
+               AND NOT EXISTS (
+                   SELECT 1 FROM pg_index i
+                    WHERE i.indrelid = c.conrelid
+                      AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] @> c.conkey
+                      AND (i.indkey::int2[])[0:cardinality(c.conkey) - 1] <@ c.conkey
+                      AND (i.indpred IS NULL OR pg_get_expr(i.indpred, i.indrelid) =
+                           (SELECT '(' || quote_ident(a.attname) || ' IS NOT NULL)' FROM pg_attribute a
+                             WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+                               AND cardinality(c.conkey) = 1)))
+             ORDER BY 1, 2
+        `.execute(testDb);
+        expect(gaps.rows).toEqual([]);
+    });
+
+    const cases: Array<[label: string, index: string, query: string]> = [
+        [
+            'dashboard / analytics spend reads completed runs index-only',
+            'idx_agent_runs_completed_cover',
+            `SELECT sum(total_cost_usd), sum(input_tokens), sum(output_tokens), sum(cache_read_tokens),
+                    sum(cache_creation_tokens), count(*)
+               FROM agent_runs WHERE status = 'completed' AND completed_at >= now() - interval '30 days'`,
+        ],
+        [
+            'per-item cost rollup',
+            'idx_agent_runs_item_completed_cover',
+            `SELECT item_id, sum(total_cost_usd) FROM agent_runs
+              WHERE status = 'completed' AND item_id = ANY (ARRAY['a', 'b']) GROUP BY item_id`,
+        ],
+        [
+            'terminal spend reads closed sessions index-only',
+            'idx_cli_sessions_closed_cover',
+            `SELECT sum(total_cost_usd), count(*) FROM cli_sessions
+              WHERE status = 'closed' AND closed_at IS NOT NULL AND closed_at >= now() - interval '30 days'`,
+        ],
+        [
+            'dashboard queue',
+            'idx_items_status_updated_at',
+            `SELECT id FROM items WHERE status = 'in_progress' ORDER BY updated_at DESC LIMIT 20`,
+        ],
+        [
+            'analytics WIP tasks (replaces the dropped type+status index)',
+            'idx_items_type_status_updated_at',
+            `SELECT id FROM items WHERE type = 'task' AND status IN ('in_progress', 'in_review', 'waiting_for_info')`,
+        ],
+        [
+            // A narrow recent window can rank the plain updated_at index cheaper; either is fine.
+            'dashboard done this week',
+            'idx_items_type_status_updated_at|idx_items_updated_at',
+            `SELECT count(*) FROM items WHERE type = 'task' AND status = 'done' AND updated_at >= now() - interval '7 days'`,
+        ],
+        [
+            'notification staleness subquery',
+            'idx_notifications_needs_you_item',
+            `SELECT 1 FROM notifications newer
+              WHERE newer.item_id = 'x' AND newer.kind = 'needs_you'
+                AND newer.event_type IN ('agent_completed', 'workflow_run') AND newer.id > 5`,
+        ],
+        [
+            'delivery status events by time',
+            'idx_issue_events_status_created_at',
+            `SELECT item_id, min(created_at) FILTER (WHERE to_value = 'done') FROM issue_events
+              WHERE field = 'status' AND created_at < now() GROUP BY item_id`,
+        ],
+        [
+            'jira attachments per issue',
+            'idx_jira_attachments_key_created',
+            `SELECT * FROM jira_attachments WHERE jira_key = 'K-1' ORDER BY created_at, id`,
+        ],
+        [
+            'top-level workflow runs in a window',
+            'idx_workflow_runs_top_started_at',
+            `SELECT * FROM workflow_runs WHERE parent_workflow_run_id IS NULL
+                AND started_at >= now() - interval '30 days' AND started_at <= now() ORDER BY started_at`,
+        ],
+        [
+            'gate verdicts in a window',
+            'idx_run_gate_results_created_at',
+            `SELECT verdict, count(*) FROM run_gate_results
+              WHERE created_at >= now() - interval '30 days' AND created_at < now() GROUP BY 1`,
+        ],
+        [
+            'parks in a window',
+            'idx_workflow_run_events_parked_created_at',
+            `SELECT count(*) FROM workflow_run_events
+              WHERE kind = 'parked' AND created_at >= now() - interval '30 days' AND created_at < now()`,
+        ],
+        [
+            'workflow runs by item (awaitingOwner probe, FK)',
+            'idx_workflow_runs_item_id',
+            `SELECT 1 FROM workflow_runs WHERE status = 'completed' AND item_id = 'x'`,
+        ],
+    ];
+    for (const [label, index, query] of cases) {
+        it(`${label} uses ${index}`, async () => {
+            const plan = await planWithoutSeqScan(query);
+            expect(plan).toMatch(new RegExp(`(using|Index Scan on) (${index})\\b`));
+            expect(plan).not.toMatch(/Seq Scan/);
+        });
+    }
+
+    it('awaitingOwner probes workflow_runs by item, never seq-scans it', async () => {
+        const plan = await planWithoutSeqScan(`
+            SELECT count(*) FROM items_live x
+             WHERE x.status = 'waiting_for_info'
+                OR (x.status = 'in_review'
+                    AND NOT EXISTS (SELECT 1 FROM workflow_runs wr WHERE wr.status = 'running' AND wr.item_id = x.id)
+                    AND NOT EXISTS (SELECT 1 FROM workflow_runs wr WHERE wr.status = 'running' AND wr.item_id = x.parent_id))`);
+        expect(plan).not.toMatch(/Seq Scan on workflow_runs/);
     });
 });

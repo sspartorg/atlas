@@ -1,4 +1,7 @@
 import type {
+    AnalyticsWindow,
+    IAnalyticsDelivery,
+    IAnalyticsWorkflows,
     AgentCategory,
     AgentKindSlug,
     ApiErrorBody,
@@ -53,6 +56,8 @@ import type {
     NotificationKind,
     NotificationDeliveryStatus,
     IReminder,
+    IReminderFire,
+    ReminderStatus,
     SetReminderInput,
     UpdateReminderInput,
     IScratchPad,
@@ -198,6 +203,11 @@ export type TeamConfigUpdate = Partial<
 export type JiraSourceInput = Pick<IJiraSource, 'jql' | 'workflow_id' | 'repo_ids'>;
 
 const get = <T>(path: string) => request<T>(path);
+
+/** The viewer's IANA zone: analytics buckets are the viewer's wall clock. */
+function viewerTz(): string {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
+}
 const post = <T>(path: string, body: unknown) =>
     request<T>(path, { method: 'POST', body: JSON.stringify(body) });
 const patch = <T>(path: string, body: unknown) =>
@@ -274,10 +284,12 @@ export const api = {
     },
 
     analytics: {
-        get: (tz?: string) => {
-            const t = tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-            return get<AnalyticsResponse>(`/analytics?tz=${encodeURIComponent(t)}`);
-        },
+        get: (window: AnalyticsWindow = 'month', tz: string = viewerTz()) =>
+            get<AnalyticsResponse>(`/analytics?tz=${encodeURIComponent(tz)}&window=${window}`),
+        delivery: (window: AnalyticsWindow, tz: string = viewerTz()) =>
+            get<IAnalyticsDelivery>(`/analytics/delivery?tz=${encodeURIComponent(tz)}&window=${window}`),
+        workflows: (window: AnalyticsWindow, tz: string = viewerTz()) =>
+            get<IAnalyticsWorkflows>(`/analytics/workflows?tz=${encodeURIComponent(tz)}&window=${window}`),
         // Drill-down: project aggregate (totals + byKind + top 25 tasks).
         project: (projectId: string) =>
             get<AnalyticsProjectResponse>(`/analytics/project/${encodeURIComponent(projectId)}`),
@@ -853,11 +865,13 @@ export const api = {
             kind?: NotificationKind;
             external_status?: NotificationDeliveryStatus;
             limit?: number;
+            before?: number;
         }) => {
             const qs = new URLSearchParams();
             if (opts?.kind) qs.set('kind', opts.kind);
             if (opts?.external_status) qs.set('external_status', opts.external_status);
             if (opts?.limit) qs.set('limit', String(opts.limit));
+            if (opts?.before) qs.set('before', String(opts.before));
             const tail = qs.toString();
             return get<INotification[]>(`/notifications${tail ? `?${tail}` : ''}`);
         },
@@ -884,11 +898,23 @@ export const api = {
     },
 
     reminders: {
-        list: () => get<IReminder[]>('/reminders'),
+        list: (q: { status?: ReminderStatus[]; limit?: number; offset?: number } = {}) => {
+            const params = new URLSearchParams();
+            if (q.status?.length) params.set('status', q.status.join(','));
+            if (q.limit !== undefined) params.set('limit', String(q.limit));
+            if (q.offset !== undefined) params.set('offset', String(q.offset));
+            const qs = params.toString();
+            return get<IReminder[]>(`/reminders${qs ? `?${qs}` : ''}`);
+        },
         create: (input: SetReminderInput) => post<IReminder>('/reminders', input),
         update: (id: number, input: UpdateReminderInput) =>
             patch<IReminder>(`/reminders/${id}`, input),
         cancel: (id: number) => request<IReminder>(`/reminders/${id}`, { method: 'DELETE' }),
+        hardDelete: (id: number) => request<void>(`/reminders/${id}?hard=1`, { method: 'DELETE' }),
+        snooze: (id: number, minutes: number) =>
+            post<IReminder>(`/reminders/${id}/snooze`, { minutes }),
+        fires: (id: number, limit = 20) =>
+            get<IReminderFire[]>(`/reminders/${id}/fires?limit=${limit}`),
     },
 
     scratchPad: {

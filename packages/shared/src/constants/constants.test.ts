@@ -12,6 +12,7 @@ import {
     ISSUE_TYPES,
     NOTIFICATION_KIND_LABELS,
     NOTIFICATION_KINDS,
+    notificationLinkUrl,
     RUNNABLE_ISSUE_TYPES,
     STATUS_LABELS,
     SDLC_ROLE_DEFAULT_STATUS,
@@ -207,5 +208,35 @@ describe('notifications', () => {
 
     it('NOTIFICATION_DELIVERY_STATUSES enumerates the 4 delivery states', () => {
         expect(NOTIFICATION_DELIVERY_STATUSES).toEqual(['none', 'pending', 'sent', 'failed']);
+    });
+});
+
+describe('notificationLinkUrl', () => {
+    const base = {
+        link_url: null,
+        issue_type: null,
+        issue_id: null,
+        project_id: null,
+        event_type: 'x',
+    };
+    it.each([
+        [
+            'stored link wins',
+            { link_url: '/workflows/w1/runs/r1', issue_type: 'task', issue_id: 'T-1' },
+            '/workflows/w1/runs/r1',
+        ],
+        ['task', { issue_type: 'task', issue_id: 'T-1', project_id: 'p1' }, '/tasks/T-1'],
+        ['sub-task', { issue_type: 'sub_task', issue_id: 'S-2' }, '/sub-tasks/S-2'],
+        ['item id without a type is not an item link', { issue_id: 'T-1' }, null],
+        ['reminder', { event_type: 'reminder' }, '/reminders'],
+        ['jira', { event_type: 'jira_sync' }, '/settings?tab=jira'],
+        [
+            'project (autofetch)',
+            { event_type: 'autofetch_failed', project_id: 'p1' },
+            '/projects/p1',
+        ],
+        ['nothing to open', {}, null],
+    ] as const)('%s', (_name, over, want) => {
+        expect(notificationLinkUrl({ ...base, ...over })).toBe(want);
     });
 });

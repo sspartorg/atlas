@@ -339,6 +339,46 @@ describe('workflow CRUD', () => {
 
     // Every early exit of the upgrade route, so a bad id fails loudly instead
     // of writing a graph from the wrong source onto a workflow.
+    it('reads the shipped templates once per process', () => {
+        expect(workflowsService.listTemplates()).toBe(workflowsService.listTemplates());
+    });
+
+    it('flags upgrades for a whole list in one published_workflows query', async () => {
+        await testDb
+            .insertInto('published_workflows')
+            .values({ id: 'pub-1', name: 'Shared', bundle: Buffer.from('x'), version: 3 })
+            .execute();
+        const row = (id: string, source: string, pulled: number) => ({
+            id,
+            project_id: 'p1',
+            name: id,
+            marketplace_source_id: source,
+            marketplace_pulled_version: pulled,
+        });
+        await testDb
+            .insertInto('workflows')
+            .values([
+                row('w-tpl-old', 'delivery', 0),
+                row('w-tpl-new', 'delivery', templateVersion('delivery')),
+                row('w-pub-old', 'pub-1', 2),
+                row('w-pub-sub', 'pub-1:build', 2),
+                row('w-pub-new', 'pub-1', 3),
+                row('w-gone', 'pub-deleted', 1),
+            ])
+            .execute();
+        const flags = Object.fromEntries(
+            (await workflowsService.list('p1')).map((w) => [w.id, w.upgrade_available]),
+        );
+        expect(flags).toEqual({
+            'w-tpl-old': true,
+            'w-tpl-new': false,
+            'w-pub-old': true,
+            'w-pub-sub': true,
+            'w-pub-new': false,
+            'w-gone': false,
+        });
+    });
+
     it('refuses to upgrade a workflow with no marketplace source, and 404s an unknown one', async () => {
         const hand = (await createWorkflow({ name: 'Hand-built' })).json() as IWorkflow;
         const noSource = await app.inject({ method: 'POST', url: `/api/workflows/${hand.id}/upgrade` });

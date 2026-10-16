@@ -2,8 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { sql } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import { ApiError } from '../utils/errors.js';
-import { asAgentCli, ISSUE_TYPES } from '@atlas/shared';
+import { z } from 'zod';
+import { ANALYTICS_WINDOWS, AnalyticsQuerySchema, asAgentCli, ISSUE_TYPES } from '@atlas/shared';
 import { costRollupForRoot, costRowsForRoot } from '../services/item-cost-tree.js';
+import { countShippedTasks, deliveryAnalytics } from '../services/analytics-delivery.js';
+import { workflowAnalytics } from '../services/analytics-workflows.js';
+import { resolveWindow } from '../services/analytics-window.js';
+import { lookupClaudePrices } from '../services/claude-model-pricing.js';
 import type { ItemType } from '../db/types.js';
 
 // Allow `Area/Location` style IANA names plus UTC. Anything else falls back to UTC.
@@ -11,7 +16,13 @@ const TZ_RE = /^[A-Za-z_+\-/]{1,64}$/;
 
 function normalizeTz(raw: unknown): string {
     if (typeof raw !== 'string' || !TZ_RE.test(raw)) return 'UTC';
-    return raw;
+    // A well-formed but unknown zone would otherwise reach Postgres as a 500.
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: raw });
+        return raw;
+    } catch {
+        return 'UTC';
+    }
 }
 
 // Cost data changes only when a run completes, which fires an SSE event that
@@ -97,17 +108,133 @@ async function fetchSubagentsBySession(
     return out;
 }
 
+// The base summary keeps its lenient tz (an unknown zone reads as UTC, as it
+// always has); only `window` is validated.
+const SummaryWindowSchema = z.object({ window: z.enum(ANALYTICS_WINDOWS).default('month') });
+
+/** Cache reads cost a fraction of fresh input; the saving is the difference, priced per model. */
+function cacheSavings(rows: Array<{ model: string | null; cache_read_tokens: number }>) {
+    let usd = 0;
+    let unpriced = 0;
+    for (const r of rows) {
+        const p = r.model ? lookupClaudePrices(r.model) : null;
+        if (p) usd += (r.cache_read_tokens * (p.input - p.cache_read)) / 1_000_000;
+        else unpriced += r.cache_read_tokens;
+    }
+    return { usd, unpriced };
+}
+
+/**
+ * One page of a project's Tasks, each rolled up over its whole sub-task tree
+ * and sorted by cost. Paged in SQL: the summary needs the top 25 and the
+ * "View all" table one page, never the full list.
+ */
+async function projectTaskRollup(projectId: string, limit: number, offset: number) {
+    const result = await sql<{
+        root_id: string;
+        root_title: string;
+        cost: string | null;
+        input_tokens: string | null;
+        output_tokens: string | null;
+        cache_read_tokens: string | null;
+        run_count: string;
+        descendant_count: string;
+        last_run_at: string | null;
+        total_rows: string;
+    }>`
+        WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
+            SELECT e.id, e.id, e.parent_id, 0
+              FROM items_live e
+             WHERE e.project_id = ${projectId} AND e.type = 'task'
+            UNION ALL
+            SELECT t.root_id, i.id, i.parent_id, t.depth + 1
+              FROM items_live i
+              JOIN tree t ON i.parent_id = t.id
+        ),
+        rolled AS (
+            SELECT
+                tree.root_id AS root_id,
+                e.title AS root_title,
+                COALESCE(SUM(r.total_cost_usd), 0) AS cost_num,
+                COALESCE(SUM(r.input_tokens), 0) AS input_tokens_num,
+                COALESCE(SUM(r.output_tokens), 0) AS output_tokens_num,
+                COALESCE(SUM(r.cache_read_tokens), 0) AS cache_read_tokens_num,
+                COUNT(r.id) AS run_count_num,
+                COUNT(DISTINCT tree.id) - 1 AS descendant_count_num,
+                MAX(r.completed_at) AS last_run_at_ts
+              FROM tree
+              LEFT JOIN agent_runs r
+                ON r.item_id = tree.id AND r.status = 'completed'
+              LEFT JOIN items_live e ON e.id = tree.root_id
+             GROUP BY tree.root_id, e.title
+        )
+        SELECT
+            root_id,
+            root_title,
+            cost_num::text AS cost,
+            input_tokens_num::text AS input_tokens,
+            output_tokens_num::text AS output_tokens,
+            cache_read_tokens_num::text AS cache_read_tokens,
+            run_count_num::text AS run_count,
+            descendant_count_num::text AS descendant_count,
+            last_run_at_ts::text AS last_run_at,
+            COUNT(*) OVER ()::text AS total_rows
+          FROM rolled
+         ORDER BY cost_num DESC, root_id ASC
+         LIMIT ${limit} OFFSET ${offset}
+    `.execute(db);
+
+    const rows = result.rows.map((r) => ({
+        id: r.root_id,
+        title: r.root_title,
+        /* v8 ignore next */
+        descendant_count: Number(r.descendant_count ?? 0),
+        last_run_at: r.last_run_at,
+        totals: {
+            /* v8 ignore next */
+            total_cost_usd: Number(r.cost ?? 0),
+            /* v8 ignore next */
+            input_tokens: Number(r.input_tokens ?? 0),
+            /* v8 ignore next */
+            output_tokens: Number(r.output_tokens ?? 0),
+            /* v8 ignore next */
+            cache_read_tokens: Number(r.cache_read_tokens ?? 0),
+            /* v8 ignore next */
+            run_count: Number(r.run_count ?? 0),
+        },
+    }));
+    const total =
+        /* v8 ignore next */
+        result.rows.length > 0 ? Number(result.rows[0]?.total_rows ?? 0) : 0;
+    return { rows, total };
+}
+
 export async function analyticsRoutes(app: FastifyInstance) {
+    app.get('/api/analytics/delivery', async (req, reply) => {
+        reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
+        return reply.send(await deliveryAnalytics(AnalyticsQuerySchema.parse(req.query ?? {})));
+    });
+
+    app.get('/api/analytics/workflows', async (req, reply) => {
+        reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
+        return reply.send(await workflowAnalytics(AnalyticsQuerySchema.parse(req.query ?? {})));
+    });
+
     app.get('/api/analytics', async (req, reply) => {
         reply.header('Cache-Control', ANALYTICS_CACHE_CONTROL);
         const tz = normalizeTz((req.query as { tz?: string } | undefined)?.tz);
+        const { window } = SummaryWindowSchema.parse(req.query ?? {});
+        const win = await resolveWindow(tz, window);
 
-        // Use a CTE to compute the month-start / 12-month-start in the requester's
-        // timezone, so day and month buckets always reflect the viewer's wall clock.
-        // We re-use these via the kysely raw `sql` template throughout.
-        const monthStartSql = sql<string>`(date_trunc('month', (now() AT TIME ZONE ${tz})) AT TIME ZONE ${tz})`;
+        // `window=month` (the default) is the month start in the viewer's tz —
+        // exactly what this endpoint always used, so the Dashboard's month
+        // spend still reconciles. The 12-month ladder ignores the window.
+        const monthStartSql = sql<string>`${win.start}::timestamptz`;
         const twelveStartSql = sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) - interval '11 months') AT TIME ZONE ${tz})`;
-        const monthEndSql = sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) + interval '1 month' - interval '1 millisecond') AT TIME ZONE ${tz})`;
+        const monthEndSql =
+            window === 'month'
+                ? sql<string>`((date_trunc('month', (now() AT TIME ZONE ${tz})) + interval '1 month' - interval '1 millisecond') AT TIME ZONE ${tz})`
+                : sql<string>`${win.end}::timestamptz`;
 
         // For period.start / period.end response fields, fetch the resolved
         // boundaries as ISO strings in one tiny query so the FE can display them.
@@ -369,6 +496,64 @@ export async function analyticsRoutes(app: FastifyInstance) {
                     .execute(),
             ]);
 
+        const [prevAgent, prevTerminal, agentByModel, terminalByModel, shippedTasks] = await Promise.all([
+            db
+                .selectFrom('agent_runs')
+                .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
+                .where('status', '=', 'completed')
+                .where(sql`completed_at`, '>=', sql`${win.previous_start}::timestamptz`)
+                .where(sql`completed_at`, '<', sql`${win.previous_end}::timestamptz`)
+                .executeTakeFirst(),
+            db
+                .selectFrom('cli_sessions')
+                .select(({ fn }) => fn.sum<string>('total_cost_usd').as('usd'))
+                .where('status', '=', 'closed')
+                .where(sql`closed_at`, '>=', sql`${win.previous_start}::timestamptz`)
+                .where(sql`closed_at`, '<', sql`${win.previous_end}::timestamptz`)
+                .executeTakeFirst(),
+            db
+                .selectFrom('agent_runs')
+                .select(({ fn }) => [
+                    'cli',
+                    'model',
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.countAll<string>().as('count'),
+                ])
+                .where('status', '=', 'completed')
+                .where(sql`completed_at`, '>=', monthStartSql)
+                .groupBy(['cli', 'model'])
+                .execute(),
+            db
+                .selectFrom('cli_sessions')
+                .select(({ fn }) => [
+                    'cli',
+                    'model',
+                    fn.sum<string>('total_cost_usd').as('total_cost_usd'),
+                    fn.sum<string>('cache_read_tokens').as('cache_read_tokens'),
+                    fn.countAll<string>().as('count'),
+                ])
+                .where('status', '=', 'closed')
+                .where(sql`closed_at`, '>=', monthStartSql)
+                .groupBy(['cli', 'model'])
+                .execute(),
+            countShippedTasks(win.start, win.end),
+        ]);
+        const byModel = [
+            ...agentByModel.map((r) => ({ source: 'agentic' as const, r })),
+            ...terminalByModel.map((r) => ({ source: 'terminal' as const, r })),
+        ]
+            .map(({ source, r }) => ({
+                source,
+                cli: asAgentCli(r.cli),
+                model: (r.model as string | null) ?? null,
+                total_cost_usd: Number(r.total_cost_usd ?? 0),
+                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
+                count: Number(r.count),
+            }))
+            .sort((a, b) => b.total_cost_usd - a.total_cost_usd);
+        const savings = cacheSavings(byModel);
+
         const inputTok = Number(summaryRow?.input_tokens ?? 0);
         const cacheRead = Number(summaryRow?.cache_read_tokens ?? 0);
         const totalContextForEfficiency = inputTok + cacheRead;
@@ -467,7 +652,18 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 /* v8 ignore next */
                 end: (periodRow?.end as string | undefined) ?? '',
                 tz,
+                window,
+                previous_start: win.previous_start,
+                previous_end: win.previous_end,
             },
+            previous: {
+                total_cost_usd: Number(prevAgent?.usd ?? 0),
+                terminal_total_cost_usd: Number(prevTerminal?.usd ?? 0),
+            },
+            byModel,
+            cache_savings_usd: savings.usd,
+            cache_savings_unpriced_tokens: savings.unpriced,
+            shipped_tasks: shippedTasks,
             summary: {
                 total_cost_usd: Number(summaryRow?.total_cost_usd ?? 0),
                 input_tokens: inputTok,
@@ -606,7 +802,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
         // page reports combined spend.
         const [
             perItemRows,
-            taskRollupRows,
+            taskRollup,
             terminalSummaryRow,
             terminalByCliRows,
             topTerminalRows,
@@ -634,43 +830,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
                  WHERE i.project_id = ${projectId}
                  GROUP BY i.type
             `.execute(db),
-            sql<{
-                root_id: string;
-                root_title: string;
-                cost: string | null;
-                input_tokens: string | null;
-                output_tokens: string | null;
-                cache_read_tokens: string | null;
-                run_count: string;
-                descendant_count: string;
-                last_run_at: string | null;
-            }>`
-                WITH RECURSIVE tree(root_id, id, parent_id, type, depth) AS (
-                    SELECT e.id, e.id, e.parent_id, e.type, 0
-                      FROM items_live e
-                     WHERE e.project_id = ${projectId} AND e.type = 'task'
-                    UNION ALL
-                    SELECT t.root_id, i.id, i.parent_id, i.type, t.depth + 1
-                      FROM items_live i
-                      JOIN tree t ON i.parent_id = t.id
-                )
-                SELECT
-                    tree.root_id AS root_id,
-                    e.title AS root_title,
-                    COALESCE(SUM(r.total_cost_usd), 0)::text AS cost,
-                    COALESCE(SUM(r.input_tokens), 0)::text AS input_tokens,
-                    COALESCE(SUM(r.output_tokens), 0)::text AS output_tokens,
-                    COALESCE(SUM(r.cache_read_tokens), 0)::text AS cache_read_tokens,
-                    COUNT(r.id)::text AS run_count,
-                    (COUNT(DISTINCT tree.id) - 1)::text AS descendant_count,
-                    MAX(r.completed_at)::text AS last_run_at
-                  FROM tree
-                  LEFT JOIN agent_runs r
-                    ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items_live e ON e.id = tree.root_id
-                 GROUP BY tree.root_id, e.title
-                 ORDER BY COALESCE(SUM(r.total_cost_usd), 0) DESC, tree.root_id ASC
-            `.execute(db),
+            projectTaskRollup(projectId, 25, 0),
             // Terminal-session summary scoped to this project. All-time
             // (matches the agent-run rollups above, which are also
             // all-time for the drill-down). Status='closed' only — same
@@ -776,27 +936,6 @@ export async function analyticsRoutes(app: FastifyInstance) {
             }
         }
 
-        const allTasks = taskRollupRows.rows;
-        const topTasks = allTasks.slice(0, 25).map((r) => ({
-            id: r.root_id,
-            title: r.root_title,
-            /* v8 ignore next */
-            descendant_count: Number(r.descendant_count ?? 0),
-            last_run_at: r.last_run_at,
-            totals: {
-                /* v8 ignore next */
-                total_cost_usd: Number(r.cost ?? 0),
-                /* v8 ignore next */
-                input_tokens: Number(r.input_tokens ?? 0),
-                /* v8 ignore next */
-                output_tokens: Number(r.output_tokens ?? 0),
-                /* v8 ignore next */
-                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
-                /* v8 ignore next */
-                run_count: Number(r.run_count ?? 0),
-            },
-        }));
-
         return reply.send({
             project: { id: project.id, name: project.name },
             totals,
@@ -804,8 +943,8 @@ export async function analyticsRoutes(app: FastifyInstance) {
                 const row = byKindMap.get(t);
                 return row ? [row] : [];
             }),
-            topTasks,
-            task_count: allTasks.length,
+            topTasks: taskRollup.rows,
+            task_count: taskRollup.total,
             // Terminal-session aggregates for the same project. Zero-shaped
             // when no closed sessions exist so the FE can render the empty
             // state without nullable guards.
@@ -876,82 +1015,7 @@ export async function analyticsRoutes(app: FastifyInstance) {
             .executeTakeFirst();
         if (!project) throw new ApiError('not_found', 'Project not found', 404);
 
-        const result = await sql<{
-            root_id: string;
-            root_title: string;
-            cost: string | null;
-            input_tokens: string | null;
-            output_tokens: string | null;
-            cache_read_tokens: string | null;
-            run_count: string;
-            descendant_count: string;
-            last_run_at: string | null;
-            total_rows: string;
-        }>`
-            WITH RECURSIVE tree(root_id, id, parent_id, depth) AS (
-                SELECT e.id, e.id, e.parent_id, 0
-                  FROM items_live e
-                 WHERE e.project_id = ${projectId} AND e.type = 'task'
-                UNION ALL
-                SELECT t.root_id, i.id, i.parent_id, t.depth + 1
-                  FROM items_live i
-                  JOIN tree t ON i.parent_id = t.id
-            ),
-            rolled AS (
-                SELECT
-                    tree.root_id AS root_id,
-                    e.title AS root_title,
-                    COALESCE(SUM(r.total_cost_usd), 0) AS cost_num,
-                    COALESCE(SUM(r.input_tokens), 0) AS input_tokens_num,
-                    COALESCE(SUM(r.output_tokens), 0) AS output_tokens_num,
-                    COALESCE(SUM(r.cache_read_tokens), 0) AS cache_read_tokens_num,
-                    COUNT(r.id) AS run_count_num,
-                    COUNT(DISTINCT tree.id) - 1 AS descendant_count_num,
-                    MAX(r.completed_at) AS last_run_at_ts
-                  FROM tree
-                  LEFT JOIN agent_runs r
-                    ON r.item_id = tree.id AND r.status = 'completed'
-                  LEFT JOIN items_live e ON e.id = tree.root_id
-                 GROUP BY tree.root_id, e.title
-            )
-            SELECT
-                root_id,
-                root_title,
-                cost_num::text AS cost,
-                input_tokens_num::text AS input_tokens,
-                output_tokens_num::text AS output_tokens,
-                cache_read_tokens_num::text AS cache_read_tokens,
-                run_count_num::text AS run_count,
-                descendant_count_num::text AS descendant_count,
-                last_run_at_ts::text AS last_run_at,
-                COUNT(*) OVER ()::text AS total_rows
-              FROM rolled
-             ORDER BY cost_num DESC, root_id ASC
-             LIMIT ${limit} OFFSET ${offset}
-        `.execute(db);
-
-        const rows = result.rows.map((r) => ({
-            id: r.root_id,
-            title: r.root_title,
-            /* v8 ignore next */
-            descendant_count: Number(r.descendant_count ?? 0),
-            last_run_at: r.last_run_at,
-            totals: {
-                /* v8 ignore next */
-                total_cost_usd: Number(r.cost ?? 0),
-                /* v8 ignore next */
-                input_tokens: Number(r.input_tokens ?? 0),
-                /* v8 ignore next */
-                output_tokens: Number(r.output_tokens ?? 0),
-                /* v8 ignore next */
-                cache_read_tokens: Number(r.cache_read_tokens ?? 0),
-                /* v8 ignore next */
-                run_count: Number(r.run_count ?? 0),
-            },
-        }));
-        const total =
-            /* v8 ignore next */
-            result.rows.length > 0 ? Number(result.rows[0]?.total_rows ?? 0) : 0;
+        const { rows, total } = await projectTaskRollup(projectId, limit, offset);
 
         return reply.send({ rows, total, page, limit });
     });

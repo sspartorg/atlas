@@ -20,6 +20,7 @@ import { commentsService } from './comments.js';
 import { dataDir, decrypt, encrypt } from './crypto.js';
 import { externalLinks } from './external-links.js';
 import { notificationsService } from './notifications.js';
+import { sendExternalForNotification } from './external-notifications.js';
 import { projectReposService } from './project-repos.js';
 import { projectsService } from './projects.js';
 import { tasksService } from './tasks.js';
@@ -74,11 +75,11 @@ export interface LocalAttachment {
 }
 
 /** Headings of the bridge-managed sections at the end of a description. */
-export const JIRA_FILES_HEADING = '## Attachments from Jira';
-export const JIRA_COMMENTS_HEADING = '## Comments from Jira';
+const JIRA_FILES_HEADING = '## Attachments from Jira';
+const JIRA_COMMENTS_HEADING = '## Comments from Jira';
 
 /** [the Owner's / imported part, the managed sections ('' if none)]. */
-export function splitManaged(description: string): [string, string] {
+function splitManaged(description: string): [string, string] {
     const at = [JIRA_FILES_HEADING, JIRA_COMMENTS_HEADING]
         .map((h) => description.lastIndexOf(`\n${h}`))
         .filter((i) => i !== -1);
@@ -653,7 +654,7 @@ function distinctRepos(matches: Match[], keep: (m: Match) => boolean): IProjectR
 // ── Attachments: Jira → Atlas copies ────────────────────────────────────────
 
 /** Files larger than this are listed with a link to Jira instead of copied. */
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 export function jiraAttachmentsDir(): string {
     return join(dataDir(), 'jira-attachments');
@@ -1451,11 +1452,15 @@ async function recordSync(ok: boolean, message: string, stampSyncTime: boolean):
         .where('id', '=', 1)
         .execute();
     if (!ok && (prev?.last_sync_ok !== false || prev.last_sync_message !== text)) {
-        await notificationsService.create({
+        const n = await notificationsService.create({
             event_type: 'jira_sync',
             message: `Jira sync failed: ${text}`,
             kind: 'needs_you',
             agent_id: null,
+            link_url: '/settings?tab=jira',
+        });
+        await sendExternalForNotification(n.id, n.message, 'jira.sync_failed').catch(() => {
+            /* outward delivery is best-effort; the row and the log carry it */
         });
     }
 }

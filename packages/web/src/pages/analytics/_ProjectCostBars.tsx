@@ -98,12 +98,11 @@ export function ProjectCostBars({
         return (
             <Card>
                 <ChartTitle
-                    eyebrow="Spend by project"
-                    title="Cost per project — this month"
+                    title="Cost per project"
                     sub="Per-project split of agentic and terminal spend, normalised against the largest spender."
                 />
                 <ChartEmpty
-                    label="No project spend this month"
+                    label="No project spend in this window"
                     sub="Runs and terminal sessions get attributed back to a project at completion — once one closes, it lands here."
                 />
             </Card>
@@ -112,8 +111,7 @@ export function ProjectCostBars({
     return (
         <Card>
             <ChartTitle
-                eyebrow="Spend by project"
-                title="Cost per project — this month"
+                title="Cost per project"
                 sub={`${rows.length} project${rows.length === 1 ? '' : 's'} touched. Each bar splits agentic spend (blue) from manual terminal spend (orange); width is normalised against the largest combined spender.`}
             />
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>

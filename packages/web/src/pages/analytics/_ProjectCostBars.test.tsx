@@ -81,7 +81,7 @@ describe('ProjectCostBars', () => {
         renderWithProviders(
             <ProjectCostBars byProject={[]} terminalByProject={[]} topProjectMax={0} />
         );
-        expect(screen.getByText(/No project spend this month/i)).toBeInTheDocument();
+        expect(screen.getByText(/No project spend in this window/i)).toBeInTheDocument();
     });
 
     it('shows combined cost when a project has both agent + terminal spend', () => {

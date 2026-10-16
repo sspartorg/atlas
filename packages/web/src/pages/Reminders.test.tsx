@@ -1,15 +1,28 @@
-import { describe, expect, it, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Reminders, formatSchedule } from './Reminders.js';
-import type { IReminder } from '@atlas/shared';
+import type { IReminder, IReminderFire } from '@atlas/shared';
 
 let isMobileValue = false;
 vi.mock('../hooks/useIsMobile.js', () => ({ useIsMobile: () => isMobileValue }));
+const show = vi.hoisted(() => vi.fn());
+vi.mock('../hooks/useToast.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    useToast: () => ({ show, toasts: [], dismiss: vi.fn() }),
+}));
+// Toasts render in the app shell, not here: assert on what the page asked to show.
+const toasted = (message: string | RegExp) =>
+    waitFor(() =>
+        expect(show.mock.calls.map((c) => (c[0] as { message: string }).message)).toContainEqual(
+            typeof message === 'string' ? message : expect.stringMatching(message),
+        ),
+    );
 
 const BASE = 'http://localhost:3000/api';
+const HOUR = 60 * 60 * 1000;
 
 function makeReminder(overrides: Partial<IReminder> = {}): IReminder {
     return {
@@ -20,488 +33,457 @@ function makeReminder(overrides: Partial<IReminder> = {}): IReminder {
         schedule_value: '09:00',
         channel: 'notification',
         status: 'active',
-        next_fire_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        next_fire_at: new Date(Date.now() + HOUR + 5 * 60_000).toISOString(),
         last_fired_at: null,
+        fire_count: 0,
         created_at: '2026-05-16T00:00:00Z',
         updated_at: '2026-05-16T00:00:00Z',
         created_by_agent_id: null,
         ...overrides,
-    } as IReminder;
+    };
 }
 
-describe('Reminders page', () => {
-    it('mounts without crashing when no reminders are returned', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([])));
-        const { container } = renderWithProviders(<Reminders />);
-        await waitFor(() => {
-            expect(container.firstChild).toBeTruthy();
-        });
-    });
+/** Serve the two list calls the page makes: live (active,paused) and history. */
+function serveLists(live: IReminder[], history: IReminder[] = [], seen: string[] = []) {
+    server.use(
+        http.get(`${BASE}/reminders`, ({ request }) => {
+            const url = new URL(request.url);
+            seen.push(url.search);
+            const status = url.searchParams.get('status') ?? '';
+            if (status.includes('active')) return HttpResponse.json(live);
+            const offset = Number(url.searchParams.get('offset') ?? 0);
+            const limit = Number(url.searchParams.get('limit') ?? 50);
+            return HttpResponse.json(history.slice(offset, offset + limit));
+        }),
+        http.get(`${BASE}/settings`, () => HttpResponse.json({ quiet_hours_timezone: 'Asia/Kolkata' })),
+    );
+}
 
-    it('renders a list of active reminders', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])));
+async function openHistory() {
+    fireEvent.click(screen.getByRole('switch', { name: /show history/i }));
+    return screen.findByRole('region', { name: 'History' });
+}
+
+async function openMenu(label: string) {
+    fireEvent.click(await screen.findByRole('button', { name: `Actions for ${label}` }));
+    return screen.findByRole('menu');
+}
+
+afterEach(() => {
+    isMobileValue = false;
+    show.mockClear();
+});
+
+describe('Reminders page — lists', () => {
+    it('shows the empty state with no live reminders', async () => {
+        serveLists([]);
         renderWithProviders(<Reminders />);
-        await waitFor(() => {
-            expect(screen.getByText('Daily standup')).toBeInTheDocument();
-        });
+        expect(await screen.findByText('No active reminders')).toBeInTheDocument();
     });
 
-    it('opens the New reminder modal when the header button is clicked', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([])));
-        renderWithProviders(<Reminders />);
-        const newBtn = await screen.findByRole('button', { name: /new reminder/i });
-        fireEvent.click(newBtn);
-        // Modal renders dialog when newOpen=true.
-        await waitFor(() => {
-            expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0);
-        });
-    });
-
-    it('on mobile, the New reminder FAB opens the modal', async () => {
-        isMobileValue = true;
-        try {
-            server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([])));
-            renderWithProviders(<Reminders />);
-            await screen.findByText('No active reminders');
-            const fab = document.querySelector('.MuiFab-root') as HTMLElement;
-            expect(fab).toHaveAccessibleName('New reminder');
-            fireEvent.click(fab);
-            await waitFor(() => expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0));
-        } finally {
-            isMobileValue = false;
-        }
-    });
-
-    it('toggles the "Show history" switch and renders history rows', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder(),
-                    makeReminder({ id: 2, label: 'Old reminder', status: 'cancelled' }),
-                ])
-            )
+    it('asks only for active + paused until history is on, then pages history 50 at a time', async () => {
+        const seen: string[] = [];
+        const hist = Array.from({ length: 51 }, (_, i) =>
+            makeReminder({ id: 100 + i, label: `Old ${i}`, status: 'cancelled' }),
         );
+        serveLists([makeReminder()], hist, seen);
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
-        // Find the show-history switch input — MUI Switch uses role="checkbox"
-        // for the underlying input but here the label text is "Show history".
-        const showLbl = screen.getByText('Show history');
-        const switchInput = showLbl.closest('label')?.querySelector('input');
-        if (switchInput) fireEvent.click(switchInput);
-        // After toggling, the History section + the cancelled row are shown.
-        expect(await screen.findByText('History')).toBeInTheDocument();
-        expect(screen.getByText('Old reminder')).toBeInTheDocument();
+        expect(seen).toEqual(['?status=active%2Cpaused']);
+
+        const region = await openHistory();
+        await within(region).findByText('Old 0');
+        expect(seen).toContain('?status=cancelled%2Ccompleted&limit=50&offset=0');
+        expect(within(region).queryByText('Old 50')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Show more history' }));
+        expect(await within(region).findByText('Old 50')).toBeInTheDocument();
+        expect(seen).toContain('?status=cancelled%2Ccompleted&limit=50&offset=50');
+        expect(screen.queryByRole('button', { name: 'Show more history' })).toBeNull();
     });
 
-    it('clicks the row Edit button to open the edit modal (requestEdit branch)', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])));
-        const { container } = renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // Edit button has aria-label "Edit reminder" via the Tooltip wrapper.
-        const editBtn =
-            container.querySelector('button[aria-label="Edit reminder"]') ??
-            container.querySelectorAll('button')[2];
-        if (editBtn) fireEvent.click(editBtn);
-    });
-
-    it('clicks the row Cancel button to open the cancel dialog (requestCancel branch)', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])));
-        const { container } = renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // The cancel icon has aria-label "Cancel reminder" via tooltip.
-        const cancelBtns = container.querySelectorAll('button');
-        // Last action icon should be cancel. Click it.
-        const cancelBtn = Array.from(cancelBtns).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
-        );
-        if (cancelBtn) {
-            fireEvent.click(cancelBtn);
-            // Confirmation dialog renders "Cancel reminder?" title.
-            await waitFor(() => {
-                expect(screen.getByText(/Cancel reminder\?/i)).toBeInTheDocument();
-            });
-            // Click "Keep" to close — exercises closeCancelDialog.
-            const keepBtn = screen.getByRole('button', { name: /^keep$/i });
-            fireEvent.click(keepBtn);
-        }
-    });
-
-    it('confirms the cancel dialog to invoke confirmCancel (mutation fires)', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])),
-            http.post(`${BASE}/reminders/1/cancel`, () => HttpResponse.json({ ok: true })),
-            http.patch(`${BASE}/reminders/1`, () => HttpResponse.json({ ok: true })),
-            http.delete(`${BASE}/reminders/1`, () => HttpResponse.json({ ok: true }))
-        );
-        const { container } = renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
-        );
-        if (cancelBtn) {
-            fireEvent.click(cancelBtn);
-            await waitFor(() => {
-                expect(screen.getByText(/Cancel reminder\?/i)).toBeInTheDocument();
-            });
-            const confirmBtn = screen.getByRole('button', { name: /^cancel reminder$/i });
-            fireEvent.click(confirmBtn);
-            await new Promise((r) => setTimeout(r, 100));
-        }
-        // Best-effort assertion; the mutation may not match the exact endpoint
-        // (the hook delegates the URL choice). The point of this test is to
-        // exercise the confirmCancel handler.
-        expect(true).toBe(true);
-    });
-
-    it('clicks the refresh button (refetch branch)', async () => {
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([])));
-        const { container } = renderWithProviders(<Reminders />);
-        // Refresh button has no aria-label — find via the "refresh" icon text.
-        await new Promise((r) => setTimeout(r, 50));
-        const refreshIcon = container.querySelector('.material-symbols-rounded');
-        const btn = refreshIcon?.closest('button');
-        if (btn) fireEvent.click(btn);
-    });
-
-    it('formatSchedule helper covers each schedule_kind branch', () => {
-        expect(
-            formatSchedule({ schedule_kind: 'once', schedule_value: '2030-01-01T09:00:00Z' })
-        ).toMatch(/Once on/);
-        expect(formatSchedule({ schedule_kind: 'daily', schedule_value: '09:00' })).toBe(
-            'Daily at 09:00'
-        );
-        expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: '09:00|1,3,5' })).toMatch(
-            /Weekly/
-        );
-        expect(formatSchedule({ schedule_kind: 'cron', schedule_value: '0 9 * * 1-5' })).toBe(
-            'cron: 0 9 * * 1-5'
-        );
-        // Invalid once date falls back to raw value.
-        expect(formatSchedule({ schedule_kind: 'once', schedule_value: 'not-a-date' })).toBe(
-            'not-a-date'
-        );
-        // Weekly missing pipe falls back to raw value.
-        expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: 'broken' })).toBe(
-            'broken'
-        );
-    });
-
-    it('renders external + both channel branches in ChannelChip', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 1, label: 'Ext one', channel: 'external' }),
-                    makeReminder({ id: 2, label: 'Both one', channel: 'both' }),
-                ])
-            )
-        );
+    it('names the Owner time zone in the subtitle', async () => {
+        serveLists([makeReminder()]);
         renderWithProviders(<Reminders />);
-        await screen.findByText('Ext one');
-        expect(screen.getByText('Both one')).toBeInTheDocument();
+        expect(await screen.findByText('Asia/Kolkata')).toBeInTheDocument();
     });
 
-    it('renders the paused status chip branch', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ status: 'paused' })])
-            )
-        );
+    it('refresh refetches both lists', async () => {
+        const seen: string[] = [];
+        serveLists([makeReminder()], [makeReminder({ id: 2, label: 'Gone', status: 'cancelled' })], seen);
         renderWithProviders(<Reminders />);
         await screen.findByText('Daily standup');
-        // The chip label is "paused" (capitalized via CSS).
-        expect(screen.getAllByText(/paused/i).length).toBeGreaterThan(0);
+        await openHistory();
+        await screen.findByText('Gone');
+        const before = seen.length;
+        fireEvent.click(screen.getByRole('button', { name: /refresh reminders/i }));
+        await waitFor(() => expect(seen.length).toBeGreaterThanOrEqual(before + 2));
+    });
+});
+
+describe('Reminders page — time line', () => {
+    it('live rows show the next fire; paused rows the last fire', async () => {
+        serveLists([
+            makeReminder(),
+            makeReminder({ id: 2, label: 'On hold', status: 'paused', last_fired_at: new Date(Date.now() - 2 * HOUR).toISOString() }),
+            makeReminder({ id: 3, label: 'Never', status: 'paused' }),
+        ]);
+        renderWithProviders(<Reminders />);
+        expect(await screen.findByText('Next in 1h')).toBeInTheDocument();
+        expect(screen.getByText('Paused · last fired 2h ago')).toBeInTheDocument();
+        expect(screen.getByText('Paused · never fired')).toBeInTheDocument();
     });
 
-    it('formatSchedule weekly with invalid day numbers filters them out', () => {
-        // Days 0, 8, 99, NaN are filtered by `n >= 1 && n <= 7` predicate.
-        const res = formatSchedule({
-            schedule_kind: 'weekly',
-            schedule_value: '09:00|0,3,8,99,abc',
-        });
-        // Only day 3 (Wed) survives the filter.
-        expect(res).toBe('Weekly Wed at 09:00');
-    });
-
-    it('formatSchedule default branch returns raw schedule_value for unknown kind', () => {
-        const res = formatSchedule({
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            schedule_kind: 'unknown_kind' as any,
-            schedule_value: 'raw value',
-        });
-        expect(res).toBe('raw value');
-    });
-
-    it('renders history-only when no active reminders', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ id: 7, label: 'Done one', status: 'completed' })])
-            )
+    it('history rows say when they finished instead of a stale next fire', async () => {
+        const threeDaysAgo = new Date(Date.now() - 3 * 24 * HOUR).toISOString();
+        const twoHoursAgo = new Date(Date.now() - 2 * HOUR - 60_000).toISOString();
+        serveLists(
+            [],
+            [
+                makeReminder({ id: 2, label: 'Done once', status: 'completed', updated_at: threeDaysAgo, fire_count: 1 }),
+                makeReminder({ id: 3, label: 'Stopped', status: 'cancelled', updated_at: twoHoursAgo, last_fired_at: threeDaysAgo }),
+                makeReminder({ id: 4, label: 'Ancient', status: 'cancelled', updated_at: '2020-01-01T00:00:00Z' }),
+            ],
         );
         renderWithProviders(<Reminders />);
-        await screen.findByText(/No active reminders/i);
-        // Toggle history to show the completed reminder
-        const showLbl = screen.getByText('Show history');
-        const switchInput = showLbl.closest('label')?.querySelector('input');
-        if (switchInput) fireEvent.click(switchInput);
-        expect(await screen.findByText('History')).toBeInTheDocument();
-        expect(screen.getByText('Done one')).toBeInTheDocument();
+        await screen.findByText('No active reminders');
+        await openHistory();
+        expect(await screen.findByText('Completed 3d ago · fired 1×')).toBeInTheDocument();
+        expect(screen.getByText('Cancelled 2h ago · last fired 3d ago')).toBeInTheDocument();
+        expect(screen.getByText(/^Cancelled on /)).toBeInTheDocument();
+        expect(screen.queryByText(/^Next/)).toBeNull();
     });
+});
 
-    it('Show history toggled ON but no history rows renders nothing extra', async () => {
-        // active reminder + no history at all → showHistory=true but history.length===0
-        // → the `showHistory && history.length > 0` branch is false.
-        server.use(http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])));
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        const showLbl = screen.getByText('Show history');
-        const switchInput = showLbl.closest('label')?.querySelector('input');
-        if (switchInput) fireEvent.click(switchInput);
-        // No History section renders.
-        expect(screen.queryByText(/^History$/)).not.toBeInTheDocument();
-    });
-
-    it('renders cancelled status chip color branch', async () => {
+describe('Reminders page — fire log', () => {
+    it('tapping a history row lazy-loads its fire log', async () => {
+        const fires: IReminderFire[] = [
+            { notification_id: 9, fired_at: '2026-10-15T03:30:00Z', push_status: 'sent', external_status: 'failed', failure_reason: 'chat not found' },
+            { notification_id: 8, fired_at: '2026-10-14T03:30:00Z', push_status: 'none', external_status: 'pending', failure_reason: null },
+        ];
+        const fireCalls = vi.fn();
+        serveLists([], [makeReminder({ id: 5, label: 'Logged', status: 'completed', fire_count: 2 })]);
         server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 1, status: 'active' }),
-                    makeReminder({ id: 2, label: 'X', status: 'cancelled' }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        const showLbl = screen.getByText('Show history');
-        const switchInput = showLbl.closest('label')?.querySelector('input');
-        if (switchInput) fireEvent.click(switchInput);
-        await screen.findByText('History');
-        expect(screen.getAllByText(/cancelled/i).length).toBeGreaterThan(0);
-    });
-
-    it('renders completed status chip color branch', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 1, status: 'active' }),
-                    makeReminder({ id: 2, label: 'Y', status: 'completed' }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        const showLbl = screen.getByText('Show history');
-        const switchInput = showLbl.closest('label')?.querySelector('input');
-        if (switchInput) fireEvent.click(switchInput);
-        await screen.findByText('History');
-        expect(screen.getAllByText(/completed/i).length).toBeGreaterThan(0);
-    });
-
-    it('reminder body field renders when set', async () => {
-        // The `{reminder.body && (...)}` branch fires only when body is truthy.
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({ id: 1, label: 'WithBody', body: 'Detail text here' }),
-                    makeReminder({ id: 2, label: 'NoBody', body: '' }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('WithBody');
-        expect(screen.getByText('Detail text here')).toBeInTheDocument();
-        // NoBody row exists but no body text element
-        expect(screen.getByText('NoBody')).toBeInTheDocument();
-    });
-
-    it('renders in-app-only channel (no external-channel icon)', async () => {
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ id: 1, channel: 'notification' })])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // The ChannelChip tooltip label is "In-app" for notification-only.
-        expect(screen.getAllByLabelText(/In-app/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: "in <1m" when next_fire_at is within 1 minute in the future', async () => {
-        // absMin < 1 && diff > 0 → "in <1m"
-        // Use a static ISO string 55 seconds in the future at request-intercept time.
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() + 55 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // The Typography renders "in <1m" — check body text to avoid exact-match issues
-        expect(document.body.textContent).toContain('in <1m');
-    });
-
-    it('relativeFromNow: "Xm ago" when next_fire_at is a few minutes in the past', async () => {
-        // absMin < 60 && diff < 0 → "${absMin}m ago"
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        expect(screen.getAllByText(/m ago/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: "in Xm" when next_fire_at is a few minutes in the future', async () => {
-        // absMin < 60 && diff > 0 → "in ${absMin}m"
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        expect(screen.getAllByText(/in \d+m/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: "Xh ago" when next_fire_at is a few hours in the past', async () => {
-        // absMin >= 60, absH < 24, diff < 0 → "${absH}h ago"
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        expect(screen.getAllByText(/h ago/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: "in Xd" when next_fire_at is 2 days away', async () => {
-        // absH >= 24, absD < 7, diff > 0 → "in ${absD}d"
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        expect(screen.getAllByText(/in \d+d/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: "Xd ago" when next_fire_at is 3 days in the past', async () => {
-        // absH >= 24, absD < 7, diff < 0 → "${absD}d ago"
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        expect(screen.getAllByText(/d ago/i).length).toBeGreaterThan(0);
-    });
-
-    it('relativeFromNow: toLocaleDateString when next_fire_at is over 7 days away', async () => {
-        // absD >= 7 → d.toLocaleDateString()
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([
-                    makeReminder({
-                        id: 1,
-                        next_fire_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-                    }),
-                ])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // Just verify no crash — the date string format varies by locale
-        expect(document.body).toBeTruthy();
-    });
-
-    it('relativeFromNow: invalid date string returns empty string', async () => {
-        // Number.isNaN(d.getTime()) → return ''
-        server.use(
-            http.get(`${BASE}/reminders`, () =>
-                HttpResponse.json([makeReminder({ id: 1, next_fire_at: 'not-a-date' })])
-            )
-        );
-        renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        // Component renders without crash even with invalid date
-        expect(document.body).toBeTruthy();
-    });
-
-    it('closeCancelDialog does nothing when cancelReminder.isPending (guard branch)', async () => {
-        // To hit the `if (cancelReminder.isPending) return;` branch, we need
-        // a cancel mutation that is in-flight while the dialog Close is clicked.
-        // We delay the cancel API so isPending is true, then click "Keep".
-        let resolveCancel!: () => void;
-        const cancelPending = new Promise<void>((res) => {
-            resolveCancel = res;
-        });
-        server.use(
-            http.get(`${BASE}/reminders`, () => HttpResponse.json([makeReminder()])),
-            http.post(`${BASE}/reminders/1/cancel`, async () => {
-                await cancelPending;
-                return HttpResponse.json({ ok: true });
+            http.get(`${BASE}/reminders/5/fires`, () => {
+                fireCalls();
+                return HttpResponse.json(fires);
             }),
-            http.patch(`${BASE}/reminders/1`, async () => {
-                await cancelPending;
-                return HttpResponse.json({ ok: true });
+        );
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        const toggle = await screen.findByRole('button', { name: /Logged — show fire log/ });
+        expect(fireCalls).not.toHaveBeenCalled();
+        fireEvent.click(toggle);
+        const log = await screen.findByRole('list', { name: 'Fire log' });
+        expect(within(log).getAllByRole('listitem')).toHaveLength(2);
+        expect(within(log).getByText('external failed · chat not found')).toBeInTheDocument();
+        expect(within(log).getByText('external held / sending')).toBeInTheDocument();
+        expect(within(log).getByText('push sent')).toBeInTheDocument();
+        expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        fireEvent.click(screen.getByRole('button', { name: /Logged — hide fire log/ }));
+        expect(screen.queryByRole('list', { name: 'Fire log' })).toBeNull();
+        expect(fireCalls).toHaveBeenCalledTimes(1);
+    });
+
+    it('says so when a reminder has no logged fires, or the log fails', async () => {
+        serveLists([], [
+            makeReminder({ id: 6, label: 'Quiet', status: 'cancelled' }),
+            makeReminder({ id: 7, label: 'Broken', status: 'cancelled' }),
+        ]);
+        server.use(
+            http.get(`${BASE}/reminders/6/fires`, () => HttpResponse.json([])),
+            http.get(`${BASE}/reminders/7/fires`, () => HttpResponse.json({ error: 'x' }, { status: 500 })),
+        );
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        fireEvent.click(await screen.findByRole('button', { name: /Quiet — show fire log/ }));
+        expect(await screen.findByText(/No fires logged/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Broken — show fire log/ }));
+        expect(await screen.findByText('Could not load the fire log.')).toBeInTheDocument();
+    });
+});
+
+describe('Reminders page — row menu', () => {
+    it('offers only the actions valid for each status', async () => {
+        serveLists(
+            [makeReminder(), makeReminder({ id: 2, label: 'On hold', status: 'paused' })],
+            [
+                makeReminder({ id: 3, label: 'Done once', status: 'completed', schedule_kind: 'once', schedule_value: '2026-10-01T00:00:00Z' }),
+                makeReminder({ id: 4, label: 'Stopped', status: 'cancelled' }),
+            ],
+        );
+        renderWithProviders(<Reminders />);
+        await screen.findByText('Daily standup');
+        await openHistory();
+        await screen.findByText('Stopped');
+        const names = async (label: string) => {
+            const menu = await openMenu(label);
+            const items = within(menu).getAllByRole('menuitem').map((m) => m.textContent);
+            fireEvent.keyDown(menu, { key: 'Escape' });
+            await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+            return items;
+        };
+        const snoozes = ['Snooze 10 minutes', 'Snooze 1 hour', 'Snooze until tomorrow 9:00'];
+        expect(await names('Daily standup')).toEqual(['Edit', 'Pause', ...snoozes, 'Cancel reminder']);
+        expect(await names('On hold')).toEqual(['Edit', 'Resume', ...snoozes, 'Cancel reminder']);
+        expect(await names('Done once')).toEqual([...snoozes, 'Delete']);
+        expect(await names('Stopped')).toEqual(['Delete']);
+    });
+
+    it('pause and resume PATCH the status', async () => {
+        const bodies: unknown[] = [];
+        serveLists([makeReminder(), makeReminder({ id: 2, label: 'On hold', status: 'paused' })]);
+        server.use(
+            http.patch(`${BASE}/reminders/:id`, async ({ request, params }) => {
+                bodies.push({ id: params['id'], body: await request.json() });
+                return HttpResponse.json(makeReminder());
             }),
-            http.delete(`${BASE}/reminders/1`, async () => {
-                await cancelPending;
+        );
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Pause' }));
+        await toasted('Reminder "Daily standup" paused');
+        fireEvent.click(within(await openMenu('On hold')).getByRole('menuitem', { name: 'Resume' }));
+        await toasted('Reminder "On hold" resumed');
+        expect(bodies).toEqual([
+            { id: '1', body: { status: 'paused' } },
+            { id: '2', body: { status: 'active' } },
+        ]);
+    });
+
+    it('a failed pause says so', async () => {
+        serveLists([makeReminder()]);
+        server.use(http.patch(`${BASE}/reminders/1`, () => HttpResponse.json({ error: 'nope' }, { status: 409 })));
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Pause' }));
+        await toasted('Could not pause reminder');
+    });
+
+    it('snooze posts the minutes and toasts the new time', async () => {
+        const bodies: unknown[] = [];
+        serveLists([makeReminder()]);
+        server.use(
+            http.post(`${BASE}/reminders/1/snooze`, async ({ request }) => {
+                bodies.push(await request.json());
+                return HttpResponse.json(makeReminder({ next_fire_at: new Date(Date.now() + 10 * 60_000).toISOString() }));
+            }),
+        );
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Snooze 10 minutes' }));
+        await toasted(/^Snoozed until/);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Snooze 1 hour' }));
+        await waitFor(() => expect(bodies).toEqual([{ minutes: 10 }, { minutes: 60 }]));
+    });
+
+    it('a failed snooze says so', async () => {
+        serveLists([makeReminder()]);
+        server.use(http.post(`${BASE}/reminders/1/snooze`, () => HttpResponse.json({ error: 'x' }, { status: 409 })));
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Snooze until tomorrow 9:00' }));
+        await toasted('Could not snooze reminder');
+    });
+
+    it('Edit opens the edit modal', async () => {
+        serveLists([makeReminder()]);
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Edit' }));
+        expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    });
+
+    it('Cancel confirms, then soft-cancels with a plain DELETE', async () => {
+        const urls: string[] = [];
+        serveLists([makeReminder()]);
+        server.use(
+            http.delete(`${BASE}/reminders/1`, ({ request }) => {
+                urls.push(request.url);
+                return HttpResponse.json(makeReminder({ status: 'cancelled' }));
+            }),
+        );
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Cancel reminder' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Cancel reminder?' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Keep' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Cancel reminder' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel reminder' }));
+        await toasted('Reminder "Daily standup" cancelled');
+        expect(urls).toEqual([`${BASE}/reminders/1`]);
+    });
+
+    it('a failed cancel says so', async () => {
+        serveLists([makeReminder()]);
+        server.use(http.delete(`${BASE}/reminders/1`, () => HttpResponse.json({ error: 'x' }, { status: 500 })));
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Cancel reminder' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel reminder' }));
+        await toasted('Could not cancel reminder');
+    });
+
+    it('Delete confirms, then hard-deletes with ?hard=1', async () => {
+        const urls: string[] = [];
+        serveLists([], [makeReminder({ id: 4, label: 'Stopped', status: 'cancelled' })]);
+        server.use(
+            http.delete(`${BASE}/reminders/4`, ({ request }) => {
+                urls.push(request.url);
                 return new HttpResponse(null, { status: 204 });
-            })
+            }),
         );
-        const { container } = renderWithProviders(<Reminders />);
-        await screen.findByText('Daily standup');
-        const cancelBtn = Array.from(container.querySelectorAll('button')).find(
-            (b) => b.getAttribute('aria-label') === 'Cancel reminder'
-        );
-        if (cancelBtn) {
-            fireEvent.click(cancelBtn);
-            await waitFor(() => {
-                expect(screen.getByText(/Cancel reminder\?/i)).toBeInTheDocument();
-            });
-            // Click the "Cancel reminder" confirm button to start mutation
-            const confirmBtn = screen.getByRole('button', { name: /^cancel reminder$/i });
-            fireEvent.click(confirmBtn);
-            // Now click "Keep" while isPending — should do nothing (dialog stays open)
-            const keepBtn = screen.queryByRole('button', { name: /^keep$/i });
-            if (keepBtn) fireEvent.click(keepBtn);
-        }
-        // Resolve to clean up
-        resolveCancel();
-        expect(document.body).toBeTruthy();
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        fireEvent.click(within(await openMenu('Stopped')).getByRole('menuitem', { name: 'Delete' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Delete reminder?' });
+        expect(within(dialog).getByText(/removed from history for good/)).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Keep' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        fireEvent.click(within(await openMenu('Stopped')).getByRole('menuitem', { name: 'Delete' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete reminder' }));
+        await toasted('Reminder "Stopped" deleted');
+        expect(urls).toEqual([`${BASE}/reminders/4?hard=1`]);
     });
-}, 15000);
+
+    it('a refused delete says so', async () => {
+        serveLists([], [makeReminder({ id: 4, label: 'Stopped', status: 'cancelled' })]);
+        server.use(http.delete(`${BASE}/reminders/4`, () => HttpResponse.json({ error: 'x' }, { status: 409 })));
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        fireEvent.click(within(await openMenu('Stopped')).getByRole('menuitem', { name: 'Delete' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete reminder' }));
+        await toasted('Could not delete reminder');
+    });
+});
+
+describe('Reminders page — mobile card', () => {
+    it('renders label + status, schedule + channel, then time line + menu, with no spacer boxes', async () => {
+        isMobileValue = true;
+        serveLists([makeReminder({ channel: 'both' })], [makeReminder({ id: 2, label: 'Stopped', status: 'cancelled', channel: 'external' })]);
+        renderWithProviders(<Reminders />);
+        const card = (await screen.findAllByTestId('reminder-row'))[0]!;
+        expect(within(card).getByText('Daily standup')).toBeInTheDocument();
+        expect(within(card).getByText('active')).toBeInTheDocument();
+        expect(within(card).getByText('Daily at 09:00')).toBeInTheDocument();
+        expect(within(card).getByRole('img', { name: 'In-app + External Notification' })).toBeInTheDocument();
+        expect(within(card).getByText('Next in 1h')).toBeInTheDocument();
+        expect(within(card).getByRole('button', { name: 'Actions for Daily standup' })).toBeInTheDocument();
+        // The body is a desktop-only detail; the card stays three lines.
+        expect(within(card).queryByText('Ping the team')).toBeNull();
+        await openHistory();
+        const hist = await screen.findByRole('button', { name: /Stopped — show fire log/ });
+        expect(hist).toBeInTheDocument();
+        expect(screen.getByRole('img', { name: 'External Notification' })).toBeInTheDocument();
+    });
+
+    it('the FAB opens the New reminder modal', async () => {
+        isMobileValue = true;
+        serveLists([]);
+        renderWithProviders(<Reminders />);
+        await screen.findByText('No active reminders');
+        const fab = document.querySelector('.MuiFab-root') as HTMLElement;
+        expect(fab).toHaveAccessibleName('New reminder');
+        fireEvent.click(fab);
+        await waitFor(() => expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0));
+    });
+});
+
+describe('Reminders page — desktop', () => {
+    it('the header button opens the New reminder modal; the body shows on the row', async () => {
+        serveLists([makeReminder({ channel: 'external' })]);
+        renderWithProviders(<Reminders />);
+        expect(await screen.findByText('Ping the team')).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /new reminder/i }));
+        await waitFor(() => expect(screen.getAllByRole('dialog').length).toBeGreaterThan(0));
+    });
+});
+
+describe('Reminders page — edge states', () => {
+    it('words every distance to the next and last fire', async () => {
+        const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+        serveLists([
+            makeReminder({ id: 1, label: 'r1', next_fire_at: at(30_000) }),
+            makeReminder({ id: 2, label: 'r2', next_fire_at: at(10 * 60_000 + 30_000) }),
+            makeReminder({ id: 3, label: 'r3', next_fire_at: at(2 * 24 * HOUR + HOUR) }),
+            makeReminder({ id: 4, label: 'r4', next_fire_at: at(30 * 24 * HOUR) }),
+            makeReminder({ id: 5, label: 'r5', next_fire_at: 'not-a-date' }),
+            makeReminder({ id: 6, label: 'r6', status: 'paused', last_fired_at: at(-5 * 60_000 - 1000) }),
+            makeReminder({ id: 7, label: 'r7', status: 'paused', last_fired_at: at(-10_000) }),
+            makeReminder({ id: 8, label: 'r8', body: '' }),
+        ]);
+        renderWithProviders(<Reminders />);
+        expect(await screen.findByText('Next in <1m')).toBeInTheDocument();
+        expect(screen.getByText('Next in 10m')).toBeInTheDocument();
+        expect(screen.getByText('Next in 2d')).toBeInTheDocument();
+        expect(screen.getByText(/^Next on /)).toBeInTheDocument();
+        expect(screen.getByText('Next')).toBeInTheDocument();
+        expect(screen.getByText(/^Paused · last fired [56]m ago$/)).toBeInTheDocument();
+        expect(screen.getByText('Paused · last fired just now')).toBeInTheDocument();
+    });
+
+    it('refresh with history off refetches only the live list', async () => {
+        const seen: string[] = [];
+        serveLists([makeReminder()], [], seen);
+        renderWithProviders(<Reminders />);
+        await screen.findByText('Daily standup');
+        fireEvent.click(screen.getByRole('button', { name: /refresh reminders/i }));
+        await waitFor(() => expect(seen.length).toBe(2));
+        expect(seen.every((q) => q.includes('active'))).toBe(true);
+    });
+
+    it('a failed resume says so', async () => {
+        serveLists([makeReminder({ status: 'paused' })]);
+        server.use(http.patch(`${BASE}/reminders/1`, () => HttpResponse.json({ error: 'x' }, { status: 409 })));
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Resume' }));
+        await toasted('Could not resume reminder');
+    });
+
+    it('dialogs stay open and show progress while their request is in flight', async () => {
+        serveLists([makeReminder()], [makeReminder({ id: 4, label: 'Stopped', status: 'cancelled' })]);
+        const never = () => new Promise<Response>(() => {});
+        server.use(http.delete(`${BASE}/reminders/1`, never), http.delete(`${BASE}/reminders/4`, never));
+        renderWithProviders(<Reminders />);
+        fireEvent.click(within(await openMenu('Daily standup')).getByRole('menuitem', { name: 'Cancel reminder' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Cancel reminder?' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel reminder' }));
+        expect(await within(dialog).findByRole('button', { name: 'Cancelling…' })).toBeDisabled();
+        fireEvent.keyDown(dialog, { key: 'Escape' });
+        expect(screen.getByRole('dialog', { name: 'Cancel reminder?' })).toBeInTheDocument();
+    });
+
+    it('the delete dialog stays open while deleting', async () => {
+        serveLists([], [makeReminder({ id: 4, label: 'Stopped', status: 'cancelled' })]);
+        server.use(http.delete(`${BASE}/reminders/4`, () => new Promise<Response>(() => {})));
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        fireEvent.click(within(await openMenu('Stopped')).getByRole('menuitem', { name: 'Delete' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Delete reminder?' });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Delete reminder' }));
+        expect(await within(dialog).findByRole('button', { name: 'Deleting…' })).toBeDisabled();
+        fireEvent.keyDown(dialog, { key: 'Escape' });
+        expect(screen.getByRole('dialog', { name: 'Delete reminder?' })).toBeInTheDocument();
+    });
+
+    it('shows progress while the next history page loads', async () => {
+        const hist = Array.from({ length: 50 }, (_, i) => makeReminder({ id: 100 + i, label: `Old ${i}`, status: 'cancelled' }));
+        server.use(
+            http.get(`${BASE}/reminders`, ({ request }) => {
+                const url = new URL(request.url);
+                if ((url.searchParams.get('status') ?? '').includes('active')) return HttpResponse.json([]);
+                if (url.searchParams.get('offset') === '50') return new Promise<Response>(() => {});
+                return HttpResponse.json(hist);
+            }),
+        );
+        renderWithProviders(<Reminders />);
+        await openHistory();
+        fireEvent.click(await screen.findByRole('button', { name: 'Show more history' }));
+        expect(await screen.findByRole('button', { name: 'Loading…' })).toBeDisabled();
+    });
+});
+
+describe('formatSchedule', () => {
+    it('covers each schedule kind', () => {
+        expect(formatSchedule({ schedule_kind: 'daily', schedule_value: '09:00' })).toBe('Daily at 09:00');
+        expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: '08:00|1,3,9' })).toBe('Weekly Mon, Wed at 08:00');
+        expect(formatSchedule({ schedule_kind: 'weekly', schedule_value: '08:00' })).toBe('08:00');
+        expect(formatSchedule({ schedule_kind: 'cron', schedule_value: '0 9 * * 1' })).toBe('cron: 0 9 * * 1');
+        expect(formatSchedule({ schedule_kind: 'once', schedule_value: 'not-a-date' })).toBe('not-a-date');
+        expect(formatSchedule({ schedule_kind: 'once', schedule_value: '2026-10-01T00:00:00Z' })).toMatch(/^Once on /);
+        expect(formatSchedule({ schedule_kind: 'bogus' as never, schedule_value: 'raw' })).toBe('raw');
+    });
+});

@@ -75,7 +75,7 @@ describe('TopRunsTable', () => {
 
     it('renders the empty-state when topRuns is empty', () => {
         renderWithProviders(<TopRunsTable topRuns={[]} topRunsMaxCost={0} />);
-        expect(screen.getByText(/No completed runs this month/i)).toBeInTheDocument();
+        expect(screen.getByText(/No completed runs in this window/i)).toBeInTheDocument();
     });
 
     it('renders rank > 3 rows with slate40 color (isPodium false branch)', () => {

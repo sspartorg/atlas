@@ -1,83 +1,76 @@
 ﻿# Reminders
 
-**Route:** `/reminders` â€¢ **Component:** `packages/web/src/pages/Reminders.tsx` â€¢ **Sidenav:** under ALERTS & ADMIN.
+**Route:** `/reminders` • **Component:** `packages/web/src/pages/Reminders.tsx` • **Sidenav:** under ALERTS & ADMIN.
 
 ## Purpose
-One-page reminder list with create + cancel. Reminders fire as in-app notifications and (optionally) external notifications, on the same per-minute scheduler as agents. Single-section page with an Active list and an optional History section behind a toggle.
+One-page reminder list with create, edit, pause / resume, snooze, cancel and delete. Reminders fire as in-app notifications and (optionally) external notifications, on the same per-minute scheduler as agents. Daily, weekly and cron schedules run in the Owner's time zone (`settings.quiet_hours_timezone`, the browser zone Settings auto-saves; the subtitle names it, or "server time" when unset). Active list always; History behind a toggle.
 
 ## States
-- Loading (single spinner before first list).
-- Empty â€” Hero empty state (`HeroEmptyState`) "No active reminders" with a one-line nudge: "Use New reminder to add one yourself, or ask Claude to set one for you."
-- Populated â€” list of reminder rows.
-- History toggle off by default; turning it on reveals a "History" subsection with cancelled + completed rows in a muted background.
+- Loading (spinner before the first list; a skeleton while history loads).
+- Empty — Hero empty state (`HeroEmptyState`) "No active reminders" with "Use New reminder to add one yourself, or ask Claude to set one for you."
+- Populated — active + paused reminders (`GET /api/reminders?status=active,paused`).
+- History toggle off by default. On: a "History" region with cancelled + completed rows, most recently finished first, fetched only then (`?status=cancelled,completed&limit=50&offset=N`), with **Show more history** while a full page came back.
 
 ## UI elements
 **Page header**
-- **Refresh** button (`RefreshButton`) â†’ refetch.
-- **Show history** switch â†’ toggles the History subsection.
-- **New reminder** button (line 122) â†’ opens `NewReminderModal`.
+- **Refresh** (`RefreshButton`) → refetch the live list (and history when shown).
+- **Show history** switch → toggles (and lazily loads) the History region.
+- **New reminder** button (desktop) / FAB (mobile) → `NewReminderModal`.
 
-**Reminder row (`ReminderRow`)**
-- Label (bold) + optional body (subtitle, single-line ellipsis).
-- Schedule kind chip (`once` / `daily` / `weekly` / `cron`) + human-formatted schedule (`formatSchedule()` at line 377).
-- Channel icon: notification bell, external notification send icon, or both.
-- Relative next-fire time (`relativeFromNow()` at line 404; tooltip carries the absolute timestamp).
-- Status chip: `active` (green) / `paused` (amber) / `cancelled` (rose) / `completed` (blue).
-- **Cancel** icon button â€” only on `active` or `paused` rows in the Active list, never in History.
+**Reminder row (`ReminderRow`)** — desktop (md+): one grid line — label (+ body), schedule chip + human schedule (`formatSchedule()`), channel icons, time line, status chip, ⋮. Below md: a card — row 1 label (2-line clamp) + status chip; row 2 schedule chip + schedule + channel icons; row 3 time line + ⋮. No spacer boxes.
+- Status chip: neutral fill + a coloured dot from `STATUS_PALETTE` (active = done green, paused = waiting amber, completed = ready blue, cancelled = draft grey) — works in both themes and meets AA.
+- Time line (mono): active "Next in 3h"; paused "Paused · last fired 2h ago" / "Paused · never fired"; history "Completed 3d ago · fired 4×" / "Cancelled 2h ago · last fired 1d ago" (never a stale next-fire). Tooltip = absolute time.
+- History rows sit on the page surface (`ATLAS_PALETTE.pageBg`) at full opacity. Tapping one (a button with `aria-expanded`) expands an inline **fire log**, lazy-loaded from `GET /api/reminders/:id/fires`: each fire's time, push status, external status (failed shows the reason; pending = held by quiet hours or sending). Fires from before the log existed aren't listed.
+- **⋮ menu** (`Actions for <label>`), only the valid items: Edit (active/paused) · Pause (active) / Resume (paused) · Snooze 10 minutes / 1 hour / until tomorrow 9:00 (active, paused, completed — snoozing a completed one-shot revives it) · Cancel reminder (active/paused) · Delete (cancelled/completed).
+- "Tomorrow 9:00" is 9:00 in the Owner's zone (`pages/reminders/snooze.ts`).
 
 ## Why these affordances exist
-- **Single-page list (no tabs)** â€” reminders are flatter than notifications; one Active + collapsible History keeps the surface minimal.
-- **Schedule kinds shown verbatim with a helper for cron** â€” `cron` reminders keep the raw expression so the Owner can copy/edit; the other kinds get a human-readable line.
-- **Cancel is per-row + irreversible** â€” confirm dialog warns: "You can't restore it â€” set a new reminder if you need it again." History is the audit trail.
-- **Owner + MCP both create** â€” `New reminder` modal is for the Owner; the MCP tool `setReminder` is for Claude sessions doing it on the Owner's behalf.
+- **Single-page list (no tabs)** — one Active list + an on-demand History keeps the surface minimal and keeps history off the first load.
+- **Schedule kinds shown verbatim with a helper for cron** — `cron` reminders keep the raw expression; other kinds get a human line.
+- **Cancel is soft, Delete is hard** — Cancel keeps the row as history (confirm: "It will stop firing and move to history…"); Delete removes a finished row for good (confirm: "It will be removed from history for good. Notifications it already sent stay in your feed.").
+- **Owner + MCP both act** — the page for the Owner; `crud_reminder` / `search_reminder` for Claude.
 
 ## Modals / drawers
-- `NewReminderModal` (`pages/reminders/NewReminderModal.tsx`) — form with the following fields (Updated 2026-07-01: corrected from stale “title + cron” description):
-  - **Label** (required text field, max 200 chars) — not “title”
-  - **Body** (optional multiline text)
-  - **Schedule** — 4-way `RadioGroup`: `Once` / `Daily` / `Weekly` / `Cron`. A context-sensitive sub-field appears below the radio buttons depending on the selected kind:
-    - `Once` → `datetime-local` picker (“When”)
-    - `Daily` → time picker (“Time”)
-    - `Weekly` → time picker + weekday checkboxes (Mon–Sun)
-    - `Cron` → free-text cron expression field (only appears when Cron is selected)
-  - **Channel** — `RadioGroup`: In-app / External Notification / Both
-  - Modal also doubles as an **edit** modal: when `editing` prop is set it hydrates from the existing row and dispatches `PATCH` instead of `POST`.
-- Cancel-confirmation `Dialog` inline at lines 168-198.
+- `NewReminderModal` (`pages/reminders/NewReminderModal.tsx`), mounted only while open:
+  - **Label** (required, max 200) · **Body** (optional) · **Schedule** `Once` (datetime-local) / `Daily` (time) / `Weekly` (time + weekdays) / `Cron` (expression) · **Channel** In-app / External Notification / Both.
+  - Doubles as the **edit** modal (`editing` prop → `PATCH`).
+- Cancel and Delete confirmation dialogs (`ConfirmDialog` in `Reminders.tsx`).
 
 ## Hooks used
-- `useReminders()` â€” list query (`['reminders']`).
-- `useCreateReminder()` â€” create mutation (invalidates list on success).
-- `useCancelReminder()` â€” cancel mutation (invalidates list on success).
-- `useSetPageTitle('Reminders')`.
-- `useToast()` â€” success / failure feedback on cancel.
+- `useReminders()` — live list (`['reminders','live']`, `status=active,paused`).
+- `useReminderHistory(enabled)` — infinite query (`['reminders','history']`, 50 per page).
+- `useReminderFires(id, enabled)` — fire log (`['reminders', id, 'fires']`).
+- `useCreateReminder()`, `useUpdateReminder()`, `useCancelReminder()`, `useSetReminderPaused()`, `useSnoozeReminder()`, `useDeleteReminder()` — all invalidate `['reminders']`.
+- `useSettings()` (Owner zone), `useIsMobile()`, `useToast()`, `useSetPageTitle('Reminders')`.
 
 ## API endpoints touched
-- `GET /api/reminders` â€” list.
-- `POST /api/reminders` â€” create (gated by `requireMcpToken`).
-- `DELETE /api/reminders/:id` â€” cancel (gated by `requireMcpToken`).
+- `GET /api/reminders?status=…&limit=&offset=` — lists.
+- `GET /api/reminders/:id/fires` — fire log.
+- `POST /api/reminders` — create. `PATCH /api/reminders/:id` — edit / pause / resume.
+- `POST /api/reminders/:id/snooze` — snooze.
+- `DELETE /api/reminders/:id` — cancel; `DELETE /api/reminders/:id?hard=1` — delete (409 unless cancelled/completed).
 
 ## MCP tools that touch this page
-- `listReminders` â€” read.
-- `setReminder` â€” create (Claude can ask the Owner to set one, or Owner can ask Claude).
-- `cancelReminder` â€” cancel by id.
+- `search_reminder` — read.
+- `crud_reminder` — `op: create | update | cancel | pause | resume | snooze` (snooze takes `minutes`).
+
+## Also on the Notifications page
+- An in-app feed card for a reminder fire (`notifications.reminder_id` set) carries a **Snooze reminder** button instead of the chevron: the same three snooze choices plus **Open Reminders**. Snoozing marks the card read. The card itself isn't a button there (it holds one). Older reminder rows without `reminder_id` stay plain link cards.
 
 ## Permissions / guards
 - Post-onboarding only.
-- Cancel is no-op for `cancelled` / `completed` rows (button hidden).
+- Writes are gated by `requireMcpToken` (trusted browser origins pass).
+- Only `active` rows fire; paused rows are skipped and the claim CAS also requires `status='active'`.
 
 ## Edge cases / quirks
-- `next_fire_at` uses `tabular-nums` so the column doesn't shift between rows.
-- The per-minute scheduler is the same one that fires agent runs â€” a reminder firing doesn't block agent dispatch and vice versa.
-- The `formatSchedule()` helper is also exported and reused in `NewReminderModal`'s preview row.
+- Resume recomputes `next_fire_at` from now — slots missed while paused are not replayed.
+- A snoozed recurring reminder fires once at the snooze time, then returns to its schedule.
+- A reminder firing doesn't block agent dispatch and vice versa (same minute tick).
+- `formatSchedule()` is exported and reused in `NewReminderModal`'s preview row.
 
 ## Connectivity
-- **Pages**: [Notifications](17-notifications.md) â€” where reminder-fires land (in-app feed + Notification Log); [Settings â†’ external notification](19-settings.md) â€” required for the external notification channel to deliver.
-- **Routes**: the create + cancel routes are gated by `requireMcpToken`; the list route is open.
-- **Entities**: `reminder`, `notification` (one is produced per fire).
-
-## Previously undocumented
-
-- `PATCH /api/reminders/:id` via `useUpdateReminder` — what the edit modal calls. *(added 2026-09-20.)*
+- **Pages**: [Notifications](17-notifications.md) — where fires land (feed + log; feed cards can snooze); [Settings → Notifications](19-settings.md) — the Owner time zone and the external channel.
+- **Entities**: `reminder`, `notification` (one per fire, linked by `reminder_id`).
 
 ## Coming soon on this page
 None.

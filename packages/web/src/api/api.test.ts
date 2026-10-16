@@ -489,10 +489,19 @@ describe('api.counts.project', () => {
 });
 
 describe('api.analytics (extended)', () => {
-    it('get with explicit tz', async () => {
+    it('get with explicit window and tz', async () => {
         const cap = captureGet('/analytics', {});
-        await api.analytics.get('America/New_York');
-        expect(cap.url).toContain('tz=');
+        await api.analytics.get('7d', 'America/New_York');
+        expect(cap.url).toContain('tz=America%2FNew_York');
+        expect(cap.url).toContain('window=7d');
+    });
+    it('delivery and workflows pass window + tz', async () => {
+        const d = captureGet('/analytics/delivery', {});
+        await api.analytics.delivery('90d', 'Asia/Kolkata');
+        expect(d.url).toContain('/analytics/delivery?tz=Asia%2FKolkata&window=90d');
+        const w = captureGet('/analytics/workflows', {});
+        await api.analytics.workflows('30d');
+        expect(w.url).toMatch(/\/analytics\/workflows\?tz=.+&window=30d$/);
     });
     it('project drill-down', async () => {
         const cap = captureGet('/analytics/project/p1', {});
@@ -672,6 +681,33 @@ describe('api.reminders', () => {
         // cancel uses DELETE method
         server.use(http.delete('http://localhost:3000/api/reminders/1', () => HttpResponse.json({})));
         await api.reminders.cancel(1);
+    });
+
+    it('list sends the status list and paging; snooze / fires / hardDelete hit their routes', async () => {
+        const seen: string[] = [];
+        server.use(
+            http.get('http://localhost:3000/api/reminders', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return HttpResponse.json([]);
+            }),
+            http.post('http://localhost:3000/api/reminders/1/snooze', async ({ request }) =>
+                HttpResponse.json(await request.json()),
+            ),
+            http.get('http://localhost:3000/api/reminders/1/fires', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return HttpResponse.json([]);
+            }),
+            http.delete('http://localhost:3000/api/reminders/1', ({ request }) => {
+                seen.push(new URL(request.url).search);
+                return new HttpResponse(null, { status: 204 });
+            }),
+        );
+        await api.reminders.list({ status: ['active', 'paused'] });
+        await api.reminders.list({ status: ['cancelled'], limit: 50, offset: 50 });
+        expect(await api.reminders.snooze(1, 10)).toEqual({ minutes: 10 });
+        await api.reminders.fires(1);
+        await api.reminders.hardDelete(1);
+        expect(seen).toEqual(['?status=active%2Cpaused', '?status=cancelled&limit=50&offset=50', '?limit=20', '?hard=1']);
     });
 });
 

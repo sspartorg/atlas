@@ -20,14 +20,10 @@ export default defineConfig({
             // token. The real .env's token must NOT leak in here.
             ATLAS_MCP_TOKEN: '',
             ATLAS_MCP_TOKEN_OPEN: '1',
-            // Pin the timezone. `computeNextFire` in services/reminders.ts
-            // deliberately schedules in LOCAL time — a "09:00" reminder fires
-            // at 09:00 for the Owner, which is the right behaviour for a
-            // single-owner local-first app. That makes the UTC instant it
-            // produces machine-dependent, so tests asserting a fixed
-            // `...T09:00:00.000Z` only pass on a UTC box. Pinning here keeps
-            // the suite reproducible on any developer machine; production is
-            // unaffected and still uses the real local zone.
+            // Pin the server timezone. `computeNextFire` in services/reminders.ts
+            // schedules in the Owner's zone (settings.quiet_hours_timezone) and
+            // falls back to server time when none is set; the tz tests set the
+            // Owner zone explicitly and assert against this UTC server clock.
             TZ: 'UTC',
             // Every on-disk side effect (team-config clone, Jira attachment
             // copies, the encryption key) goes to a scratch dir, never the

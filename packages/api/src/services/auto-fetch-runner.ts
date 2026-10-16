@@ -8,7 +8,7 @@ import { credentialsService } from './credentials.js';
 import { isAnyAgentActiveForProject } from './agent-activity.js';
 import { broadcastSSE } from '../routes/events.js';
 import { notificationsService } from './notifications.js';
-import { sendExternalNotification } from './external-notifications.js';
+import { sendExternalForNotification } from './external-notifications.js';
 import { performAutoFetch, type AutoFetchCode } from './auto-fetch.js';
 import { gitInvokeEnv } from './git-env.js';
 import type { IProjectSchedule, ScheduleRunStatus } from '@atlas/shared';
@@ -178,15 +178,14 @@ export async function runAutoFetch(repoId: string): Promise<void> {
                 `${detail} - auto-disabled after ${count} failures`,
                 null,
             );
-            await notificationsService.create({
+            const disabled = await notificationsService.create({
                 event_type: 'autofetch_disabled',
                 kind: 'needs_you',
                 project_id: projectId,
                 message: `Auto-fetch disabled on "${project.name}/${repo.name}": credential rejected ${count} times in a row. Re-attach credential and re-enable.`,
             });
-            sendExternalNotification(
-                `Auto-fetch disabled on "${project.name}/${repo.name}" after ${count} auth failures.`,
-            ).catch(() => {});
+            // On the row, so the Notification Log tracks it and quiet hours hold it.
+            await sendExternalForNotification(disabled.id, disabled.message).catch(() => {});
             broadcastSSE({
                 type: 'autofetch_error',
                 autofetchId,
@@ -203,14 +202,14 @@ export async function runAutoFetch(repoId: string): Promise<void> {
     await schedulesService.recordRun(repoId, result, detail, schedule.next_run_at);
 
     const evt = `autofetch_${result === 'success' ? 'success' : result === 'skipped' ? 'skipped' : result === 'conflict' ? 'conflict' : 'failed'}`;
-    await notificationsService.create({
+    const done = await notificationsService.create({
         event_type: evt,
         kind: 'system',
         project_id: projectId,
         message: `Auto-fetch on "${project.name}/${repo.name}": ${detail}.`,
     });
     if (result === 'failure' || (result === 'conflict' && schedule.conflict_policy === 'abort')) {
-        sendExternalNotification(`Auto-fetch on "${project.name}/${repo.name}": ${detail}.`).catch(() => {});
+        await sendExternalForNotification(done.id, done.message).catch(() => {});
     }
     broadcastSSE({ type: 'autofetch_completed', autofetchId, projectId, repoId, result, detail });
 }

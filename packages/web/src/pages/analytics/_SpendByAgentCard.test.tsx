@@ -6,7 +6,7 @@ import { SpendByAgentCard } from './_SpendByAgentCard.js';
 describe('SpendByAgentCard', () => {
     it('renders the empty-state message when byAgent is empty', () => {
         renderWithProviders(<SpendByAgentCard byAgent={[]} totalAgentCost={0} />);
-        expect(screen.getByText(/No agent spend this month/i)).toBeInTheDocument();
+        expect(screen.getByText(/No agent spend in this window/i)).toBeInTheDocument();
     });
 
     it('renders the legend even when every agent has zero cost (donut handles all-zero gracefully)', () => {
@@ -34,6 +34,6 @@ describe('SpendByAgentCard', () => {
         );
         expect(screen.getAllByText(/Coder/).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/Reviewer/).length).toBeGreaterThan(0);
-        expect(screen.getByText(/2 agents ran this month/i)).toBeInTheDocument();
+        expect(screen.getByText(/2 agents ran in this window/i)).toBeInTheDocument();
     });
 });

@@ -28,6 +28,7 @@ import { eventsLog } from './events-log.js';
 import { broadcastSSE } from '../routes/events.js';
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'marketplace', 'workflows');
+let templatesCache: IWorkflowTemplate[] | null = null;
 // Sub-tasks nodes in templates name their sub-workflow by template
 // (`template:build`); it resolves to that template's workflow in the same
 // project, created from the template when the project lacks it.
@@ -244,8 +245,22 @@ export const workflowsService = {
     async withUpgradeFlags(workflows: IWorkflow[]): Promise<IWorkflow[]> {
         const sourceIds = [...new Set(workflows.flatMap((w) => (w.marketplace_source_id ? [w.marketplace_source_id] : [])))];
         if (sourceIds.length === 0) return workflows;
-        const versions = new Map<string, number | null>();
-        for (const id of sourceIds) versions.set(id, await this.sourceVersion(id));
+        const entryOf = (id: string) => (id.includes(':') ? id.slice(0, id.indexOf(':')) : id);
+        const templates = new Map(this.listTemplates().map((t) => [t.id, t.version]));
+        const published = sourceIds.map(entryOf).filter((id) => !templates.has(id));
+        const publishedVersions = new Map<string, number>();
+        if (published.length > 0) {
+            const rows = await db
+                .selectFrom('published_workflows')
+                .select(['id', 'version'])
+                .where('id', 'in', [...new Set(published)])
+                .execute();
+            for (const r of rows) publishedVersions.set(r.id, r.version);
+        }
+        // Same resolution as `sourceVersion`, one query for the whole list.
+        const versions = new Map(
+            sourceIds.map((id) => [id, templates.get(entryOf(id)) ?? publishedVersions.get(entryOf(id)) ?? null]),
+        );
         return workflows.map((w) => {
             const current = w.marketplace_source_id ? versions.get(w.marketplace_source_id) : null;
             return {
@@ -377,14 +392,16 @@ export const workflowsService = {
         broadcastWorkflowsChanged();
     },
 
+    // Shipped files never change while the server runs, so read them once.
     listTemplates(): IWorkflowTemplate[] {
-        return readdirSync(TEMPLATES_DIR)
+        templatesCache ??= readdirSync(TEMPLATES_DIR)
             .filter((f) => f.endsWith('.json'))
             .map((f) => {
                 const raw = JSON.parse(readFileSync(join(TEMPLATES_DIR, f), 'utf8')) as IWorkflowTemplate;
                 return { ...raw, graph: WorkflowGraphSchema.parse(raw.graph) };
             })
             .sort((a, b) => a.name.localeCompare(b.name));
+        return templatesCache;
     },
 
     /**

@@ -786,7 +786,9 @@ export type ExternalNotificationEventKey =
     | 'item.status_changed:in_review'
     | 'agent.failed'
     | 'agent.run_finished_no_item'
-    | 'terminal.waiting_for_input';
+    | 'terminal.waiting_for_input'
+    | 'jira.sync_failed'
+    | 'workflow.failed';
 
 export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = [
     'item.status_changed:waiting_for_info',
@@ -794,6 +796,8 @@ export const EXTERNAL_NOTIFICATION_EVENT_KEYS: ExternalNotificationEventKey[] = 
     'agent.failed',
     'agent.run_finished_no_item',
     'terminal.waiting_for_input',
+    'jira.sync_failed',
+    'workflow.failed',
 ];
 
 export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEventKey, { title: string; sub: string }> = {
@@ -816,6 +820,14 @@ export const EXTERNAL_NOTIFICATION_EVENT_LABELS: Record<ExternalNotificationEven
     'terminal.waiting_for_input': {
         title: 'Terminal: Waiting for Input',
         sub: 'terminal.waiting_for_input · session has been idle longer than the configured threshold',
+    },
+    'jira.sync_failed': {
+        title: 'Jira Sync Failed',
+        sub: 'jira.sync_failed · a Jira sync pass errored (sent once per new failure)',
+    },
+    'workflow.failed': {
+        title: 'Workflow Failed',
+        sub: 'workflow.failed · a workflow run errored and parked, or a queued Task could not be dispatched',
     },
 };
 
@@ -1071,6 +1083,13 @@ export interface INotification {
      *  the URL from issue_type/issue_id. Lets callers route to surfaces
      *  that aren't Atlas items (Terminal sessions, etc.). */
     link_url: string | null;
+    /** Set while quiet hours hold the outward (Telegram/Teams) send; the row
+     *  is `external_status='pending'` until the window ends and the minute
+     *  tick delivers it. Null otherwise. */
+    external_deferred_at: string | null;
+    /** The reminder whose fire produced this row; null for every other
+     *  producer, and for reminder fires from before the fire log. */
+    reminder_id: number | null;
     created_at: string;
 }
 
@@ -1397,10 +1416,21 @@ export interface IReminder {
     channel: ReminderChannel;
     next_fire_at: string;
     last_fired_at: string | null;
+    /** Fires logged in `notifications.reminder_id` (fires before the log existed don't count). */
+    fire_count: number;
     created_by_agent_id: string | null;
     status: ReminderStatus;
     created_at: string;
     updated_at: string;
+}
+
+/** One fire of a reminder: the notification row it produced and how it was delivered. */
+export interface IReminderFire {
+    notification_id: number;
+    fired_at: string;
+    push_status: PushDeliveryStatus;
+    external_status: NotificationDeliveryStatus;
+    failure_reason: string | null;
 }
 
 // P12 — Scratch Pad. A free-form markdown-tile workspace for the Owner;
@@ -1833,4 +1863,122 @@ export interface IAgentBundleManifest {
     summary: string;
     version: number;
     published_at: string;
+}
+
+// ── Analytics (delivery + workflow insight endpoints) ──────────────────────
+
+/** `?window=` on every `/api/analytics*` summary. `month` = this calendar month in the viewer's tz. */
+export const ANALYTICS_WINDOWS = ['7d', '30d', '90d', 'month'] as const;
+export type AnalyticsWindow = (typeof ANALYTICS_WINDOWS)[number];
+
+/**
+ * The span a response covers, resolved in the viewer's tz. `previous_*` is the
+ * span its deltas compare against: the N days before for a rolling window, the
+ * same number of days into last month for `month`.
+ */
+export interface IAnalyticsPeriod {
+    window: AnalyticsWindow;
+    tz: string;
+    /** `day` for 7d / 30d / month, `week` (Monday start) for 90d. */
+    bucket: 'day' | 'week';
+    start: string;
+    end: string;
+    previous_start: string;
+    previous_end: string;
+}
+
+export interface IAnalyticsSpread {
+    /** How many Tasks the percentiles are over. */
+    count: number;
+    p50_s: number | null;
+    p90_s: number | null;
+}
+
+export interface IAnalyticsDelivery {
+    period: IAnalyticsPeriod;
+    /** Items whose first move into Done falls in the window. */
+    shipped: { tasks: number; sub_tasks: number };
+    /** One row per bucket, zero-filled. `cycle_p50_s` is over the bucket's Tasks. */
+    throughput: Array<{ bucket: string; tasks: number; sub_tasks: number; cycle_p50_s: number | null }>;
+    /** Task created → first Done. */
+    lead_time: IAnalyticsSpread;
+    /** Task's first In progress → first Done. Tasks that never entered In progress are left out. */
+    cycle_time: IAnalyticsSpread;
+    cycle_histogram: Array<{ label: string; min_s: number; max_s: number | null; count: number }>;
+    /** Shipped Tasks' time in each status before Done, averaged over every shipped Task. */
+    time_in_status: Array<{ status: IssueStatus; avg_s: number; items: number }>;
+    /** Moves into Waiting for info that started in the window, open ones measured to the window's end. */
+    waiting: { parks: number; total_s: number; median_s: number | null; still_waiting: number };
+    /** Distinct items moved out of Done vs into Done, in the window. */
+    reopens: { reopened: number; done: number; rate: number | null };
+    /** Tasks in progress, waiting for info or in review right now (not windowed). */
+    wip: {
+        count: number;
+        aging: number;
+        aging_after_s: number;
+        oldest: Array<{ id: string; title: string; status: IssueStatus; project_id: string; age_s: number }>;
+    };
+    by_priority: Array<{ priority: IssuePriority; shipped: number; cycle_p50_s: number | null }>;
+    by_project: Array<{
+        project_id: string;
+        project_name: string;
+        shipped: number;
+        cycle_p50_s: number | null;
+        lead_p50_s: number | null;
+    }>;
+    /** Shipped Tasks with a Jira issue link vs without. */
+    source_mix: { jira: number; native: number };
+    /** The fleet page's delivery maths (`agent-scorecard.ts`) over runs started in the window. */
+    prs: { opened: number; merged: number; merge_rate: number | null; median_s_to_pr: number | null };
+    previous: { tasks_shipped: number; cycle_p50_s: number | null; prs_merged: number };
+}
+
+export interface IAnalyticsWorkflowRow {
+    workflow_id: string;
+    name: string;
+    runs: number;
+    completed: number;
+    /** Completed ÷ finished (completed, cancelled, error). */
+    success_rate: number | null;
+    /** Completed runs only. */
+    median_duration_s: number | null;
+    avg_loops: number;
+    avg_gate_rounds: number;
+    cost_per_run_usd: number | null;
+}
+
+/** One agent's row: the fleet page's numbers (`shapeAgent`), in name order, no ranking (ADR 0023). */
+export interface IAnalyticsAgentRow {
+    agent_id: string;
+    name: string;
+    accent_color: string | null;
+    steps: number;
+    first_pass: { applied: number; rejected: number; parked: number };
+    loops: number;
+    gate_catch: number;
+    cost_usd: number;
+    per_step_usd: number | null;
+    p95_s: number | null;
+}
+
+export interface IAnalyticsWorkflows {
+    period: IAnalyticsPeriod;
+    /** Top-level runs started in the window, agent tests left out. */
+    runs: {
+        total: number;
+        completed: number;
+        cancelled: number;
+        error: number;
+        waiting_for_owner: number;
+        running: number;
+        success_rate: number | null;
+    };
+    by_workflow: IAnalyticsWorkflowRow[];
+    /** Script-step verdicts in the window. `pass_rate` = pass ÷ (pass + fail). */
+    gates: { pass: number; fail: number; unavailable: number; needs_review: number; pass_rate: number | null };
+    park_reasons: Array<{ reason: string; count: number }>;
+    /** Agent dispatches that retried an earlier run (`agent_runs.parent_run_id`). */
+    retries: { retries: number; dispatches: number; rate: number | null };
+    agents: IAnalyticsAgentRow[];
+    previous: { runs: number; success_rate: number | null };
 }

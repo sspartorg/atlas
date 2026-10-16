@@ -4,14 +4,13 @@ import {
     CartesianGrid,
     ComposedChart,
     Legend,
-    Line,
     ResponsiveContainer,
     Tooltip,
     XAxis,
     YAxis,
 } from 'recharts';
 import { ATLAS_PALETTE, TYPOGRAPHY } from '../../theme/tokens.js';
-import { Card, ChartEmpty, ChartTitle, CHART_COLORS, MONO } from './_chrome.js';
+import { Card, ChartEmpty, ChartTitle, CHART_COLORS, LEGEND_PROPS, MONO, usdTooltip } from './_chrome.js';
 
 interface MomRow {
     month: string;
@@ -31,9 +30,8 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
         return (
             <Card>
                 <ChartTitle
-                    eyebrow="Month over month"
                     title="Trailing 12 months"
-                    sub="Agentic + terminal spend per calendar month, with completed agent-run volume overlaid."
+                    sub="Agent-run plus terminal-session spend per calendar month."
                 />
                 <ChartEmpty
                     label="No spend in the trailing 12 months"
@@ -45,9 +43,8 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
     return (
         <Card>
             <ChartTitle
-                eyebrow="Month over month"
                 title="Trailing 12 months"
-                sub="Bars stack agentic cost (blue) under manual terminal cost (orange) per calendar month. The gold line is completed agent-run volume on the right axis. The current month renders solid; prior months are faded."
+                sub="Agent-run cost stacked under terminal-session cost per calendar month, whatever window is picked above. The current month is solid; earlier months are faded."
             />
             <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={momData} margin={{ top: 4, right: 16, left: -8, bottom: 0 }}>
@@ -105,40 +102,27 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         axisLine={false}
                         tickLine={false}
                     />
-                    <YAxis
-                        yAxisId="runs"
-                        orientation="right"
-                        tick={{ fontSize: 11, fill: ATLAS_PALETTE.slate40, fontFamily: MONO }}
-                        width={44}
-                        axisLine={false}
-                        tickLine={false}
-                    />
                     <Tooltip
-                        cursor={{ fill: 'rgba(0,122,201,.04)' }}
-                        formatter={(v: unknown, name: unknown) =>
-                            name === 'Agentic cost' || name === 'Terminal cost'
-                                ? `$${Number(v).toFixed(4)}`
-                                : String(v)
-                        }
+                        cursor={{ fill: 'rgba(127,127,127,.10)' }}
+                        formatter={usdTooltip}
                         contentStyle={{
                             fontSize: 12,
                             borderRadius: '10px',
                             border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                            boxShadow: '0 10px 30px rgba(11,31,68,.12)',
+                            boxShadow: 'var(--atlas-elevation-mid)',
+                            background: ATLAS_PALETTE.surfaceRaised,
+                            color: ATLAS_PALETTE.slate,
                             fontFamily: MONO,
                         }}
                         labelStyle={{ fontFamily: TYPOGRAPHY.fontFamily, fontWeight: 600 }}
                     />
-                    <Legend
-                        wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
-                        iconType="circle"
-                        iconSize={8}
-                    />
+                    <Legend {...LEGEND_PROPS} />
                     <Bar
                         yAxisId="cost"
                         dataKey="cost"
                         name="Agentic cost"
                         stackId="cost"
+                        fill={CHART_COLORS.cost}
                         isAnimationActive
                         animationDuration={900}
                     >
@@ -158,6 +142,7 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                         dataKey="terminalCost"
                         name="Terminal cost"
                         stackId="cost"
+                        fill={CHART_COLORS.terminal}
                         radius={[6, 6, 0, 0]}
                         isAnimationActive
                         animationDuration={900}
@@ -173,26 +158,6 @@ export function MonthlyLadder({ momData }: { momData: MomRow[] }) {
                             />
                         ))}
                     </Bar>
-                    <Line
-                        yAxisId="runs"
-                        type="monotone"
-                        dataKey="runs"
-                        name="Runs"
-                        stroke={CHART_COLORS.runs}
-                        strokeWidth={2.5}
-                        dot={{
-                            r: 3.5,
-                            fill: ATLAS_PALETTE.surfaceRaised,
-                            stroke: CHART_COLORS.runs,
-                            strokeWidth: 2,
-                        }}
-                        activeDot={{
-                            r: 6,
-                            fill: CHART_COLORS.runs,
-                            stroke: ATLAS_PALETTE.surfaceRaised,
-                            strokeWidth: 2,
-                        }}
-                    />
                 </ComposedChart>
             </ResponsiveContainer>
         </Card>

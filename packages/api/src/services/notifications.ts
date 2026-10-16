@@ -1,8 +1,9 @@
-import type { ExpressionBuilder } from 'kysely';
+import { sql, type ExpressionBuilder } from 'kysely';
 import { db } from '../db/kysely-client.js';
 import type { DB } from '../db/types.js';
 import { broadcastSSE } from '../routes/events.js';
 import { sendWebPushForNotification } from './web-push.js';
+import { notificationLinkUrl } from '@atlas/shared';
 import type {
     INotification,
     IssueType,
@@ -24,12 +25,16 @@ interface CreateInput {
     /** Optional deep-link target — overrides the issue_type/issue_id-derived
      *  URL when set. Used by terminal idle notifications etc. */
     link_url?: string | null;
+    /** Set by reminder fires — the fire log (`GET /api/reminders/:id/fires`). */
+    reminder_id?: number | null;
 }
 
 interface ListFilter {
     kind?: NotificationKind | undefined;
     external_status?: NotificationDeliveryStatus | undefined;
     limit?: number | undefined;
+    // Keyset cursor: rows strictly older than this notification id's row.
+    before?: number | undefined;
 }
 
 // One row of the notifications-with-item-type join. Avoids the previous N+1
@@ -58,6 +63,8 @@ function rowToNotification(row: Record<string, unknown>): INotification {
         push_failure_reason: (row['push_failure_reason'] as string | null) ?? null,
         read_at: (row['read_at'] as string | null) ?? null,
         link_url: (row['link_url'] as string | null) ?? null,
+        external_deferred_at: (row['external_deferred_at'] as string | null) ?? null,
+        reminder_id: row['reminder_id'] == null ? null : Number(row['reminder_id']),
         created_at: row['created_at'] as string,
     };
 }
@@ -132,6 +139,8 @@ function selectNotificationsWithItemType() {
             'n.push_failure_reason as push_failure_reason',
             'n.read_at as read_at',
             'n.link_url as link_url',
+            'n.external_deferred_at as external_deferred_at',
+            'n.reminder_id as reminder_id',
             'n.created_at as created_at',
             'i.type as item_type',
         ]);
@@ -142,8 +151,14 @@ export const notificationsService = {
         let q = selectNotificationsWithItemType().where(notStaleNeedsYou);
         if (filter.kind) q = q.where('n.kind', '=', filter.kind);
         if (filter.external_status) q = q.where('n.external_status', '=', filter.external_status);
+        if (filter.before !== undefined) {
+            q = q.where(
+                sql<boolean>`(n.created_at, n.id) < (SELECT c.created_at, c.id FROM notifications c WHERE c.id = ${filter.before})`,
+            );
+        }
         const rows = await q
             .orderBy('n.created_at', 'desc')
+            .orderBy('n.id', 'desc')
             .limit(filter.limit ?? 50)
             .execute();
         return rows.map((r) => rowToNotification(r as Record<string, unknown>));
@@ -157,6 +172,20 @@ export const notificationsService = {
     },
 
     async create(data: CreateInput): Promise<INotification> {
+        // Stamp the click target now, while the producer's context is known, so
+        // the feed, push and log never have to guess it later.
+        let issueType = data.issue_type ?? null;
+        if (!data.link_url && data.issue_id && !issueType) {
+            const item = await db.selectFrom('items').select('type').where('id', '=', data.issue_id).executeTakeFirst();
+            issueType = (item?.type as IssueType | undefined) ?? null;
+        }
+        const linkUrl = notificationLinkUrl({
+            link_url: data.link_url ?? null,
+            issue_type: issueType,
+            issue_id: data.issue_id ?? null,
+            project_id: data.project_id ?? null,
+            event_type: data.event_type,
+        });
         const inserted = await db
             .insertInto('notifications')
             .values({
@@ -169,7 +198,8 @@ export const notificationsService = {
                 agent_id: data.agent_id ?? null,
                 external_status: data.external_status ?? 'none',
                 failure_reason: data.failure_reason ?? null,
-                link_url: data.link_url ?? null,
+                link_url: linkUrl,
+                reminder_id: data.reminder_id ?? null,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -205,10 +235,44 @@ export const notificationsService = {
                 external_status: status,
                 failure_reason: failureReason,
                 sent_external: sentFlag,
+                external_deferred_at: null,
             })
             .where('id', '=', id)
             .execute();
         broadcastSSE({ type: 'notification_updated', notificationId: id });
+    },
+
+    /** Quiet hours: hold the outward send until `flushDeferredExternal`. */
+    async holdExternal(id: number, at: Date): Promise<void> {
+        await db
+            .updateTable('notifications')
+            .set({ external_status: 'pending', failure_reason: null, sent_external: 0, external_deferred_at: at.toISOString() })
+            .where('id', '=', id)
+            .execute();
+        broadcastSSE({ type: 'notification_updated', notificationId: id });
+    },
+
+    /**
+     * Claim every held send (CAS: only rows still held and pending), oldest
+     * first. The claim clears `external_deferred_at`, so a concurrent tick or a
+     * Cancel that lands first wins and the row is never sent twice.
+     */
+    async claimDeferred(): Promise<Array<{ id: number; message: string; created_at: string }>> {
+        const rows = await db
+            .updateTable('notifications')
+            .set({ external_deferred_at: null })
+            .where('external_deferred_at', 'is not', null)
+            .where('external_status', '=', 'pending')
+            .returning(['id', 'message', 'created_at'])
+            .execute();
+        return rows
+            .map((r) => ({
+                id: Number(r.id),
+                message: r.message,
+                // timestamptz arrives as a Date from node-postgres whatever the column type says.
+                created_at: new Date(r.created_at as unknown as string | Date).toISOString(),
+            }))
+            .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
     },
 
     async updatePushStatus(

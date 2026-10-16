@@ -236,3 +236,115 @@ describe('DELETE /api/reminders/:id', () => {
         expect(res.statusCode).toBe(404);
     });
 });
+
+async function createReminder(): Promise<number> {
+    const res = await app.inject({ method: 'POST', url: '/api/reminders', payload: VALID_REMINDER });
+    return (JSON.parse(res.body) as { id: number }).id;
+}
+
+describe('PATCH /api/reminders/:id — pause / resume', () => {
+    it('pauses and resumes; a terminal status is a 400', async () => {
+        const id = await createReminder();
+        const paused = await app.inject({ method: 'PATCH', url: `/api/reminders/${id}`, payload: { status: 'paused' } });
+        expect(paused.statusCode).toBe(200);
+        expect(JSON.parse(paused.body).status).toBe('paused');
+        const resumed = await app.inject({ method: 'PATCH', url: `/api/reminders/${id}`, payload: { status: 'active' } });
+        expect(JSON.parse(resumed.body).status).toBe('active');
+        const bad = await app.inject({ method: 'PATCH', url: `/api/reminders/${id}`, payload: { status: 'completed' } });
+        expect(bad.statusCode).toBe(400);
+    });
+});
+
+describe('POST /api/reminders/:id/snooze', () => {
+    it('moves next_fire_at to now + minutes and returns the row', async () => {
+        const id = await createReminder();
+        const before = Date.now();
+        const res = await app.inject({ method: 'POST', url: `/api/reminders/${id}/snooze`, payload: { minutes: 10 } });
+        expect(res.statusCode).toBe(200);
+        const body = JSON.parse(res.body) as { next_fire_at: string; status: string; fire_count: number };
+        expect(body.status).toBe('active');
+        expect(body.fire_count).toBe(0);
+        const at = new Date(body.next_fire_at).getTime();
+        expect(at).toBeGreaterThanOrEqual(before + 10 * 60_000 - 1000);
+        expect(at).toBeLessThanOrEqual(Date.now() + 10 * 60_000 + 1000);
+    });
+
+    it('400 on bad minutes, 404 on a missing reminder, 409 on a cancelled one', async () => {
+        const id = await createReminder();
+        expect((await app.inject({ method: 'POST', url: `/api/reminders/${id}/snooze`, payload: { minutes: 0 } })).statusCode).toBe(400);
+        expect((await app.inject({ method: 'POST', url: `/api/reminders/${id}/snooze`, payload: {} })).statusCode).toBe(400);
+        expect((await app.inject({ method: 'POST', url: '/api/reminders/abc/snooze', payload: { minutes: 5 } })).statusCode).toBe(400);
+        const missing = await app.inject({ method: 'POST', url: '/api/reminders/99999/snooze', payload: { minutes: 5 } });
+        expect(missing.statusCode).toBe(404);
+        expect(JSON.parse(missing.body).kind).toBe('not_found');
+        await app.inject({ method: 'DELETE', url: `/api/reminders/${id}` });
+        const cancelled = await app.inject({ method: 'POST', url: `/api/reminders/${id}/snooze`, payload: { minutes: 5 } });
+        expect(cancelled.statusCode).toBe(409);
+        expect(JSON.parse(cancelled.body).kind).toBe('conflict');
+    });
+});
+
+describe('GET /api/reminders/:id/fires', () => {
+    it('returns the fire log (time, push and external status), honouring ?limit', async () => {
+        const id = await createReminder();
+        for (let i = 0; i < 3; i++) {
+            await testDb
+                .insertInto('notifications')
+                .values({ event_type: 'reminder', message: 'x', sent_external: 0, kind: 'system', external_status: 'sent', reminder_id: id })
+                .execute();
+        }
+        const res = await app.inject({ method: 'GET', url: `/api/reminders/${id}/fires?limit=2` });
+        expect(res.statusCode).toBe(200);
+        const fires = JSON.parse(res.body) as Array<Record<string, unknown>>;
+        expect(fires).toHaveLength(2);
+        expect(Object.keys(fires[0]!).sort()).toEqual(
+            ['external_status', 'failure_reason', 'fired_at', 'notification_id', 'push_status'],
+        );
+        expect(fires[0]!['external_status']).toBe('sent');
+        const all = await app.inject({ method: 'GET', url: `/api/reminders/${id}/fires` });
+        expect(JSON.parse(all.body)).toHaveLength(3);
+        const row = await app.inject({ method: 'GET', url: `/api/reminders/${id}` });
+        expect(JSON.parse(row.body).fire_count).toBe(3);
+    });
+
+    it('404 for a missing reminder, 400 for a bad limit', async () => {
+        expect((await app.inject({ method: 'GET', url: '/api/reminders/99999/fires' })).statusCode).toBe(404);
+        const id = await createReminder();
+        expect((await app.inject({ method: 'GET', url: `/api/reminders/${id}/fires?limit=0` })).statusCode).toBe(400);
+    });
+});
+
+describe('DELETE /api/reminders/:id?hard=1', () => {
+    it('409 while the reminder can still fire; 204 once cancelled, then gone', async () => {
+        const id = await createReminder();
+        const live = await app.inject({ method: 'DELETE', url: `/api/reminders/${id}?hard=1` });
+        expect(live.statusCode).toBe(409);
+        await app.inject({ method: 'DELETE', url: `/api/reminders/${id}` });
+        const del = await app.inject({ method: 'DELETE', url: `/api/reminders/${id}?hard=1` });
+        expect(del.statusCode).toBe(204);
+        expect((await app.inject({ method: 'GET', url: `/api/reminders/${id}` })).statusCode).toBe(404);
+        expect((await app.inject({ method: 'DELETE', url: `/api/reminders/${id}?hard=1` })).statusCode).toBe(404);
+    });
+});
+
+describe('GET /api/reminders — status list + paging', () => {
+    it('takes a comma list of statuses and pages with limit/offset', async () => {
+        const a = await createReminder();
+        const b = await createReminder();
+        await app.inject({ method: 'PATCH', url: `/api/reminders/${b}`, payload: { status: 'paused' } });
+        const c = await createReminder();
+        await app.inject({ method: 'DELETE', url: `/api/reminders/${c}` });
+
+        const live = JSON.parse((await app.inject({ method: 'GET', url: '/api/reminders?status=active,paused' })).body) as Array<{ id: number }>;
+        expect(live.map((r) => r.id).sort()).toEqual([a, b].sort());
+        const hist = JSON.parse((await app.inject({ method: 'GET', url: '/api/reminders?status=cancelled,completed&limit=50&offset=0' })).body) as Array<{ id: number }>;
+        expect(hist.map((r) => r.id)).toEqual([c]);
+        const paged = JSON.parse((await app.inject({ method: 'GET', url: '/api/reminders?limit=1&offset=1' })).body) as unknown[];
+        expect(paged).toHaveLength(1);
+    });
+
+    it('400 for an unknown status or a bad limit', async () => {
+        expect((await app.inject({ method: 'GET', url: '/api/reminders?status=active,bogus' })).statusCode).toBe(400);
+        expect((await app.inject({ method: 'GET', url: '/api/reminders?limit=-1' })).statusCode).toBe(400);
+    });
+});

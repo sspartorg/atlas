@@ -109,9 +109,8 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
         return (
             <Card>
                 <ChartTitle
-                    eyebrow="Manual terminal sessions"
                     title="Owner-driven runs"
-                    sub={`No closed sessions this month — start one from /terminal to populate this view.`}
+                    sub={`No terminal session has closed here yet. Sessions you start from Terminal are counted when they close.`}
                 />
                 <Box
                     sx={{
@@ -134,7 +133,6 @@ export function TerminalSessionsCard({ summary, byCli, topSessions, monthLabel }
     return (
         <Card>
             <ChartTitle
-                eyebrow="Manual terminal sessions"
                 title="Owner-driven runs"
                 sub={`Closed sessions for ${monthLabel}. Manual terminal usage parallels autonomous agent runs in this period.`}
             />

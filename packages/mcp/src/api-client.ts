@@ -151,6 +151,7 @@ interface IUpdateReminderPayload {
     body?: string | undefined;
     schedule?: ReminderSchedule | undefined;
     channel?: ReminderChannel | undefined;
+    status?: 'active' | 'paused' | undefined;
 }
 
 // Theme 07 — agent memory payloads.
@@ -299,6 +300,7 @@ export interface IApiClient {
     setReminder(payload: ISetReminderPayload): Promise<IReminder>;
     updateReminder(id: number, payload: IUpdateReminderPayload): Promise<IReminder>;
     cancelReminder(id: number): Promise<IReminder>;
+    snoozeReminder(id: number, minutes: number): Promise<IReminder>;
     listReminders(filter?: {
         status?: 'active' | 'paused' | 'cancelled' | 'completed';
         channel?: ReminderChannel;
@@ -629,6 +631,8 @@ export function createApiClient(config: IMcpConfig): IApiClient {
             request<IReminder>(`/api/reminders/${id}`, { method: 'PATCH', body: payload }),
         cancelReminder: (id) =>
             request<IReminder>(`/api/reminders/${id}`, { method: 'DELETE' }),
+        snoozeReminder: (id, minutes) =>
+            request<IReminder>(`/api/reminders/${id}/snooze`, { method: 'POST', body: { minutes } }),
         listReminders: (filter) => {
             const params = new URLSearchParams();
             if (filter?.status) params.set('status', filter.status);

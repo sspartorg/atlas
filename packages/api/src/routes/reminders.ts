@@ -1,29 +1,56 @@
 import type { FastifyInstance } from 'fastify';
-import { SetReminderSchema, CancelReminderSchema, UpdateReminderSchema } from '@atlas/shared';
+import { z } from 'zod';
+import {
+    SetReminderSchema,
+    CancelReminderSchema,
+    UpdateReminderSchema,
+    SnoozeReminderSchema,
+    ReminderChannelSchema,
+} from '@atlas/shared';
 import { remindersService } from '../services/reminders.js';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
 
-// Theme 07 — REST surface for reminders. MCP tools call these endpoints
-// through the api-client wrapper. The web UI doesn't render reminders
-// yet (Theme 09's AI-news agent is the first user); a "Reminders" page
-// can be layered later.
+// Theme 07 — REST surface for reminders. The Reminders page and the MCP
+// tools (through the api-client wrapper) call these endpoints.
+
+const IdSchema = z.coerce.number().int().positive();
+const StatusSchema = z.enum(['active', 'paused', 'cancelled', 'completed']);
+const ListQuerySchema = z.object({
+    status: z
+        .string()
+        .transform((v) => v.split(',').filter(Boolean))
+        .pipe(z.array(StatusSchema))
+        .optional(),
+    channel: ReminderChannelSchema.optional(),
+    since: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(500).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+});
 
 export async function remindersRoutes(app: FastifyInstance): Promise<void> {
-    // search_reminder filter params (consolidation 2026-07). `status` /
-    // `channel` / `since` are all optional; when omitted the list returns
-    // every row sorted by next_fire_at (legacy listReminders shape).
+    // `status` takes a comma list (`active,paused`); `limit` / `offset` page it.
+    // With no filter the list returns every row sorted by next_fire_at.
     app.get('/api/reminders', async (req) => {
-        const q = req.query as {
-            status?: string;
-            channel?: string;
-            since?: string;
-        };
-        const filter: Parameters<typeof remindersService.list>[0] = {};
-        if (q.status)
-            filter.status = q.status as 'active' | 'paused' | 'cancelled' | 'completed';
-        if (q.channel) filter.channel = q.channel as 'notification' | 'external' | 'both';
-        if (q.since) filter.since = q.since;
-        return remindersService.list(filter);
+        const q = ListQuerySchema.parse(req.query);
+        return remindersService.list({
+            status: q.status,
+            channel: q.channel,
+            since: q.since,
+            limit: q.limit,
+            offset: q.offset,
+        });
+    });
+
+    app.get('/api/reminders/:id/fires', async (req) => {
+        const id = IdSchema.parse((req.params as { id: string }).id);
+        const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }).parse(req.query);
+        return remindersService.fires(id, limit);
+    });
+
+    app.post('/api/reminders/:id/snooze', { preHandler: requireMcpToken }, async (req) => {
+        const id = IdSchema.parse((req.params as { id: string }).id);
+        const { minutes } = SnoozeReminderSchema.parse(req.body);
+        return remindersService.snooze(id, minutes);
     });
 
     app.get('/api/reminders/:id', async (req, reply) => {
@@ -63,6 +90,12 @@ export async function remindersRoutes(app: FastifyInstance): Promise<void> {
         const parsed = CancelReminderSchema.parse({
             id: Number((req.params as { id: string }).id),
         });
+        // `?hard=1` deletes a finished reminder (409 while it can still fire);
+        // the default stays a soft cancel that keeps the row as history.
+        if ((req.query as { hard?: string }).hard === '1') {
+            await remindersService.hardDelete(parsed.id);
+            return reply.status(204).send();
+        }
         const row = await remindersService.cancel(parsed.id);
         if (!row) return reply.status(404).send({ error: 'reminder not found' });
         return row;

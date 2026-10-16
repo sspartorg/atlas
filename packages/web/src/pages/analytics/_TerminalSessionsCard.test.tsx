@@ -74,7 +74,7 @@ describe('TerminalSessionsCard', () => {
             />
         );
         // Empty-state copy explicitly mentions /terminal and the month.
-        expect(screen.getByText(/No closed sessions this month/i)).toBeInTheDocument();
+        expect(screen.getByText(/No terminal session has closed here yet/i)).toBeInTheDocument();
         expect(screen.getByText(/— no terminal sessions for June —/i)).toBeInTheDocument();
         // None of the metric tiles render in the empty state.
         expect(screen.queryByText(/Sessions closed/i)).not.toBeInTheDocument();
@@ -91,7 +91,7 @@ describe('TerminalSessionsCard', () => {
             />
         );
         // Eyebrow + title for the populated state.
-        expect(screen.getByText(/Manual terminal sessions/i)).toBeInTheDocument();
+        expect(screen.getByText(/Owner-driven runs/i)).toBeInTheDocument();
         expect(screen.getByText(/Owner-driven runs/i)).toBeInTheDocument();
         // Three metric tile labels.
         expect(screen.getByText(/Sessions closed/i)).toBeInTheDocument();

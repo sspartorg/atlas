@@ -1165,6 +1165,19 @@ describe('NotificationsTab', () => {
         });
     });
 
+    it('says quiet hours are off when From and To are the same time', async () => {
+        server.use(
+            http.get(`${BASE}/settings`, () =>
+                HttpResponse.json(
+                    settings({ quiet_hours_enabled: 1, quiet_hours_from: '09:00', quiet_hours_to: '09:00' })
+                )
+            ),
+            ...defaultHandlers
+        );
+        renderWithProviders(<NotificationsTab />);
+        expect(await screen.findByText(/From and To are the same, so there is no quiet window/)).toBeInTheDocument();
+    });
+
     it('setQuietHoursEnabled(false) PATCHes enabled=0 (line 236)', async () => {
         let patched: { quiet_hours_enabled?: number } | null = null;
         server.use(
@@ -1180,11 +1193,11 @@ describe('NotificationsTab', () => {
         renderWithProviders(<NotificationsTab />);
         // Wait for quiet hours to be enabled (text confirms quiet_hours_enabled=1)
         await waitFor(() =>
-            expect(screen.getByText(/External notifications are muted/i)).toBeInTheDocument()
+            expect(screen.getByText(/External notifications are held/i)).toBeInTheDocument()
         );
         // The quiet-hours Enable row has a MuiSwitch. Walk up from the label text to find
         // the nearest ancestor that directly contains an input[type=checkbox].
-        const enableLabel = screen.getByText(/External notifications are muted/i);
+        const enableLabel = screen.getByText(/External notifications are held/i);
         let switchInput: HTMLInputElement | null = null;
         let el: Element | null = enableLabel.parentElement;
         while (el && !switchInput) {

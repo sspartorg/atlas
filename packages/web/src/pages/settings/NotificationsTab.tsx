@@ -693,7 +693,7 @@ export function NotificationsTab() {
 
             <SettingsSection
                 title="Quiet Hours"
-                subtitle="While quiet hours are active, external notifications are silenced — even agent and MCP-driven sends. In-app notifications are still posted."
+                subtitle="During quiet hours, Telegram and Teams messages are held and sent when the window ends, marked with the time they were raised. In-app and push notifications on this device still arrive right away. Set From and To to the same time to turn the window off."
             >
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     <Row label="Enable">
@@ -706,9 +706,11 @@ export function NotificationsTab() {
                             }}
                         >
                             <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60 }}>
-                                {quietEnabled
-                                    ? 'External notifications are muted between the times below.'
-                                    : 'Off — external notifications deliver at any hour.'}
+                                {!quietEnabled
+                                    ? 'Off — external notifications deliver at any hour.'
+                                    : quietFrom === quietTo
+                                      ? 'From and To are the same, so there is no quiet window.'
+                                      : 'External notifications are held between the times below.'}
                             </Typography>
                             <Switch
                                 checked={quietEnabled}

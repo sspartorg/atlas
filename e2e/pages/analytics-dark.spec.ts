@@ -15,7 +15,8 @@ test.describe('/analytics — dark mode', () => {
         await setThemeMode(page, 'dark');
         await goto(page, '/analytics');
         await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-        // Hero metric — total spend label or value should be visible
-        await expect(page.getByText(/TOTAL SPEND/i).first()).toBeVisible();
+        // The Overview's tiles and chart render on the themed surface.
+        await expect(page.getByText('Workflow success rate')).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Shipped and spent/ })).toBeVisible();
     });
 });

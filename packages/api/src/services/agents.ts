@@ -235,10 +235,23 @@ async function replaceChecklists(
         .execute();
 }
 
+const AGENT_SUMMARY_COLUMNS = [
+    'id', 'team_managed', 'name', 'category', 'cli', 'model', 'effort', 'framework', 'prompt_version', 'status',
+    'accent_color', 'sort_order', 'description', 'designation', 'role_id', 'glyph', 'memory_cadence', 'kind_slug',
+    'settings_json', 'marketplace_source_id', 'marketplace_pulled_version', 'marketplace_upgradable_hash',
+    'created_at', 'updated_at',
+] as const satisfies ReadonlyArray<Exclude<keyof DB['agents'], 'prompt_md'>>;
+
 export const agentsService = {
     async list(): Promise<IAgent[]> {
         const rows = await db.selectFrom('agents').selectAll().orderBy('name', 'asc').execute();
         return rows as unknown as IAgent[];
+    },
+
+    /** Every column but `prompt_md`, so Postgres never de-TOASTs the prompts. */
+    async listSummary(): Promise<Array<Omit<IAgent, 'prompt_md'>>> {
+        const rows = await db.selectFrom('agents').select(AGENT_SUMMARY_COLUMNS).orderBy('name', 'asc').execute();
+        return rows as unknown as Array<Omit<IAgent, 'prompt_md'>>;
     },
 
     async get(id: string): Promise<IAgent | undefined> {

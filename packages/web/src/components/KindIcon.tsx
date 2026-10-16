@@ -44,6 +44,9 @@ export function KindIcon({ kind, size = 16 }: Props) {
                     flexShrink: 0,
                     cursor: 'help',
                 }}
+                // aria-label is prohibited on a role-less span (axe
+                // aria-prohibited-attr); as an image it names the glyph.
+                role="img"
                 aria-label={cfg.label}
             >
                 <Icon sx={{ fontSize: size }} />

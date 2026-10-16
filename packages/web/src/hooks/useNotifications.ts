@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { NotificationKind, NotificationDeliveryStatus } from '@atlas/shared';
 import { api } from '../api/api.js';
 
@@ -18,6 +18,20 @@ export function useNotifications(opts: UseNotificationsArgs = {}) {
         ],
         queryFn: () => api.notifications.list(opts),
     });
+}
+
+const FEED_PAGE = 200;
+
+/** The Notifications page's rows, newest first, 200 at a time ("Load more" walks the `before` cursor). */
+export function useNotificationFeed() {
+    const q = useInfiniteQuery({
+        queryKey: ['notifications', 'feed-pages'],
+        queryFn: ({ pageParam }) =>
+            api.notifications.list({ limit: FEED_PAGE, ...(pageParam ? { before: pageParam } : {}) }),
+        initialPageParam: 0,
+        getNextPageParam: (last) => (last.length < FEED_PAGE ? undefined : last[last.length - 1]?.id),
+    });
+    return { ...q, rows: q.data?.pages.flat() ?? [] };
 }
 
 function invalidateAll(qc: ReturnType<typeof useQueryClient>) {

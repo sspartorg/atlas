@@ -53,9 +53,23 @@ function safeTargetUrl(raw) {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const targetUrl = safeTargetUrl(event.notification.data && event.notification.data.url);
+    const notificationId = event.notification.data && event.notification.data.notification_id;
 
     event.waitUntil(
         (async () => {
+            // Opening it from the OS counts as reading it, same as a feed click.
+            // Same-origin POST, so the API's browser gate admits it. Best-effort.
+            if (Number.isInteger(notificationId) && notificationId > 0) {
+                try {
+                    await fetch('/api/notifications/' + notificationId + '/read', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: '{}',
+                    });
+                } catch (_err) {
+                    // offline / API down — the feed still shows it unread
+                }
+            }
             const allClients = await self.clients.matchAll({
                 type: 'window',
                 includeUncontrolled: true,
