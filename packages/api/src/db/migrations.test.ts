@@ -135,8 +135,8 @@ describe('migrations (Knex, via globalSetup)', () => {
         expect(rows).toHaveLength(1);
     });
 
-    it('notifications are indexed for the (created_at, id) keyset (migration 015)', async () => {
-        // The page orders by `created_at DESC, id DESC`. Migration 015
+    it('notifications are indexed for the (created_at, id) keyset (migration 016)', async () => {
+        // The page orders by `created_at DESC, id DESC`. Migration 016
         // replaced the single-column `idx_notifications_created_at` with the
         // two-column index, so the id tie-break needs no sort.
         const rows = await sql<{ indexname: string }>`

@@ -5,7 +5,7 @@ import { testDb } from '../../tests/_pg-db.js';
 // Verifies the composite/partial indexes the W3 hot-path audit surfaced (they
 // live in `001_baseline.sql` since the pre-publish consolidation; they were
 // added by the old migration 021, which no longer exists as a file) and the
-// later page / analytics indexes (migrations 002, 012, 015), each against its
+// later page / analytics indexes (migrations 002, 012, 016), each against its
 // target query pattern.
 //
 // This is a REGRESSION GATE, not a perf benchmark: EXPLAIN is asked for a
@@ -385,7 +385,7 @@ describe('migration 012 — page indexes', () => {
     });
 });
 
-// ── Migration 015 — analytics test filter, keysets, PR lookup ──────────────
+// ── Migration 016 — analytics test filter, keysets, PR lookup ──────────────
 //
 // The rewritten analytics queries are EXPLAINed in the shape the services
 // send them (literal bounds instead of parameters), so a later edit that
@@ -415,7 +415,7 @@ const ANALYTICS_SEED = `
 const WINDOW = `now() - interval '30 days'`;
 const SHORT_WINDOW = `now() - interval '2 days'`;
 
-describe('migration 015 — analytics and keyset indexes', () => {
+describe('migration 016 — analytics and keyset indexes', () => {
     it('creates the four indexes and drops the single-column notifications index', async () => {
         expect(await indexNames(ANALYTICS_INDEXES)).toEqual([...ANALYTICS_INDEXES].sort());
         expect(await indexNames(['idx_notifications_created_at'])).toEqual([]);
