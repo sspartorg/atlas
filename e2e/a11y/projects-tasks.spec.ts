@@ -65,25 +65,6 @@ test.afterAll(async ({ request }) => {
     sql(`DELETE FROM comments WHERE body LIKE '%a11y-burrow%'`);
 });
 
-type Violations = Awaited<ReturnType<AxeBuilder['analyze']>>['violations'];
-
-/**
- * Drop the one app-wide finding this spec does not own: the Draft status chip
- * (`--atlas-status-draft-fg` #727a87 on `--atlas-status-draft-bg` #eef1f4,
- * 3.8:1) comes from the global theme tokens every page shares. It is listed
- * under "Open" in e2e/coverage/projects-tasks-matrix.md. Anything else —
- * including another colour pair on the same chip — still fails.
- */
-function known(violations: Violations): Violations {
-    return violations
-        .map((v) =>
-            v.id !== 'color-contrast'
-                ? v
-                : { ...v, nodes: v.nodes.filter((n) => !n.any.some((c) => (c.data as { fgColor?: string; bgColor?: string } | null)?.fgColor === '#727a87' && (c.data as { bgColor?: string }).bgColor === '#eef1f4')) },
-        )
-        .filter((v) => v.nodes.length > 0);
-}
-
 /** Console errors and page errors for the whole test, not just the load. */
 function watchConsole(page: Page): string[] {
     const errors: string[] = [];
@@ -130,7 +111,7 @@ for (const mode of ['light', 'dark'] as const) {
                     // Colours are measured at rest, not halfway through a button's enable transition.
                     await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
                     const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
-                    const summary = known(violations).map(
+                    const summary = violations.map(
                         (x) => `${x.id} (${x.impact}) ×${x.nodes.length}: ${x.nodes.slice(0, 3).map((n) => `${n.target.join(' ')} ${n.html.slice(0, 140)}`).join(' | ')}`,
                     );
                     expect(summary, summary.join('\n')).toEqual([]);
@@ -209,7 +190,11 @@ test.describe('keyboard', () => {
         await newProject.focus();
         await page.keyboard.press('Enter');
         const dialog = page.getByRole('dialog');
-        // Focus lands inside the dialog (on its paper, not Name — see the matrix's Open list); Tab walks Close, then Name.
+        // On the dev server React StrictMode runs MUI's focus-trap effect twice; the
+        // first cleanup restores focus to the trigger and the second run moves it to
+        // the paper, so `autoFocus` on Name is lost. A production build (no double
+        // effects) focuses Name — checked with `vite preview`. Here: focus is inside
+        // the dialog, and Tab walks Close, then Name.
         await expect.poll(() => dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
         await page.keyboard.press('Tab');
         await expect(dialog.getByRole('button', { name: 'Close' })).toBeFocused();

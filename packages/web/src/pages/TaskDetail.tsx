@@ -61,7 +61,7 @@ const CARD_TITLE_SX = {
 function ReadOnlyCard({ title, children }: { title: string; children: ReactNode }) {
     return (
         <Box sx={CARD_SX}>
-            <Typography sx={CARD_TITLE_SX}>{title}</Typography>
+            <Typography component="h2" sx={CARD_TITLE_SX}>{title}</Typography>
             {children}
         </Box>
     );
@@ -107,7 +107,7 @@ function AddSubTaskForm({
             }}
             sx={{ ...CARD_SX, display: 'flex', flexDirection: 'column', gap: 3 }}
         >
-            <Typography sx={{ ...CARD_TITLE_SX, mb: 0 }}>New sub-task</Typography>
+            <Typography component="h2" sx={{ ...CARD_TITLE_SX, mb: 0 }}>New sub-task</Typography>
             <TextField
                 size="small"
                 label="Title"

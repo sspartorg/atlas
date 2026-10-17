@@ -10,7 +10,9 @@ describe('EditableMarkdownCard', () => {
         renderWithProviders(
             <EditableMarkdownCard title="Plan" value="# heading" onSave={onSave} />
         );
-        expect(screen.getByText('Plan')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 2, name: 'Plan' })).toBeInTheDocument();
+        // The body's `#` sits one level under the card title.
+        expect(screen.getByRole('heading', { level: 3, name: 'heading' })).toBeInTheDocument();
         await userEvent.click(screen.getByRole('button', { name: /Edit/i }));
         expect(screen.getByRole('textbox')).toBeInTheDocument();
     });

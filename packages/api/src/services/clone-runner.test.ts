@@ -163,6 +163,17 @@ describe('startClone', () => {
         );
     });
 
+    it('uses the client-chosen clone_id for the job and its events', async () => {
+        vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
+        vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);
+        mocks.spawn.mockReturnValue(makeChild());
+        const id = await startClone({ ...INPUT, clone_id: 'client-clone-1234' });
+        expect(id).toBe('client-clone-1234');
+        expect(vi.mocked(broadcastSSE)).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'clone_status', cloneId: 'client-clone-1234' }),
+        );
+    });
+
     it('success path: spawns git with correct args, emits stdout/stderr, broadcasts clone_completed', async () => {
         vi.mocked(credentialsService.get).mockResolvedValue(FAKE_CRED as never);
         vi.mocked(credentialsService.getToken).mockResolvedValue(FAKE_TOKEN);

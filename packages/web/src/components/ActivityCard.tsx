@@ -806,7 +806,7 @@ export function ConversationCard({
                     mb: 3,
                 }}
             >
-                <Typography sx={{ ...headerSx, mb: 0 }}>Conversation</Typography>
+                <Typography component="h2" sx={{ ...headerSx, mb: 0 }}>Conversation</Typography>
                 <Typography
                     sx={{
                         fontSize: 11.5,
@@ -914,7 +914,7 @@ export function ActivityLogCard({
     return (
         <Box sx={cardSx}>
             <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.5, mb: 3 }}>
-                <Typography sx={{ ...headerSx, mb: 0 }}>Activity log</Typography>
+                <Typography component="h2" sx={{ ...headerSx, mb: 0 }}>Activity log</Typography>
                 <Typography
                     sx={{
                         fontSize: 11.5,

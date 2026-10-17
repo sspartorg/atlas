@@ -95,7 +95,7 @@ export function GenerateAiScaffoldDialog({ project, open, onClose }: Props) {
                             <code>{selected.git_path}</code>, detect its stack, and generate{' '}
                             <code>AGENTS.md</code> + <code>CLAUDE.md</code> +{' '}
                             <code>.github/copilot-instructions.md</code> + <code>.agents/</code>{' '}
-                            skeleton on a new branch <code>atlas/ai-readiness</code>, push it, and
+                            skeleton on a new <code>atlas/wf/…</code> branch (the run's own), push it, and
                             open a PR for your review.
                         </>
                     ) : (

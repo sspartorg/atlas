@@ -1,77 +1,38 @@
 import { test, expect } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
+import { projectAction } from '../helpers/projects.js';
 
-// GenerateAiScaffoldDialog is opened from the Project Setup tab. It allows
-// the user to generate initial project scaffolding via AI. The e2e seed
-// inserts "E2E Terminal" project. We open its Setup tab and look for the
-// "Generate" or "AI scaffold" trigger button.
-// We never submit — Cancel or Esc only.
+// GenerateAiScaffoldDialog opens from Project actions → "Generate AI scaffold…"
+// (it used to be looked for on the Setup tab, where it no longer lives, and
+// the old spec skipped itself). The seed project's one repo is ready, so the
+// item is enabled. We never submit here — e2e/flows/project-repos-github.spec.ts
+// runs a real Generate against the fake GitHub.
 
 test.describe('GenerateAiScaffoldDialog', () => {
-    test('Generate AI scaffold button is visible on the project Setup tab', async ({ page }) => {
-        await goto(page, '/projects');
-        await expect(page.getByText(/E2E Terminal/i)).toBeVisible();
+    test('opens from Project actions, names the repo and path it will analyse, and Cancel / Escape close it', async ({ page }) => {
+        await goto(page, '/projects/e2e-terminal-project');
+        await projectAction(page, /Generate AI scaffold…/);
+        const dialog = page.getByRole('dialog');
+        await expect(dialog.getByText('Generate AI scaffold', { exact: true })).toBeVisible();
+        await expect(dialog).toContainText(/Atlas will analyze project at .*atlas-e2e-fixtures\/project, detect its stack/);
+        await expect(dialog).toContainText('Files that already exist on main will be skipped.');
+        await expect(dialog.getByRole('button', { name: 'Generate' })).toBeEnabled();
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+        await expect(dialog).toHaveCount(0);
 
-        const openLink = page.getByRole('link', { name: /Open/i }).first();
-        await openLink.click();
-        await expect(page).toHaveURL(/\/projects\/[a-z0-9-]+/);
-
-        // Click the Setup tab
-        const setupTab = page.getByRole('tab', { name: /Setup/i });
-        const hasSetup = await setupTab.isVisible().catch(() => false);
-        test.skip(!hasSetup, 'no Setup tab on project detail — deferring');
-
-        await setupTab.click();
-
-        // Look for a "Generate" or "AI scaffold" button
-        const generateBtn = page
-            .getByRole('button', { name: /Generate|AI scaffold|Scaffold/i })
-            .first();
-        const hasGenerate = await generateBtn.isVisible().catch(() => false);
-        test.skip(!hasGenerate, 'no Generate AI scaffold button on Setup tab — deferring');
-
-        await expect(generateBtn).toBeVisible();
+        await projectAction(page, /Generate AI scaffold…/);
+        await expect(dialog).toBeVisible();
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
     });
 
-    test('Generate AI scaffold dialog opens with a prompt or configuration field', async ({ page }) => {
-        await goto(page, '/projects');
-        await expect(page.getByText(/E2E Terminal/i)).toBeVisible();
-
-        const openLink = page.getByRole('link', { name: /Open/i }).first();
-        await openLink.click();
-        await expect(page).toHaveURL(/\/projects\/[a-z0-9-]+/);
-
-        const setupTab = page.getByRole('tab', { name: /Setup/i });
-        const hasSetup = await setupTab.isVisible().catch(() => false);
-        test.skip(!hasSetup, 'no Setup tab — deferring');
-
-        await setupTab.click();
-
-        const generateBtn = page
-            .getByRole('button', { name: /Generate|AI scaffold|Scaffold/i })
-            .first();
-        const hasGenerate = await generateBtn.isVisible().catch(() => false);
-        test.skip(!hasGenerate, 'no Generate button — deferring');
-
-        await generateBtn.click();
+    test('Generate on a repo with no credential toasts the refusal and starts nothing', async ({ page }) => {
+        await goto(page, '/projects/e2e-terminal-project');
+        await projectAction(page, /Generate AI scaffold…/);
         const dialog = page.getByRole('dialog');
-        await expect(dialog).toBeVisible();
-
-        // Dialog should contain a prompt/description textarea or configuration field
-        const promptField = dialog.getByRole('textbox').first();
-        const hasField = await promptField.isVisible().catch(() => false);
-        if (hasField) {
-            await expect(promptField).toBeVisible();
-        }
-
-        // Cancel without generating
-        const cancelBtn = dialog.getByRole('button', { name: /Cancel/i });
-        const hasCancel = await cancelBtn.isVisible().catch(() => false);
-        if (hasCancel) {
-            await cancelBtn.click();
-        } else {
-            await page.keyboard.press('Escape');
-        }
-        await expect(dialog).not.toBeVisible();
+        await dialog.getByRole('button', { name: 'Generate' }).click();
+        await expect(page.getByText('Generate AI scaffold failed')).toBeVisible();
+        await expect(page.getByText(/Repo has no credential attached/)).toBeVisible();
+        await expect(page).toHaveURL(/\/projects\/e2e-terminal-project$/);
     });
 });

@@ -15,6 +15,7 @@ import CloseRounded from '@mui/icons-material/CloseRounded';
 import type { ConnectError } from '../../api/api.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
 import { useCloneJob } from '../../hooks/useCloneJob.js';
+import { newJobId } from '../../hooks/sse-hub.js';
 import { useCloneProjectRepo, useConnectProjectRepo } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
 import { api } from '../../api/api.js';
@@ -112,13 +113,22 @@ export function AddRepoDialog({ projectId, onClose }: Props) {
         setConnectError(null);
         try {
             if (mode === 'clone') {
-                const res = await cloneRepo.mutateAsync({
-                    name,
-                    repo_url: repoUrl.trim(),
-                    credential_id: credentialId,
-                    default_branch: defaultBranch.trim(),
-                });
-                setCloneId(res.clone_id);
+                // Subscribe (via useCloneJob) before the POST: a fast clone's
+                // clone_completed can land before the response does.
+                const id = newJobId();
+                setCloneId(id);
+                try {
+                    await cloneRepo.mutateAsync({
+                        name,
+                        repo_url: repoUrl.trim(),
+                        credential_id: credentialId,
+                        default_branch: defaultBranch.trim(),
+                        clone_id: id,
+                    });
+                } catch (e) {
+                    setCloneId(null);
+                    throw e;
+                }
                 return;
             }
             const res = await connectRepo.mutateAsync({

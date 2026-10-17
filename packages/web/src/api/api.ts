@@ -614,7 +614,13 @@ export const api = {
         repos: (id: string) => get<IProjectRepo[]>(`/projects/${id}/repos`),
         cloneRepo: (
             id: string,
-            data: { name: string; repo_url: string; credential_id: string; default_branch: string }
+            data: {
+                name: string;
+                repo_url: string;
+                credential_id: string;
+                default_branch: string;
+                clone_id?: string;
+            }
         ) =>
             post<{ clone_id: string; destination: string }>(`/projects/${id}/repos`, {
                 mode: 'clone',

@@ -95,7 +95,9 @@ export function useAgentRuns(id: string) {
 // first paint. Same fix pattern as useAgents (commit 54dc1b7).
 export function useProjectAgentRuns(projectId: string) {
     return useQuery({
-        queryKey: ['projects', projectId, 'agent-runs'],
+        // Under ['runs'] so useSSE's run events (queued / started /
+        // completed / error) refresh History and Recent activity live.
+        queryKey: ['runs', 'project', projectId],
         queryFn: () => api.run.list({ project_id: projectId, limit: 200 }),
         enabled: Boolean(projectId),
         staleTime: 30_000,
@@ -106,7 +108,7 @@ export function useProjectAgentRuns(projectId: string) {
 
 export function useItemAgentRuns(itemId: string | null | undefined) {
     return useQuery({
-        queryKey: ['items', itemId, 'agent-runs'],
+        queryKey: ['runs', 'item', itemId],
         queryFn: () => api.run.list({ issue_id: itemId!, limit: 100 }),
         enabled: Boolean(itemId),
         // 2026-06-28 — same dedupe pattern; item detail pages sometimes

@@ -1,4 +1,5 @@
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import MenuItem from '@mui/material/MenuItem';
@@ -26,11 +27,15 @@ interface SelectableCardProps {
 
 export function SelectableCard({ title, sub, selected, onClick }: SelectableCardProps) {
     return (
-        <Box
-            role="button"
+        // A real <button>: Tab reaches it, Enter / Space press it, and the
+        // theme's focus ring shows on keyboard focus.
+        <ButtonBase
             aria-pressed={selected}
             onClick={onClick}
             sx={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
                 px: 2,
                 py: 1.5,
                 borderRadius: '10px',
@@ -45,7 +50,9 @@ export function SelectableCard({ title, sub, selected, onClick }: SelectableCard
             }}
         >
             <Typography
+                component="span"
                 sx={{
+                    display: 'block',
                     fontSize: 13,
                     fontWeight: 600,
                     color: selected ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate,
@@ -55,11 +62,12 @@ export function SelectableCard({ title, sub, selected, onClick }: SelectableCard
                 {title}
             </Typography>
             <Typography
-                sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 0.5, lineHeight: 1.3 }}
+                component="span"
+                sx={{ display: 'block', fontSize: 11, color: ATLAS_PALETTE.slate60, mt: 0.5, lineHeight: 1.3 }}
             >
                 {sub}
             </Typography>
-        </Box>
+        </ButtonBase>
     );
 }
 

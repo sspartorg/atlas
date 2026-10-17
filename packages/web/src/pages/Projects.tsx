@@ -1,6 +1,6 @@
-import { Suspense, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { lazyNamed } from '../utils/lazyNamed.js';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -37,14 +37,36 @@ import { ApiErrorAlert } from '../components/ApiErrorAlert.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
+const ROW_OPTIONS = [10, 20, 50, 100] as const;
+
 export function Projects() {
     useSetPageTitle('Projects');
     const isMobileLayout = useIsMobile();
     const navigate = useNavigate();
 
-    const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(20);
+    // Page and rows live in the URL so a reload, Back or a shared link keeps them.
+    const [params, setParams] = useSearchParams();
+    const limit = ROW_OPTIONS.find((n) => n === Number(params.get('limit'))) ?? 20;
+    const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1);
+    const setPaging = (nextPage: number, nextLimit: number = limit) =>
+        setParams(
+            (prev) => {
+                const next = new URLSearchParams(prev);
+                if (nextPage > 1) next.set('page', String(nextPage));
+                else next.delete('page');
+                if (nextLimit !== 20) next.set('limit', String(nextLimit));
+                else next.delete('limit');
+                return next;
+            },
+            { replace: true }
+        );
     const paged = useProjectsPaged({ page, limit });
+    // Past the end (a delete emptied the last page, or a stale link): go to
+    // the last page that has rows.
+    const lastPage = paged.data ? Math.max(1, Math.ceil(paged.data.total / limit)) : page;
+    useEffect(() => {
+        if (page > lastPage) setPaging(lastPage);
+    }, [page, lastPage]);
     const projects: IProject[] = paged.data?.rows ?? [];
     const totalProjects = paged.data?.total ?? 0;
     const isPending = paged.isPending;
@@ -391,11 +413,10 @@ export function Projects() {
                                         label="Rows"
                                         value={limit}
                                         onChange={(e) => {
-                                            setLimit(Number(e.target.value));
-                                            setPage(1);
+                                            setPaging(1, Number(e.target.value));
                                         }}
                                     >
-                                        {[10, 20, 50, 100].map((n) => (
+                                        {ROW_OPTIONS.map((n) => (
                                             <MenuItem key={n} value={n}>
                                                 {n}
                                             </MenuItem>
@@ -405,7 +426,7 @@ export function Projects() {
                                 <MuiPagination
                                     page={page}
                                     count={pageCount}
-                                    onChange={(_e, v) => setPage(v)}
+                                    onChange={(_e, v) => setPaging(v)}
                                     color="primary"
                                     shape="rounded"
                                     showFirstButton

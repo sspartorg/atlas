@@ -26,6 +26,7 @@ import {
     useRemoveProjectRepo,
     useUpdateProjectRepo,
 } from '../../hooks/useProjectRepos.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import { useToast } from '../../hooks/useToast.js';
 import { useEnabledSchedules } from '../../hooks/useProjectSchedule.js';
 import { useCredentials } from '../../hooks/useCredentials.js';
@@ -60,7 +61,7 @@ interface Props {
 /** ADR 0018 — the project's repos. All equal; every one can be removed. */
 export function ProjectReposCard({ project, displayId }: Props) {
     const projectId = project.id;
-    const { data: repos, isLoading, error } = useProjectRepos(projectId);
+    const { data: repos, isLoading, error, refetch } = useProjectRepos(projectId);
     const remove = useRemoveProjectRepo(projectId);
     const toast = useToast();
     const { map: schedules } = useEnabledSchedules();
@@ -137,10 +138,12 @@ export function ProjectReposCard({ project, displayId }: Props) {
             {isLoading && (
                 <Skeleton variant="rectangular" height={64} sx={{ borderRadius: '8px' }} />
             )}
-            {error && (
-                <Alert severity="error">
-                    {error instanceof Error ? error.message : 'Could not load the repos'}
-                </Alert>
+            {error && !repos && (
+                <RetryAlert
+                    error={error}
+                    label="Could not load the repos"
+                    onRetry={() => void refetch()}
+                />
             )}
 
             {repos?.length === 0 && (
@@ -187,7 +190,9 @@ export function ProjectReposCard({ project, displayId }: Props) {
                                 sx={{ fontFamily: MONO, fontSize: 11 }}
                             />
                             <CloneStatusChip status={repo.clone_status} />
-                            {schedules.get(repo.id) && <ScheduleChip schedule={schedules.get(repo.id)!} />}
+                            {schedules.get(repo.id) && (
+                                <ScheduleChip schedule={schedules.get(repo.id)!} />
+                            )}
                         </Box>
                         {repo.git_url && (
                             <Box
@@ -292,7 +297,11 @@ function ScheduleChip({ schedule }: { schedule: { preset: string; next_run_at: s
         >
             <Chip
                 size="small"
-                icon={<ScheduleRounded sx={{ fontSize: 14, color: `${ATLAS_PALETTE.success} !important` }} />}
+                icon={
+                    <ScheduleRounded
+                        sx={{ fontSize: 14, color: `${ATLAS_PALETTE.success} !important` }}
+                    />
+                }
                 label={`Auto-fetch · ${PRESET_LABEL[schedule.preset] ?? schedule.preset}`}
                 sx={{ fontSize: 11, bgcolor: 'rgba(49,171,70,.08)', color: ATLAS_PALETTE.slate }}
             />

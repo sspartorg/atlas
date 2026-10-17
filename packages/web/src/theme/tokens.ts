@@ -325,6 +325,19 @@ export const MOBILE_SHELL = {
     fabBottomOffset: 80,
 } as const;
 
+/** Off screen but still read by screen readers (the usual "sr-only" box). */
+export const VISUALLY_HIDDEN = {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    margin: '-1px',
+    padding: 0,
+    border: 0,
+    overflow: 'hidden',
+    clip: 'rect(0 0 0 0)',
+    whiteSpace: 'nowrap',
+} as const;
+
 export interface StatusPaletteEntry {
     label: string;
     /** Pale chip fill (used by `StatusChip` / `StatusPill`). */

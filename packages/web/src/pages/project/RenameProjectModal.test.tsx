@@ -22,6 +22,13 @@ describe('RenameProjectModal', () => {
         expect(screen.getByDisplayValue('Acme')).toBeInTheDocument();
     });
 
+    it('names its Close button', () => {
+        renderWithProviders(
+            <RenameProjectModal open project={makeProject({ id: 'p1', name: 'Acme' })} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    });
+
     it('renders nothing when project is null', () => {
         const { container } = renderWithProviders(
             <RenameProjectModal open project={null} displayId="" onClose={vi.fn()} />

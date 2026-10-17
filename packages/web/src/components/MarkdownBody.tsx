@@ -24,8 +24,11 @@ const isJiraAttachment = (src: string): boolean => /^\/api\/jira-attachments\/[^
 const body = { fontSize: 13.5, lineHeight: 1.7, color: ATLAS_PALETTE.slate80 } as const;
 
 const components: Components = {
+    // Real headings, one level under the card title (h2): # → h3, ## → h4,
+    // ### → h5, deeper → h6. Screen readers can jump between them.
     h1: ({ children }) => (
         <Typography
+            component="h3"
             sx={{
                 fontSize: 20,
                 fontWeight: 700,
@@ -41,6 +44,7 @@ const components: Components = {
     ),
     h2: ({ children }) => (
         <Typography
+            component="h4"
             sx={{
                 fontSize: 12,
                 fontWeight: 700,
@@ -55,10 +59,10 @@ const components: Components = {
             {children}
         </Typography>
     ),
-    h3: ({ children }) => <Heading size={14}>{children}</Heading>,
-    h4: ({ children }) => <Heading size={13.5}>{children}</Heading>,
-    h5: ({ children }) => <Heading size={13}>{children}</Heading>,
-    h6: ({ children }) => <Heading size={13}>{children}</Heading>,
+    h3: ({ children }) => <Heading level="h5" size={14}>{children}</Heading>,
+    h4: ({ children }) => <Heading level="h6" size={13.5}>{children}</Heading>,
+    h5: ({ children }) => <Heading level="h6" size={13}>{children}</Heading>,
+    h6: ({ children }) => <Heading level="h6" size={13}>{children}</Heading>,
     p: ({ children }) => <Typography sx={{ ...body, mb: 2, '&:last-of-type': { mb: 0 } }}>{children}</Typography>,
     ul: ({ children }) => <List component="ul">{children}</List>,
     ol: ({ children, start }) => (
@@ -202,9 +206,9 @@ const components: Components = {
     ),
 };
 
-function Heading({ size, children }: { size: number; children: ReactNode }) {
+function Heading({ level, size, children }: { level: 'h5' | 'h6'; size: number; children: ReactNode }) {
     return (
-        <Typography sx={{ fontSize: size, fontWeight: 600, color: ATLAS_PALETTE.slate, mt: 3, mb: 1, '&:first-of-type': { mt: 0 } }}>
+        <Typography component={level} sx={{ fontSize: size, fontWeight: 600, color: ATLAS_PALETTE.slate, mt: 3, mb: 1, '&:first-of-type': { mt: 0 } }}>
             {children}
         </Typography>
     );

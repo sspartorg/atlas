@@ -1,6 +1,7 @@
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import Typography from '@mui/material/Typography';
@@ -56,13 +57,15 @@ export function CredentialSelect({
                 Git credential
                 <Box component="span" sx={HINT_SX}>
                     {credentials.length} saved ·{' '}
-                    <Box
-                        component="a"
+                    {/* A button, not an href-less <a>: Tab reaches it and Enter follows it. */}
+                    <Link
+                        component="button"
+                        type="button"
                         onClick={onManage}
-                        sx={{ color: ATLAS_PALETTE.brandBlue, cursor: 'pointer' }}
+                        sx={{ color: ATLAS_PALETTE.brandBlue, fontSize: 'inherit', verticalAlign: 'baseline' }}
                     >
                         manage in Settings
-                    </Box>
+                    </Link>
                 </Box>
             </Typography>
             {credentials.length === 0 ? (
@@ -87,6 +90,8 @@ export function CredentialSelect({
                 <Select
                     fullWidth
                     size="small"
+                    // The label above is a Typography, not an InputLabel: name the combobox.
+                    inputProps={{ 'aria-label': 'Git credential' }}
                     value={value}
                     onChange={(e) => onChange(e.target.value as string)}
                     sx={{ ...inputSx, mb: 3 }}

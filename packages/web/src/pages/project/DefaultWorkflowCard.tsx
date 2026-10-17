@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography';
 import type { IProject } from '@atlas/shared';
 import { useUpdateProject } from '../../hooks/useProjects.js';
 import { useWorkflows } from '../../hooks/useWorkflows.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
@@ -23,7 +24,7 @@ interface Props {
  * text says so, because "default" otherwise reads as "applies everywhere".
  */
 export function DefaultWorkflowCard({ project }: Props) {
-    const { data: workflows = [] } = useWorkflows();
+    const { data: workflows = [], error: loadError, refetch, isLoading } = useWorkflows();
     const update = useUpdateProject();
     const toast = useToast();
     // Inline rather than a toast: the refusal belongs next to the control.
@@ -40,7 +41,10 @@ export function DefaultWorkflowCard({ project }: Props) {
     async function change(next: string) {
         setError(null);
         try {
-            await update.mutateAsync({ id: project.id, data: { default_workflow_id: next || null } });
+            await update.mutateAsync({
+                id: project.id,
+                data: { default_workflow_id: next || null },
+            });
             toast.show({ message: 'Default workflow saved' });
         } catch (e) {
             // api.ts always throws an Error carrying the API's message.
@@ -58,24 +62,33 @@ export function DefaultWorkflowCard({ project }: Props) {
                 still pick another, or none, on the form. Jira imports use their source&apos;s
                 workflow instead.
             </Typography>
-            <TextField
-                select
-                label="Default workflow"
-                value={value}
-                onChange={(e) => void change(e.target.value)}
-                disabled={update.isPending}
-                error={error !== null}
-                helperText={error}
-                slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
-                sx={{ minWidth: 280 }}
-            >
-                <MenuItem value="">None — Tasks wait until you pick one</MenuItem>
-                {options.map((w) => (
-                    <MenuItem key={w.id} value={w.id}>
-                        {w.name}
-                    </MenuItem>
-                ))}
-            </TextField>
+            {loadError && workflows.length === 0 ? (
+                // Showing "None" here would misstate the saved default.
+                <RetryAlert
+                    error={loadError}
+                    label="Could not load workflows"
+                    onRetry={() => void refetch()}
+                />
+            ) : (
+                <TextField
+                    select
+                    label="Default workflow"
+                    value={value}
+                    onChange={(e) => void change(e.target.value)}
+                    disabled={update.isPending || isLoading}
+                    error={error !== null}
+                    helperText={error}
+                    slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
+                    sx={{ minWidth: 280 }}
+                >
+                    <MenuItem value="">None — Tasks wait until you pick one</MenuItem>
+                    {options.map((w) => (
+                        <MenuItem key={w.id} value={w.id}>
+                            {w.name}
+                        </MenuItem>
+                    ))}
+                </TextField>
+            )}
         </Box>
     );
 }

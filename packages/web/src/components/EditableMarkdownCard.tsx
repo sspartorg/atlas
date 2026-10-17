@@ -74,6 +74,7 @@ export function EditableMarkdownCard({
                 }}
             >
                 <Typography
+                    component="h2"
                     sx={{
                         fontSize: 11,
                         fontWeight: 600,

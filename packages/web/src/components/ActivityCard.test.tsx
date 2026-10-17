@@ -358,6 +358,11 @@ describe('ConversationCard', () => {
             );
         }
 
+        it('titles the card with an h2 "Conversation"', () => {
+            renderCard();
+            expect(screen.getByRole('heading', { level: 2, name: 'Conversation' })).toBeInTheDocument();
+        });
+
         it('shows when the parked item latest step belongs to a workflow run', () => {
             renderCard();
             expect(screen.getByText(hint)).toBeInTheDocument();

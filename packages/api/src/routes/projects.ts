@@ -354,6 +354,7 @@ export async function projectsRoutes(app: FastifyInstance) {
                 issue_key_prefix: project.issue_key_prefix,
                 default_branch: body.default_branch,
                 destination,
+                clone_id: body.clone_id,
             },
             async (clone) => ({
                 repo: await projectReposService.insert({

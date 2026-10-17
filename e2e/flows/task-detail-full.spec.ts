@@ -63,8 +63,8 @@ for (const k of KINDS) {
             await card(page, 'Description').getByRole('button', { name: 'Edit', exact: true }).click();
             await card(page, 'Description').getByRole('textbox').fill('## Why\n\nBecause **voles** dig.');
             await card(page, 'Description').getByRole('button', { name: 'Save' }).click();
-            // Markdown headings render as styled text, not heading elements.
-            await expect(card(page, 'Description').getByText('Why', { exact: true })).toBeVisible();
+            // `##` is a real heading, one level under the card's h2.
+            await expect(card(page, 'Description').getByRole('heading', { level: 4, name: 'Why' })).toBeVisible();
             await expect(card(page, 'Description')).not.toContainText('##');
             await expect(page.locator('strong', { hasText: 'voles' })).toBeVisible();
 

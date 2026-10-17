@@ -36,19 +36,19 @@ export interface RunStatusPaletteEntry {
 type RunStatusPaletteKey = RunStatus | 'running' | 'failed';
 
 export const RUN_STATUS_PALETTE: Record<RunStatusPaletteKey, RunStatusPaletteEntry> = {
-    queued: { bg: '#EEF1F4', fg: '#727A87', dot: '#94A0AE' }, // stone
+    queued: { bg: '#EEF1F4', fg: '#656C78', dot: '#94A0AE' }, // stone
     in_progress: { bg: '#E5E8F4', fg: '#5960AB', dot: '#7B83D4' }, // periwinkle
     running: { bg: '#E5E8F4', fg: '#5960AB', dot: '#7B83D4' }, // alias of in_progress
-    completed: { bg: '#DDECE2', fg: '#4A7C5C', dot: '#6EA67E' }, // sage
-    error: { bg: '#F9DCD8', fg: '#A4504A', dot: '#D08580' }, // dusty rose
-    failed: { bg: '#F9DCD8', fg: '#A4504A', dot: '#D08580' }, // alias of error
-    cancelled: { bg: '#FBE5C9', fg: '#A06A30', dot: '#D4914A' }, // apricot
-    setup_failed: { bg: '#F9DCD8', fg: '#A4504A', dot: '#D08580' }, // alias of error
+    completed: { bg: '#DDECE2', fg: '#437154', dot: '#6EA67E' }, // sage
+    error: { bg: '#F9DCD8', fg: '#9B4C46', dot: '#D08580' }, // dusty rose
+    failed: { bg: '#F9DCD8', fg: '#9B4C46', dot: '#D08580' }, // alias of error
+    cancelled: { bg: '#FBE5C9', fg: '#8C5D2A', dot: '#D4914A' }, // apricot
+    setup_failed: { bg: '#F9DCD8', fg: '#9B4C46', dot: '#D08580' }, // alias of error
 };
 
 export const DEFAULT_RUN_STATUS_PALETTE_ENTRY: RunStatusPaletteEntry = {
     bg: '#EEF1F4',
-    fg: '#727A87',
+    fg: '#656C78',
     dot: '#94A0AE',
 };
 

@@ -266,25 +266,69 @@ describe('Projects page', () => {
         expect(await screen.findByText(/2 tasks · 3 sub-tasks/)).toBeInTheDocument();
     });
 
-    it('exercises the rows-per-page change (setLimit + setPage)', async () => {
+    it('page and rows come from the URL; changing them requests that page', async () => {
+        const many = Array.from({ length: 25 }, (_, i) =>
+            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
+        );
+        const asked: string[] = [];
+        server.use(
+            http.get(`${BASE}/projects/paged`, ({ request }) => {
+                const u = new URL(request.url);
+                const page = Number(u.searchParams.get('page'));
+                const limit = Number(u.searchParams.get('limit'));
+                asked.push(`${page}/${limit}`);
+                const rows = many.slice((page - 1) * limit, page * limit);
+                return HttpResponse.json({ rows, total: 25, page, limit });
+            }),
+            http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
+            ...defaultHandlers
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects?page=2&limit=10'] });
+        expect(await screen.findByText(/11–20 of 25/)).toBeInTheDocument();
+        expect(asked).toContain('2/10');
+
+        fireEvent.mouseDown(screen.getByLabelText(/Rows/i));
+        fireEvent.click(await screen.findByRole('option', { name: '20' }));
+        expect(await screen.findByText(/1–20 of 25/)).toBeInTheDocument();
+        expect(asked.at(-1)).toBe('1/20');
+    });
+
+    it('a page past the end (stale link, or a delete emptied it) moves to the last page', async () => {
         const many = Array.from({ length: 25 }, (_, i) =>
             makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
         );
         server.use(
-            http.get(`${BASE}/projects/paged`, () =>
-                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 })
-            ),
+            http.get(`${BASE}/projects/paged`, ({ request }) => {
+                const u = new URL(request.url);
+                const page = Number(u.searchParams.get('page'));
+                const limit = Number(u.searchParams.get('limit'));
+                return HttpResponse.json({
+                    rows: many.slice((page - 1) * limit, page * limit),
+                    total: 25,
+                    page,
+                    limit,
+                });
+            }),
             http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
             ...defaultHandlers
         );
-        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
-        await screen.findByText(/1–20 of 25/);
-        // Select the rows-per-page dropdown and change to 10
-        const rowsSelect = screen.getByLabelText(/Rows/i);
-        fireEvent.mouseDown(rowsSelect);
-        await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeTruthy());
-        const option10 = screen.queryByRole('option', { name: '10' });
-        if (option10) fireEvent.click(option10);
+        renderWithProviders(<Projects />, { initialEntries: ['/projects?page=9'] });
+        expect(await screen.findByText(/21–25 of 25/)).toBeInTheDocument();
+    });
+
+    it('ignores a junk page / limit in the URL', async () => {
+        const asked: string[] = [];
+        server.use(
+            http.get(`${BASE}/projects/paged`, ({ request }) => {
+                const u = new URL(request.url);
+                asked.push(`${u.searchParams.get('page')}/${u.searchParams.get('limit')}`);
+                return HttpResponse.json({ rows: [makeProject()], total: 1, page: 1, limit: 20 });
+            }),
+            ...baseHandlers()
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects?page=-3&limit=7'] });
+        await screen.findByText('Atlas');
+        expect(asked[0]).toBe('1/20');
     });
 
     it('exercises PageFab onClick (fn#26) — targets the FAB specifically', async () => {

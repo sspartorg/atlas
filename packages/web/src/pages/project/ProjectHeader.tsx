@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import type { IProject, IProjectRepo } from '@atlas/shared';
 import { Breadcrumb } from '../../components/index.js';
-import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { ATLAS_PALETTE, VISUALLY_HIDDEN } from '../../theme/tokens.js';
 import { ProjectActionsMenu } from './ProjectActionsMenu.js';
 import { PAGE_TITLE_SX } from '../../components/PageHeader.js';
 
@@ -81,12 +81,13 @@ export const ProjectHeader = memo(function ProjectHeader({
                     >
                         <Typography
                             component="h1"
-                            sx={{
+                            sx={(theme) => ({
                                 ...PAGE_TITLE_SX,
-                                // Hide on mobile — MobileAppBar already renders the project name
-                                // as the page title, so this h1 would be the third repeat.
-                                display: { xs: 'none', md: 'block' },
-                            }}
+                                // Out of sight on mobile — MobileAppBar already shows the project
+                                // name — but still the page's h1 for screen readers (display:none
+                                // left the phone page with no heading at all).
+                                [theme.breakpoints.down('md')]: VISUALLY_HIDDEN,
+                            })}
                         >
                             {project.name}
                         </Typography>
