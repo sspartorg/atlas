@@ -13,7 +13,8 @@ import { ATLAS_PALETTE, TYPOGRAPHY } from '../theme/tokens.js';
 // `green` and `brandBlue` are both #4F46E5 and `ready` was indistinguishable
 // from `cloning`.
 const CLONE_STATUS_CONFIG: Record<CloneStatus, { label: string; bg: string; color: string }> = {
-    ready: { label: 'Ready', bg: 'rgba(70,165,106,.16)', color: ATLAS_PALETTE.success },
+    // successFg, not success: #46A56A on this fill is 2.6:1, under WCAG AA's 4.5:1.
+    ready: { label: 'Ready', bg: 'rgba(70,165,106,.16)', color: ATLAS_PALETTE.successFg },
     cloning: { label: 'Cloning', bg: 'rgba(79,70,229,.12)', color: ATLAS_PALETTE.info },
     pending: { label: 'Pending', bg: ATLAS_PALETTE.slate06, color: ATLAS_PALETTE.slate60 },
     error: { label: 'Error', bg: 'rgba(179,58,48,.16)', color: ATLAS_PALETTE.error },

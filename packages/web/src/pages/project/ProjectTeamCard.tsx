@@ -43,7 +43,7 @@ export function ProjectTeamCard({ project }: { project: IProject }) {
                     }
                     label={
                         <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                            Include in team config — publishes this project's repos, guardrails, scripts, Jira
+                            Include in team config — publishes this project's repos, guard-rails, scripts, Jira
                             queries, workflows and their agents. Never its secrets.
                         </Typography>
                     }

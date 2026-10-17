@@ -26,10 +26,11 @@ import { MOBILE_SHELL } from '../theme/tokens.js';
 
 import { relativeTime } from '../utils/time.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { RetryAlert } from '../components/ApiErrorAlert.js';
 
 export function Guardrails() {
     useSetPageTitle('Guard-rails');
-    const { data, isLoading } = useGuardrails();
+    const { data, isLoading, isError, error, refetch } = useGuardrails();
     const { data: scripts = [] } = useGuardrailScripts();
     const createRule = useCreateGuardrail();
     const updateRule = useUpdateGuardrail();
@@ -87,9 +88,13 @@ export function Guardrails() {
     }
 
     async function handleSaveAll() {
-        await saveAll.mutateAsync();
-        setDirtyCount(0);
-        toast.show({ message: 'Guard-rails saved' });
+        try {
+            await saveAll.mutateAsync();
+            setDirtyCount(0);
+            toast.show({ message: 'Guard-rails saved' });
+        } catch (err) {
+            toast.show({ message: 'Could not save guard-rails', detail: (err as Error).message });
+        }
     }
 
     function handleDiscard() {
@@ -98,6 +103,14 @@ export function Guardrails() {
             message: 'Dirty marker cleared',
             detail: 'Saved edits remain — Discard only clears the session counter.',
         });
+    }
+
+    if (isError) {
+        return (
+            <Box sx={{ p: 3 }}>
+                <RetryAlert error={error} label="Could not load guard-rails" onRetry={() => void refetch()} />
+            </Box>
+        );
     }
 
     if (isLoading || !data) {
@@ -254,7 +267,7 @@ export function Guardrails() {
                 editing={editing}
                 onClose={() => setModalOpen(false)}
                 onSubmit={handleSubmit}
-                onDelete={(r) => void handleDelete(r)}
+                onDelete={handleDelete}
             />
         </Box>
     );

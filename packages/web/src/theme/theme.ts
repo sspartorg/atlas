@@ -16,6 +16,9 @@ declare module '@mui/material/styles' {
     }
 }
 
+// ATLAS_PALETTE holds CSS vars, so one ring reads in light and dark.
+const FOCUS_RING = { outline: `2px solid ${ATLAS_PALETTE.brandBlue}`, outlineOffset: 2 };
+
 export type ThemeMode = 'light' | 'dark';
 
 export function createAtlasTheme(mode: ThemeMode): Theme {
@@ -105,8 +108,18 @@ export function createAtlasTheme(mode: ThemeMode): Theme {
                     },
                     '*::-webkit-scrollbar-track': { background: 'transparent' },
                     '::selection': { background: `${raw.brandBlue}26` },
+                    // JetBrains Mono's code ligatures (contextual alternates)
+                    // redraw "!=" as "≠" and close up "//" in URLs, paths, JQL
+                    // and branch names; literal text must read as typed.
+                    body: { fontVariantLigatures: 'no-contextual' },
                     '*:focus': { outline: 'none' },
-                    '*:focus-visible': { outline: 'none' },
+                    // Keyboard focus must be visible (WCAG 2.4.7). Text fields
+                    // show their own focused border; tabindex=-1 targets
+                    // (dialog paper, tab panels) take focus programmatically.
+                    '*:focus-visible': FOCUS_RING,
+                    ':is(input, textarea, select, [contenteditable], [tabindex="-1"]):focus-visible': {
+                        outline: 'none',
+                    },
                     code: { fontFamily: '"JetBrains Mono", monospace' },
                     pre: { fontFamily: '"JetBrains Mono", monospace' },
                     '@media (max-width: 600px)': {
@@ -115,6 +128,12 @@ export function createAtlasTheme(mode: ThemeMode): Theme {
                         },
                     },
                 },
+            },
+
+            // ButtonBase resets outline itself and marks keyboard focus
+            // with .Mui-focusVisible, so the ring goes there too.
+            MuiButtonBase: {
+                styleOverrides: { root: { '&.Mui-focusVisible': FOCUS_RING } },
             },
 
             MuiButton: {
@@ -220,6 +239,8 @@ export function createAtlasTheme(mode: ThemeMode): Theme {
                         minHeight: 44,
                         color: ATLAS_PALETTE.slate60,
                         '&.Mui-selected': { color: ATLAS_PALETTE.brandBlue },
+                        // Inset: the tab scroller clips anything outside.
+                        '&.Mui-focusVisible': { outlineOffset: -2 },
                     },
                 },
             },
@@ -350,6 +371,8 @@ export function createAtlasTheme(mode: ThemeMode): Theme {
                             background: `${raw.brandBlue}14`,
                             color: ATLAS_PALETTE.brandBlue,
                         },
+                        // Inset: the menu paper clips anything outside.
+                        '&.Mui-focusVisible': { outlineOffset: -2 },
                     },
                 },
             },

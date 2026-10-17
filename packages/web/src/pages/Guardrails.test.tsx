@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { Guardrails } from './Guardrails.js';
+import { Toast } from '../components/Toast.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -59,6 +60,53 @@ describe('Guardrails page', () => {
         const btn = await screen.findByRole('button', { name: /Save Guard-rails/i });
         fireEvent.click(btn);
         await waitFor(() => expect(saved).toBe(true));
+    });
+
+    it('toasts when "Save Guard-rails" fails instead of failing silently', async () => {
+        server.use(
+            ...baseHandlers(),
+            http.post(`${BASE}/guardrails/save`, () =>
+                HttpResponse.json({ error: 'disk full' }, { status: 500 })
+            )
+        );
+        renderWithProviders(
+            <>
+                <Guardrails />
+                <Toast />
+            </>,
+            { initialEntries: ['/guardrails'] }
+        );
+        fireEvent.click(await screen.findByRole('button', { name: /Save Guard-rails/i }));
+        expect(await screen.findByText('Could not save guard-rails')).toBeInTheDocument();
+    });
+
+    it('a failed rule delete keeps the modal open with the error', async () => {
+        server.use(
+            ...baseHandlers({
+                rules: [
+                    {
+                        id: 'r-x',
+                        category: 'file_system',
+                        rule_text: 'Keep me',
+                        detail: null,
+                        severity: 'block',
+                        sort_order: 0,
+                        created_at: '2026-05-01T00:00:00.000Z',
+                        updated_at: '2026-05-01T00:00:00.000Z',
+                    },
+                ],
+            }),
+            http.delete(`${BASE}/guardrails/r-x`, () =>
+                HttpResponse.json({ error: 'locked' }, { status: 500 })
+            )
+        );
+        renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
+        fireEvent.click(await screen.findByRole('button', { name: /Keep me/ }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Delete rule' }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this rule?' });
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+        expect(await screen.findByText('locked')).toBeInTheDocument();
+        expect(await screen.findByRole('dialog', { name: 'Edit rule' })).toBeInTheDocument();
     });
 
     it('clicks "Discard" to clear the session dirty marker', async () => {
@@ -653,4 +701,16 @@ describe('Guardrails page', () => {
         }
         expect(document.body).toBeTruthy();
     }, 30000);
+});
+
+describe('load failure', () => {
+    it('says it could not load, with Retry, instead of spinning or showing the empty state', async () => {
+        server.use(http.get(`${BASE}/guardrails`, () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+        renderWithProviders(<Guardrails />, { initialEntries: ['/guardrails'] });
+        expect(await screen.findByText(/Could not load guard-rails/)).toBeInTheDocument();
+        let calls = 0;
+        server.use(http.get(/.*/, () => { calls += 1; return HttpResponse.json({ error: 'boom' }, { status: 500 }); }));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(calls).toBeGreaterThan(0));
+    });
 });

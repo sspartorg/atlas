@@ -12,7 +12,8 @@ import type { AgentSummary } from '../../api/types.js';
 interface Props {
     projectId: string;
     activeAgents: AgentSummary[];
-    guardrailsMd: string;
+    /** Titles of the project's enabled guard-rail rules. */
+    activeRuleTitles: string[];
     onEditGuardrails?: () => void;
 }
 
@@ -83,16 +84,11 @@ function HealthPanel({ projectId }: { projectId: string }) {
 export const ProjectRightRail = memo(function ProjectRightRail({
     projectId,
     activeAgents,
-    guardrailsMd,
+    activeRuleTitles,
     onEditGuardrails,
 }: Props) {
-    const headingPreview = guardrailsMd
-        .split('\n')
-        .filter((line) => /^##\s+/.test(line))
-        .map((line) => line.trim())
-        .join('  ')
-        .slice(0, 140);
-    const hasGuardrails = guardrailsMd.trim().length > 0;
+    const joined = activeRuleTitles.join(' · ');
+    const preview = joined.length > 140 ? `${joined.slice(0, 140)}…` : joined;
     const { agentIds: runningAgentIds } = useActiveRuns();
 
     return (
@@ -188,15 +184,15 @@ export const ProjectRightRail = memo(function ProjectRightRail({
                 <Typography
                     sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate80, lineHeight: 1.6, mb: 1.5 }}
                 >
-                    Single markdown file applied to every agent run inside this project.
+                    Rules every agent must respect inside this project.
                 </Typography>
-                {!hasGuardrails ? (
+                {activeRuleTitles.length === 0 ? (
                     <Typography
                         sx={{ fontSize: 12, color: ATLAS_PALETTE.slate40, fontStyle: 'italic' }}
                     >
-                        No rules set yet.
+                        No active rules.
                     </Typography>
-                ) : headingPreview ? (
+                ) : (
                     <Typography
                         sx={{
                             fontSize: 11.5,
@@ -209,13 +205,7 @@ export const ProjectRightRail = memo(function ProjectRightRail({
                             lineHeight: 1.6,
                         }}
                     >
-                        {headingPreview}…
-                    </Typography>
-                ) : (
-                    <Typography
-                        sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, fontStyle: 'italic' }}
-                    >
-                        Editor open in the Guard-rails tab.
+                        {preview}
                     </Typography>
                 )}
             </InfoPanel>

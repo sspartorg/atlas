@@ -318,7 +318,7 @@ Fields: `id, category, body, detail, severity, enabled, sort_order, created_at, 
 
 Lighter-weight per-project rules surfaced in the Project Guard-rails tab.
 
-Fields: `id, project_id, title, body_md, applies_to, icon, enabled, sort_order, created_at, updated_at`
+Fields: `id, project_id, title, body_md, icon, enabled, sort_order, created_at, updated_at`
 
 ### INotification
 **Why this entity exists**: Out-of-band signal delivery (external notification pings, in-app alerts) needs its own queue so the Owner can retry transient failures and so quiet-hours batching has somewhere to defer rows to. Modeling it as a persisted queue (vs. fire-and-forget) preserves the audit trail and lets the Notifications page show what was attempted, when, and why it failed.
@@ -443,6 +443,7 @@ Fields: `id, workflow_id, item_id, project_id, status, graph_snapshot, parent_wo
 - `graph_snapshot` is the graph frozen at start; later edits to the workflow don't affect a live run.
 - `branch` = the item's valid `worktree_branch` ?? `atlas/wf/<itemId>`, or `atlas/wf/<runId8>` for project-level runs; null when `!use_worktree`. A child run copies its parent's `branch`, `worktree_path` and `setup_done`. `worktree_path` lives only here, never on `items.worktree_path`, so the orphan reaper can't push or delete it.
 - `setup_done` flips after the first completed step so later steps skip the project setup script.
+- DB-only `repo_ids` (migration 019): the repos a project-level run (no item) works, e.g. the AI scaffold's picked repo. Empty means the project's first repo. A Task's run ignores it and reads its Task's `repo_ids`.
 - `workflow_runs_one_live_per_item` allows one `running` or `waiting_for_owner` run per item. It covers the gaps between steps and the End push, where no `agent_runs` row is live. Only `running` locks item status / assignee writes (`workflow-lock.ts`); only `running` top-level runs count against `max_parallel_runs`.
 - **Child runs (ADR 0015, migration 038):** `parent_workflow_run_id` (FK → `workflow_runs`, ON DELETE CASCADE) + `parent_node_id` mark a sub-task's run, started by the parent Task run's Sub-tasks node. At most one child is live per Task run (sub-tasks run one at a time). A child's End commits leftovers and sets the sub-task `in_review` — it never pushes; a parked child parks the parent at the Sub-tasks node; stopping either cancels the Task run and its live children. `GET /api/workflow-runs/:id` returns them as `children`.
 - Each step is an ordinary `agent_runs` row with `workflow_run_id` + `node_id` set.

@@ -167,6 +167,47 @@ describe('OverviewTabContent', () => {
         expect(screen.getByText('125.0K')).toBeInTheDocument();
     });
 
+    it('counts cache-write tokens in the AI Cost tile', async () => {
+        renderWithProviders(
+            <OverviewTabContent
+                counts={{
+                    ...emptyCounts,
+                    costSummary: { ...countsWith.costSummary!, cache_creation_tokens: 75000 },
+                }}
+                projectId="proj-1"
+                onJumpToHistory={vi.fn()}
+            />
+        );
+        // 100k + 20k + 5k + 75k cache write = 200k.
+        expect(await screen.findByText('200.0K')).toBeInTheDocument();
+    });
+
+    it('a failed runs load shows an error with Retry, not "No recent activity yet"', async () => {
+        server.use(
+            http.get(`${BASE}/run`, () =>
+                HttpResponse.json({ error: 'boom', kind: 'internal_error' }, { status: 500 })
+            )
+        );
+        renderWithProviders(
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={vi.fn()} />
+        );
+        expect(await screen.findByText(/Could not load recent activity/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+        expect(screen.queryByText('No recent activity yet')).not.toBeInTheDocument();
+    });
+
+    it('"Full history →" is a keyboard-reachable button', async () => {
+        const onJump = vi.fn();
+        renderWithProviders(
+            <OverviewTabContent counts={emptyCounts} projectId="proj-1" onJumpToHistory={onJump} />
+        );
+        const btn = await screen.findByRole('button', { name: 'Full history →' });
+        btn.focus();
+        expect(btn).toHaveFocus();
+        fireEvent.click(btn);
+        expect(onJump).toHaveBeenCalled();
+    });
+
     it('shows the waiting-info count when tasks are waiting on the Owner', async () => {
         renderWithProviders(
             <OverviewTabContent

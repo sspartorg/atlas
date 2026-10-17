@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -62,7 +62,8 @@ describe('GuardrailModal — open add mode', () => {
 
     it('shows "Add rule" heading', () => {
         renderAdd();
-        expect(screen.getByText('Add rule')).toBeInTheDocument();
+        // Heading and submit button share the label.
+        expect(screen.getAllByText('Add rule')).toHaveLength(2);
     });
 
     it('shows subtitle with merge note', () => {
@@ -225,11 +226,7 @@ describe('GuardrailModal — cancel', () => {
                 onSubmit={vi.fn()}
             />
         );
-        // The icon button has no label but can be found since it wraps CloseRounded
-        // The close icon button is among the dialog's icon buttons
-        const closeBtn = screen.getByRole('button', { name: '' });
-        // It's the only unnamed button (CloseRounded inside the header)
-        await userEvent.click(closeBtn);
+        await userEvent.click(screen.getByRole('button', { name: 'Close' }));
         expect(onClose).toHaveBeenCalled();
     });
 });
@@ -434,6 +431,41 @@ describe('GuardrailModal — form interactions', () => {
         expect(addBtn).toBeDisabled();
         await userEvent.type(ruleField, 'A');
         await waitFor(() => expect(addBtn).not.toBeDisabled());
+    });
+
+    it('delete confirm names the category by its label, not the raw key', async () => {
+        renderWithProviders(
+            <GuardrailModal
+                open
+                initialCategory="side_effects_network"
+                editing={{ ...existingRule, category: 'side_effects_network' }}
+                onClose={vi.fn()}
+                onSubmit={vi.fn()}
+                onDelete={vi.fn()}
+            />
+        );
+        await userEvent.click(screen.getByRole('button', { name: /Delete rule/i }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this rule?' });
+        expect(within(confirm).getByText('Side Effects & Network')).toBeInTheDocument();
+        expect(within(confirm).queryByText(/side effects_network/)).not.toBeInTheDocument();
+    });
+
+    it('category and severity pickers are keyboard buttons with a pressed state', async () => {
+        renderWithProviders(
+            <GuardrailModal
+                open
+                initialCategory="file_system"
+                editing={null}
+                onClose={vi.fn()}
+                onSubmit={vi.fn()}
+            />
+        );
+        const net = screen.getByRole('button', { name: /Side Effects & Network/ });
+        expect(net).toHaveAttribute('aria-pressed', 'false');
+        net.focus();
+        await userEvent.keyboard('{Enter}');
+        expect(net).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(2);
     });
 
     it('clicking a category button changes the selection', async () => {

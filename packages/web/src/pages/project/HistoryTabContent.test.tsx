@@ -44,6 +44,17 @@ describe('HistoryTabContent', () => {
         });
     });
 
+    it('a failed runs load shows an error with Retry, not the empty state', async () => {
+        server.use(
+            http.get(`${BASE}/run`, () => HttpResponse.error()),
+            http.get(`${BASE}/agents`, () => HttpResponse.json([]))
+        );
+        renderWithProviders(<HistoryTabContent projectId="p1" />);
+        expect(await screen.findByText(/Could not load agent activity/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+        expect(screen.queryByText(/No agent activity yet/i)).not.toBeInTheDocument();
+    });
+
     it('renders one row per run when runs exist (task type)', async () => {
         server.use(
             http.get(`${BASE}/run`, () => HttpResponse.json([makeRun({ issue_type: 'task' })])),

@@ -58,7 +58,7 @@ describe('TaskFiltersBar', () => {
     it('clicking DropdownChip for status opens the menu', async () => {
         renderWithProviders(<TaskFiltersBar {...defaultProps} />);
         // The Status DropdownChip has role="button" and label text "Status:"
-        const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
+        const statusChip = screen.getByText('Status:').closest('button') as HTMLElement;
         expect(statusChip).toBeDefined();
         await userEvent.click(statusChip!);
         // Menu should be open — status options appear
@@ -68,7 +68,7 @@ describe('TaskFiltersBar', () => {
     it('selecting a status option fires onStatusChange', async () => {
         const onStatusChange = vi.fn();
         renderWithProviders(<TaskFiltersBar {...defaultProps} onStatusChange={onStatusChange} />);
-        const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
+        const statusChip = screen.getByText('Status:').closest('button') as HTMLElement;
         await userEvent.click(statusChip!);
         await waitFor(() => screen.getByText('Draft'));
         // Click the Draft option
@@ -76,11 +76,11 @@ describe('TaskFiltersBar', () => {
         expect(onStatusChange).toHaveBeenCalledWith('draft');
     });
 
-    it('DropdownChip onKeyDown Enter opens menu', async () => {
+    it.each(['{Enter}', ' '])('the DropdownChip is a button that opens on %s', async (key) => {
         renderWithProviders(<TaskFiltersBar {...defaultProps} />);
-        const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
-        // Trigger keyboard Enter on the chip
-        fireEvent.keyDown(statusChip!, { key: 'Enter' });
+        const statusChip = screen.getByRole('button', { name: /Status:/ });
+        statusChip.focus();
+        await userEvent.keyboard(key);
         await waitFor(() => expect(screen.getByText('Draft')).toBeInTheDocument());
     });
 
@@ -108,17 +108,15 @@ describe('TaskFiltersBar', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('shows "any" label in status chip when statusFilter is null', () => {
+    it('shows "Any" label in status chip when statusFilter is null', () => {
         renderWithProviders(<TaskFiltersBar {...defaultProps} statusFilter={null} />);
-        // STATUS_OPTIONS[0] = { value: null, label: 'any' }
-        // DropdownChip shows current label = 'any'
-        const statusSection = screen.getByText('Status:').closest('[role="button"]');
-        expect(statusSection?.textContent).toContain('any');
+        const statusSection = screen.getByText('Status:').closest('button');
+        expect(statusSection?.textContent).toContain('Any');
     });
 
     it('shows matching status label when statusFilter is set', () => {
         renderWithProviders(<TaskFiltersBar {...defaultProps} statusFilter="draft" />);
-        const statusSection = screen.getByText('Status:').closest('[role="button"]');
+        const statusSection = screen.getByText('Status:').closest('button');
         expect(statusSection?.textContent).toContain('Draft');
     });
 
@@ -131,7 +129,7 @@ describe('TaskFiltersBar', () => {
                 onStatusChange={onStatusChange}
             />
         );
-        const statusChip = screen.getByText('Status:').closest('[role="button"]') as HTMLElement;
+        const statusChip = screen.getByText('Status:').closest('button') as HTMLElement;
         await userEvent.click(statusChip!);
         // Menu opens — wait for the 'In Progress' option to appear (unambiguous in menu)
         await waitFor(() => expect(screen.getByText('In Progress')).toBeInTheDocument());

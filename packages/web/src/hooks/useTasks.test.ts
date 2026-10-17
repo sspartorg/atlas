@@ -10,7 +10,6 @@ import {
     useCreateTask,
     useDeleteTask,
     useTaskFull,
-    useTaskStats,
     useTasks,
     useTransitionTask,
     useUpdateTask,
@@ -37,19 +36,6 @@ describe('useTasks', () => {
         server.use(handlers.listTasks([makeTaskListItem({ id: 'E2' })]));
         const { result } = renderHook(() => useTasks('p1', true), { wrapper: makeWrapper() });
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    });
-});
-
-describe('useTaskStats', () => {
-    it('returns the stats payload', async () => {
-        server.use(
-            http.get('http://localhost:3000/api/tasks/stats', () =>
-                ok({ total: 5, awaiting_pickup: 2 }),
-            ),
-        );
-        const { result } = renderHook(() => useTaskStats(), { wrapper: makeWrapper() });
-        await waitFor(() => expect(result.current.isSuccess).toBe(true));
-        expect(result.current.data?.total).toBe(5);
     });
 });
 
@@ -155,4 +141,63 @@ describe('useTransitionTask + useAssignTask', () => {
         expect(r.assignee_agent_id).toBe('agent-coder');
     });
 
+    it('every failed Task mutation toasts the API reason', async () => {
+        const lock = { error: 'A workflow run is working on this item and owns its status and assignee. Stop the run to change them by hand.' };
+        server.use(
+            http.patch('http://localhost:3000/api/tasks/E1/status', () => HttpResponse.json(lock, { status: 409 })),
+            http.patch('http://localhost:3000/api/tasks/E1/assign', () => HttpResponse.json(lock, { status: 409 })),
+            http.patch('http://localhost:3000/api/tasks/E1', () => HttpResponse.json({ error: 'Title too long' }, { status: 400 })),
+        );
+        const { result } = renderHook(
+            () => ({ transition: useTransitionTask(), assign: useAssignTask(), update: useUpdateTask(), toast: useToast() }),
+            { wrapper: makeWrapper() },
+        );
+        result.current.transition.mutate({ id: 'E1', status: 'ready' });
+        result.current.assign.mutate({ id: 'E1', agentId: null });
+        result.current.update.mutate({ id: 'E1', data: { title: 'x' } });
+        await waitFor(() => expect(result.current.toast.toasts).toHaveLength(3));
+        expect(result.current.toast.toasts.map((t) => [t.message, t.detail])).toEqual(
+            expect.arrayContaining([
+                ["Couldn't move E1", lock.error],
+                ["Couldn't reassign E1", lock.error],
+                ["Couldn't save E1", 'Title too long'],
+            ]),
+        );
+    });
+
+    it('a closure refusal shows one toast, not a second generic one', async () => {
+        server.use(
+            http.patch('http://localhost:3000/api/tasks/E1/status', () =>
+                HttpResponse.json(
+                    { error: 'Cannot close E1', kind: 'conflict', details: { parent_id: 'E1', open_children: [{ id: 'E2', status: 'in_progress' }] } },
+                    { status: 422 },
+                ),
+            ),
+        );
+        const { result } = renderHook(() => ({ transition: useTransitionTask(), toast: useToast() }), { wrapper: makeWrapper() });
+        result.current.transition.mutate({ id: 'E1', status: 'done' });
+        await waitFor(() => expect(result.current.toast.toasts).toHaveLength(1));
+        expect(result.current.toast.toasts[0]?.message).toBe('Cannot close — open children');
+    });
 });
+
+describe('useDeleteTask', () => {
+    it('does not refetch the deleted Task while its page is still mounted', async () => {
+        let fullGets = 0;
+        server.use(
+            http.get('http://localhost:3000/api/tasks/ATL-9/full', () => {
+                fullGets += 1;
+                return HttpResponse.json({ task: { id: 'ATL-9' } });
+            }),
+            http.delete('http://localhost:3000/api/tasks/ATL-9', () => new HttpResponse(null, { status: 204 })),
+        );
+        const { result } = renderHook(() => ({ full: useTaskFull('ATL-9'), del: useDeleteTask() }), {
+            wrapper: makeWrapper(),
+        });
+        await waitFor(() => expect(result.current.full.isSuccess).toBe(true));
+        await result.current.del.mutateAsync('ATL-9');
+        await new Promise((r) => setTimeout(r, 50));
+        expect(fullGets).toBe(1);
+    });
+});
+

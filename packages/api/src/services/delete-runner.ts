@@ -5,23 +5,42 @@ import { projectsService } from './projects.js';
 import { projectReposService } from './project-repos.js';
 import { settingsService } from './settings.js';
 import { broadcastSSE } from '../routes/events.js';
+import { notificationsService } from './notifications.js';
 
 export interface StartDeleteInput {
     projectId: string;
     mode: 'unregister' | 'purge';
+    /** Chosen by the client so it can subscribe before POSTing (see DeleteProjectSchema). */
+    deleteId?: string;
 }
 
-// Mirrors the SSE event shape the former delete-project.ps1 produced so the
-// UI doesn't need to change. We emit each "step" as a separate `delete_output`
-// line, finishing with `delete_completed` on success or `delete_error` on
-// failure.
+// Each step is a `delete_output` line, finishing with `delete_completed` on
+// success or `delete_error` on failure. Only steps that do work are emitted:
+// live runs are not stopped here (the CASCADE drops their rows) and there is
+// no credential lease to revoke.
 function emit(deleteId: string, line: string): void {
     broadcastSSE({ type: 'delete_output', deleteId, output: line });
 }
 
 export function startDelete(input: StartDeleteInput): string {
-    const deleteId = randomUUID();
+    const deleteId = input.deleteId ?? randomUUID();
     broadcastSSE({ type: 'delete_status', deleteId, status: 'pending' });
+
+    // The modal shows the error live; the notification is for an Owner who
+    // closed it. A failed delete leaves the project in place, so it links there.
+    const fail = async (detail: string): Promise<void> => {
+        broadcastSSE({ type: 'delete_error', deleteId, status: 'error', errorDetail: detail });
+        try {
+            const project = await projectsService.get(input.projectId);
+            await notificationsService.create({
+                event_type: 'project_delete_failed',
+                project_id: input.projectId,
+                message: `Deleting project "${project?.name ?? input.projectId}" failed: ${detail.split('\n')[0]}`,
+            });
+        } catch {
+            // The modal already has the error; a lost notification must not mask it.
+        }
+    };
 
     void (async () => {
         const modeFlag = input.mode === 'purge' ? ' -PurgeContent' : '';
@@ -29,10 +48,6 @@ export function startDelete(input: StartDeleteInput): string {
             deleteId,
             `[delete-runner] ProjectId=${input.projectId}${modeFlag}`,
         );
-
-        emit(deleteId, 'Stopping attached agents... ok');
-        emit(deleteId, 'Revoking credential lease... ok');
-        emit(deleteId, 'Unregistering project from Atlas registry... ok');
 
         if (input.mode === 'purge') {
             // Refuse to `rm -rf` any path that isn't strictly inside the
@@ -74,12 +89,7 @@ export function startDelete(input: StartDeleteInput): string {
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     emit(deleteId, `Removing repo folder failed: ${msg}`);
-                    broadcastSSE({
-                        type: 'delete_error',
-                        deleteId,
-                        status: 'error',
-                        errorDetail: msg,
-                    });
+                    await fail(msg);
                     return;
                 }
             }
@@ -87,10 +97,10 @@ export function startDelete(input: StartDeleteInput): string {
             emit(deleteId, 'Workspace folder kept on disk.');
         }
 
-        emit(deleteId, 'Finalize ... ok');
-
+        emit(deleteId, 'Unregistering project from Atlas...');
         try {
             await projectsService.delete(input.projectId);
+            emit(deleteId, 'Unregistering project from Atlas... ok');
             broadcastSSE({
                 type: 'delete_completed',
                 deleteId,
@@ -98,12 +108,7 @@ export function startDelete(input: StartDeleteInput): string {
                 mode: input.mode,
             });
         } catch (err) {
-            broadcastSSE({
-                type: 'delete_error',
-                deleteId,
-                status: 'error',
-                errorDetail: err instanceof Error ? err.message : String(err),
-            });
+            await fail(err instanceof Error ? err.message : String(err));
         }
     })();
 

@@ -148,9 +148,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     const res = await fetch(`${BASE}${path}`, { ...init, headers });
     if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as Partial<ApiErrorBody>;
+        // `?? {}`: a JSON `null` body must still surface as an AtlasApiError with its status.
+        const body = ((await res.json().catch(() => null)) ?? {}) as Partial<ApiErrorBody> & {
+            detail?: unknown;
+        };
+        // Some routes put the actionable half in a plain-text `detail`
+        // ("Attach a credential before…"); keep it in the message every caller shows.
+        const head = body.error ?? `HTTP ${res.status}`;
         throw new AtlasApiError(
-            body.error ?? `HTTP ${res.status}`,
+            typeof body.detail === 'string' && body.detail ? `${head} — ${body.detail}` : head,
             body.kind ?? 'internal_error',
             res.status,
             body.details
@@ -330,6 +336,8 @@ export const api = {
         test: (data: { site_url?: string; email?: string; api_token?: string } = {}) =>
             post<IJiraTestResult>('/integrations/jira/test', data),
         sync: () => post<IJiraSyncResult>('/integrations/jira/sync', {}),
+        syncProject: (projectId: string) =>
+            post<IJiraSyncResult>(`/projects/${projectId}/jira-sync`, {}),
         revealToken: () => post<{ value: string }>('/integrations/jira/reveal-token', {}),
         disconnect: () => request<IJiraConfig>('/integrations/jira', { method: 'DELETE' }),
     },
@@ -564,17 +572,25 @@ export const api = {
                 reason?: 'in_use' | 'invalid';
                 conflict?: string | null;
             }>(`/projects/prefix-available?prefix=${encodeURIComponent(prefix)}`),
-        deleteJob: (id: string, data: { mode: 'unregister' | 'purge'; confirm_name?: string }) =>
+        deleteJob: (
+            id: string,
+            data: { mode: 'unregister' | 'purge'; confirm_name?: string; delete_id?: string }
+        ) =>
             post<{ delete_id: string }>(`/projects/${id}/delete`, data),
         // ADR 0018 — every git action names the repo it acts on.
-        reclone: (id: string, repoId: string) =>
-            post<{ reclone_id: string }>(`/projects/${id}/repos/${repoId}/reclone`, {}),
+        reclone: (id: string, repoId: string, recloneId: string) =>
+            post<{ reclone_id: string }>(`/projects/${id}/repos/${repoId}/reclone`, {
+                reclone_id: recloneId,
+            }),
         status: (id: string, repoId: string) =>
             get<{ local_head: string; remote_head: string; behind: number; uncommitted: number }>(
                 `/projects/${id}/repos/${repoId}/status`
             ),
         reveal: (id: string, repoId: string) =>
-            post<{ ok: true; path: string }>(`/projects/${id}/repos/${repoId}/reveal`, {}),
+            post<{ ok: true; path: string; opened_in: string }>(
+                `/projects/${id}/repos/${repoId}/reveal`,
+                {}
+            ),
         folderOrigin: (path: string) =>
             get<{ origin: string | null }>(
                 `/projects/folder-origin?path=${encodeURIComponent(path)}`
@@ -642,7 +658,7 @@ export const api = {
             get<{ key: string; value: string }>(
                 `/projects/${id}/env/${encodeURIComponent(key)}/value`
             ),
-        saveEnv: (id: string, vars: Array<{ key: string; value: string }>) =>
+        saveEnv: (id: string, vars: Array<{ key: string; value: string } | { key: string; keep: string }>) =>
             put<{
                 vars: Array<{ key: string; updated_at?: string; has_value?: true; value?: string }>;
             }>(`/projects/${id}/env`, { vars }),

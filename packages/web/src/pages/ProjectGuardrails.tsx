@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -15,16 +15,41 @@ import {
     useProjectGuardrails,
     useProjectGuardrailScripts,
     useCreateProjectGuardrail,
+    useUpdateProjectGuardrail,
+    useDeleteProjectGuardrail,
     useToggleProjectGuardrail,
 } from '../hooks/useProjectGuardrails.js';
+import { ConfirmActionModal } from '../components/ConfirmActionModal.js';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { ProjectGuardrailScriptsTab } from './projectGuardrails/ProjectGuardrailScriptsTab.js';
+import { RetryAlert } from '../components/ApiErrorAlert.js';
 import { iconOr } from '../theme/icons.js';
 
-function RuleCard({ rule, projectId }: { rule: IProjectGuardrail; projectId: string }) {
+function RuleCard({
+    rule,
+    projectId,
+    onEdit,
+}: {
+    rule: IProjectGuardrail;
+    projectId: string;
+    onEdit: (rule: IProjectGuardrail) => void;
+}) {
     const toggle = useToggleProjectGuardrail(projectId);
+    const remove = useDeleteProjectGuardrail(projectId);
+    const toast = useToast();
+    const [confirmOpen, setConfirmOpen] = useState(false);
     const enabled = rule.enabled === 1;
+
+    async function confirmDelete() {
+        try {
+            await remove.mutateAsync(rule.id);
+            toast.show({ message: `Deleted guard-rail — ${rule.title}` });
+            setConfirmOpen(false);
+        } catch (err) {
+            toast.show({ message: 'Could not delete guard-rail', detail: (err as Error).message });
+        }
+    }
     return (
         <Box
             sx={{
@@ -94,46 +119,95 @@ function RuleCard({ rule, projectId }: { rule: IProjectGuardrail; projectId: str
                 <Switch
                     checked={enabled}
                     onChange={(e) =>
-                        toggle.mutate({ id: rule.id, enabled: e.target.checked ? 1 : 0 })
+                        toggle.mutate(
+                            { id: rule.id, enabled: e.target.checked ? 1 : 0 },
+                            {
+                                onError: (err) =>
+                                    toast.show({
+                                        message: 'Could not update guard-rail',
+                                        detail: err.message,
+                                    }),
+                            }
+                        )
                     }
                     size="small"
+                    slotProps={{ input: { 'aria-label': `${enabled ? 'Pause' : 'Resume'} ${rule.title}` } }}
                 />
+                <IconButton size="small" aria-label={`Edit ${rule.title}`} onClick={() => onEdit(rule)}>
+                    <Box
+                        component="span"
+                        className="material-symbols-rounded"
+                        aria-hidden="true"
+                        sx={{ fontSize: 18, color: ATLAS_PALETTE.slate60 }}
+                    >
+                        edit
+                    </Box>
+                </IconButton>
+                <IconButton
+                    size="small"
+                    aria-label={`Delete ${rule.title}`}
+                    onClick={() => setConfirmOpen(true)}
+                >
+                    <Box
+                        component="span"
+                        className="material-symbols-rounded"
+                        aria-hidden="true"
+                        sx={{ fontSize: 18, color: ATLAS_PALETTE.error }}
+                    >
+                        delete
+                    </Box>
+                </IconButton>
             </Box>
+            <ConfirmActionModal
+                open={confirmOpen}
+                title="Delete this rule?"
+                body={`Removes "${rule.title}" from this project. Agents won't see it on their next run.`}
+                confirmLabel="Delete"
+                tone="destructive"
+                busy={remove.isPending}
+                onConfirm={() => void confirmDelete()}
+                onCancel={() => setConfirmOpen(false)}
+            />
         </Box>
     );
 }
 
-function AddRuleDialog({
+function RuleDialog({
     open,
     onClose,
     projectId,
+    editing,
 }: {
     open: boolean;
     onClose: () => void;
     projectId: string;
+    editing: IProjectGuardrail | null;
 }) {
     const create = useCreateProjectGuardrail(projectId);
+    const update = useUpdateProjectGuardrail(projectId);
     const toast = useToast();
     const [title, setTitle] = useState('');
     const [body, setBody] = useState('');
-    const [appliesTo, setAppliesTo] = useState('');
 
-    function reset() {
-        setTitle('');
-        setBody('');
-        setAppliesTo('');
-    }
+    // Seed on every open so a cancelled draft or the last edited rule doesn't
+    // leak into the next open.
+    useEffect(() => {
+        if (!open) return;
+        setTitle(editing?.title ?? '');
+        setBody(editing?.body_md ?? '');
+    }, [open, editing]);
 
     async function submit() {
         if (!title.trim() || !body.trim()) return;
+        const data = { title: title.trim(), body_md: body.trim() };
         try {
-            await create.mutateAsync({
-                title: title.trim(),
-                body_md: body.trim(),
-                applies_to: appliesTo.trim(),
-            });
-            toast.show({ message: `Added guard-rail — ${title.trim()}` });
-            reset();
+            if (editing) {
+                await update.mutateAsync({ id: editing.id, data });
+                toast.show({ message: `Updated guard-rail — ${data.title}` });
+            } else {
+                await create.mutateAsync(data);
+                toast.show({ message: `Added guard-rail — ${data.title}` });
+            }
             onClose();
         } catch (err) {
             toast.show({ message: (err as Error).message });
@@ -146,6 +220,7 @@ function AddRuleDialog({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
+            aria-labelledby="project-rule-dialog-title"
             slotProps={{ paper: { sx: { borderRadius: '12px' } } }}
         >
             <Box sx={{ p: 4 }}>
@@ -157,7 +232,9 @@ function AddRuleDialog({
                         mb: 3,
                     }}
                 >
-                    <Typography sx={{ fontSize: 16, fontWeight: 600 }}>Add guard-rail</Typography>
+                    <Typography id="project-rule-dialog-title" sx={{ fontSize: 16, fontWeight: 600 }}>
+                        {editing ? 'Edit guard-rail' : 'Add guard-rail'}
+                    </Typography>
                     <IconButton onClick={onClose} size="small" aria-label="Close">
                         <Box
                             component="span"
@@ -184,12 +261,6 @@ function AddRuleDialog({
                         multiline
                         minRows={3}
                     />
-                    <TextField
-                        label="Applies to (optional)"
-                        value={appliesTo}
-                        onChange={(e) => setAppliesTo(e.target.value)}
-                        fullWidth
-                    />
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
                     <Button variant="outlined" onClick={onClose} sx={{ textTransform: 'none' }}>
@@ -198,10 +269,12 @@ function AddRuleDialog({
                     <Button
                         variant="contained"
                         onClick={() => void submit()}
-                        disabled={!title.trim() || !body.trim() || create.isPending}
+                        disabled={
+                            !title.trim() || !body.trim() || create.isPending || update.isPending
+                        }
                         sx={{ textTransform: 'none' }}
                     >
-                        Add rule
+                        {editing ? 'Save changes' : 'Add rule'}
                     </Button>
                 </Box>
             </Box>
@@ -216,9 +289,14 @@ export function ProjectGuardrailsBody({
     projectId: string;
     projectName?: string | undefined;
 }) {
-    const { data: rules = [], isLoading } = useProjectGuardrails(projectId);
+    const { data: rules = [], isLoading, isError, error, refetch } = useProjectGuardrails(projectId);
     const { data: scripts = [] } = useProjectGuardrailScripts(projectId);
     const [addOpen, setAddOpen] = useState(false);
+    const [editing, setEditing] = useState<IProjectGuardrail | null>(null);
+    const openAdd = () => {
+        setEditing(null);
+        setAddOpen(true);
+    };
     const [tab, setTab] = useState<'rules' | 'scripts'>('rules');
     const active = rules.filter((r) => r.enabled === 1);
 
@@ -268,7 +346,7 @@ export function ProjectGuardrailsBody({
                         </Typography>
                         <Button
                             variant="contained"
-                            onClick={() => setAddOpen(true)}
+                            onClick={openAdd}
                             startIcon={
                                 <Box
                                     component="span"
@@ -416,11 +494,13 @@ export function ProjectGuardrailsBody({
                             >
                                 Enabled
                             </Typography>
-                            <Switch checked readOnly size="small" />
+                            <Switch checked readOnly size="small" slotProps={{ input: { 'aria-label': 'Guard-rails enabled' } }} />
                         </Box>
                     </Box>
 
-                    {isLoading ? (
+                    {isError ? (
+                        <RetryAlert error={error} label="Could not load this project's rules" onRetry={() => void refetch()} />
+                    ) : isLoading ? (
                         <Box
                             sx={{
                                 display: 'grid',
@@ -476,7 +556,7 @@ export function ProjectGuardrailsBody({
                                 Workspace rules still apply. Add a rule to enforce something
                                 project-specific.
                             </Typography>
-                            <Button variant="contained" onClick={() => setAddOpen(true)}>
+                            <Button variant="contained" onClick={openAdd}>
                                 Add first rule
                             </Button>
                         </Box>
@@ -489,14 +569,27 @@ export function ProjectGuardrailsBody({
                             }}
                         >
                             {rules.map((r) => (
-                                <RuleCard key={r.id} rule={r} projectId={projectId} />
+                                <RuleCard
+                                    key={r.id}
+                                    rule={r}
+                                    projectId={projectId}
+                                    onEdit={(rule) => {
+                                        setEditing(rule);
+                                        setAddOpen(true);
+                                    }}
+                                />
                             ))}
                         </Box>
                     )}
                 </>
             )}
 
-            <AddRuleDialog open={addOpen} onClose={() => setAddOpen(false)} projectId={projectId} />
+            <RuleDialog
+                open={addOpen}
+                onClose={() => setAddOpen(false)}
+                projectId={projectId}
+                editing={editing}
+            />
         </Box>
     );
 }

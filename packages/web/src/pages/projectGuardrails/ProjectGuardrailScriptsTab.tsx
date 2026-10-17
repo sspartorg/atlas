@@ -1,5 +1,6 @@
 import { useState, memo } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
@@ -15,9 +16,10 @@ import {
 import { useGuardrailScripts } from '../../hooks/useGuardrails.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import { ScriptModal, type ScriptModalValues } from '../../components/ScriptModal.js';
 
-// Phase 1.5b â€” Per-project Scripts tab. Same shape as the Atlas-level
+// Phase 1.5b — Per-project Scripts tab. Same shape as the Atlas-level
 // tab but scoped to a single project. The orchestrator merges
 // project-level scripts with org-wide scripts at regen time
 // (project entries override atlas entries with the same id).
@@ -30,12 +32,14 @@ const ScriptCard = memo(function ScriptCard({
     onClick: () => void;
 }) {
     return (
-        <Box
-            role="button"
+        <ButtonBase
             onClick={onClick}
             sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
+                justifyContent: 'flex-start',
+                width: '100%',
+                textAlign: 'left',
                 gap: 2,
                 p: 2.5,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
@@ -94,12 +98,12 @@ const ScriptCard = memo(function ScriptCard({
                     </Typography>
                 ) : null}
             </Box>
-        </Box>
+        </ButtonBase>
     );
 });
 
 export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string }) {
-    const { data: scripts = [], isLoading } = useProjectGuardrailScripts(projectId);
+    const { data: scripts = [], isLoading, isError, error, refetch } = useProjectGuardrailScripts(projectId);
     const create = useCreateProjectGuardrailScript(projectId);
     const update = useUpdateProjectGuardrailScript(projectId);
     const del = useDeleteProjectGuardrailScript(projectId);
@@ -133,7 +137,7 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
         body_ps1: string;
     }) {
         if (editing?.id) {
-            // Slug is immutable on update â€” strip `id` from the patch body.
+            // Slug is immutable on update — strip `id` from the patch body.
             const { id: _unused, ...patch } = data;
             void _unused;
             await update.mutateAsync({ id: editing.id, patch });
@@ -175,9 +179,11 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
                     Add script
                 </Button>
             </Stack>
-            {isLoading ? (
+            {isError ? (
+                <RetryAlert error={error} label="Could not load scripts" onRetry={() => void refetch()} />
+            ) : isLoading ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Loadingâ€¦
+                    Loading…
                 </Typography>
             ) : scripts.length === 0 ? (
                 <Box
@@ -194,7 +200,7 @@ export function ProjectGuardrailScriptsTab({ projectId }: { projectId: string })
                     </Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
                         Add a shell script scoped to this project. Org-wide scripts from Atlas
-                        Guardrails apply automatically.
+                        Guard-rails apply automatically.
                     </Typography>
                     <Button
                         variant="outlined"

@@ -34,24 +34,24 @@ export async function projectGuardrailsRoutes(app: FastifyInstance) {
     });
 
     app.patch('/api/projects/:projectId/guardrails/:id', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { projectId: string; id: string };
-        if (!(await projectGuardrailsService.get(id)))
+        const { projectId, id } = req.params as { projectId: string; id: string };
+        if ((await projectGuardrailsService.get(id))?.project_id !== projectId)
             return reply.status(404).send({ error: 'Rule not found' });
         const body = UpdateProjectGuardrailSchema.parse(req.body);
         return reply.send(await projectGuardrailsService.update(id, body));
     });
 
     app.patch('/api/projects/:projectId/guardrails/:id/toggle', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { projectId: string; id: string };
-        if (!(await projectGuardrailsService.get(id)))
+        const { projectId, id } = req.params as { projectId: string; id: string };
+        if ((await projectGuardrailsService.get(id))?.project_id !== projectId)
             return reply.status(404).send({ error: 'Rule not found' });
         const { enabled } = ToggleProjectGuardrailSchema.parse(req.body);
         return reply.send(await projectGuardrailsService.toggle(id, enabled));
     });
 
     app.delete('/api/projects/:projectId/guardrails/:id', { preHandler: requireMcpToken }, async (req, reply) => {
-        const { id } = req.params as { projectId: string; id: string };
-        if (!(await projectGuardrailsService.get(id)))
+        const { projectId, id } = req.params as { projectId: string; id: string };
+        if ((await projectGuardrailsService.get(id))?.project_id !== projectId)
             return reply.status(404).send({ error: 'Rule not found' });
         await projectGuardrailsService.delete(id);
         return reply.status(204).send();

@@ -1418,6 +1418,22 @@ describe('CommentRow — strong interaction tests', () => {
         await screen.findByRole('button', { name: /Preview/i });
     });
 
+    it('owner comment edit mode also previews its markdown, table included', async () => {
+        const comment = makeComment({ id: 56, author: 'owner', agent_id: null, body: '| a | b |\n|---|---|\n| 1 | 2 |' });
+        const activity: IActivityItem[] = [{ kind: 'comment', data: comment }];
+        server.use(
+            ...defaultHandlers,
+            http.get(`${BASE}/issues/task/S1/activity`, () => HttpResponse.json(activity))
+        );
+        const { container } = renderWithProviders(<ConversationCard issueType="task" issueId="S1" />);
+        await screen.findByRole('button', { name: /Edit comment/i });
+        expect(container.querySelector('table')).not.toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /Edit comment/i }));
+        fireEvent.click(await screen.findByRole('button', { name: /Preview/i }));
+        await screen.findByRole('button', { name: /Back to editor/i });
+        expect(container.querySelectorAll('table')).toHaveLength(1);
+    });
+
     it('ConversationCard: submitting empty draft returns early (line 696 !body guard)', async () => {
         server.use(
             ...defaultHandlers,

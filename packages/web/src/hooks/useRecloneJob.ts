@@ -6,6 +6,8 @@ export interface RecloneState {
     lines: string[];
     errorDetail: string | null;
     stashPath: string | null;
+    /** Commits the fast-forward brought in; null when the server couldn't count them. */
+    commitsPulled: number | null;
 }
 
 const INITIAL: RecloneState = {
@@ -13,6 +15,7 @@ const INITIAL: RecloneState = {
     lines: [],
     errorDetail: null,
     stashPath: null,
+    commitsPulled: null,
 };
 
 export function useRecloneJob(recloneId: string | null): RecloneState {
@@ -31,12 +34,17 @@ export function useRecloneJob(recloneId: string | null): RecloneState {
                 const line = payload.output;
                 setState((s) => ({ ...s, lines: [...s.lines, line] }));
             } else if (payload.type === 'reclone_completed') {
-                setState((s) => ({ ...s, status: 'ready', stashPath: payload.stashPath ?? null }));
+                setState((s) => ({
+                    ...s,
+                    status: 'ready',
+                    stashPath: payload.stashPath ?? null,
+                    commitsPulled: payload.commitsPulled ?? null,
+                }));
             } else if (payload.type === 'reclone_error') {
                 setState((s) => ({
                     ...s,
                     status: 'error',
-                    errorDetail: payload.errorDetail ?? 'Re-clone failed',
+                    errorDetail: payload.errorDetail ?? 'Pull failed',
                 }));
             }
         });

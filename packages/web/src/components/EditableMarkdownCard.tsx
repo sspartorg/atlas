@@ -45,7 +45,12 @@ export function EditableMarkdownCard({
         setEditing(false);
     };
     const save = async () => {
-        await onSave(draft);
+        try {
+            await onSave(draft);
+        } catch {
+            // The caller's mutation toasts the reason; keep the draft open.
+            return;
+        }
         setEditing(false);
     };
 

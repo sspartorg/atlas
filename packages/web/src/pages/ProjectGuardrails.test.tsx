@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
@@ -8,6 +8,7 @@ import { defaultHandlers } from '../test-utils/mock-handlers.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeProject } from '../test-utils/factories.js';
 import { ProjectGuardrails, ProjectGuardrailsBody } from './ProjectGuardrails.js';
+import { Toast } from '../components/Toast.js';
 
 const BASE = 'http://localhost:3000/api';
 
@@ -16,7 +17,6 @@ const rule1 = {
     project_id: 'p1',
     title: 'No direct DB writes',
     body_md: 'Never write SQL directly.',
-    applies_to: 'all',
     icon: 'shield',
     enabled: 1,
     sort_order: 1,
@@ -55,6 +55,12 @@ describe('ProjectGuardrailsBody — empty state', () => {
         await waitFor(() =>
             expect(screen.getByText('No guard-rails yet for this project')).toBeInTheDocument()
         );
+    });
+
+    // axe "label": the read-only status switch had no accessible name.
+    it('names the always-on guard-rails switch', async () => {
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        expect(await screen.findByRole('switch', { name: 'Guard-rails enabled' })).toBeChecked();
     });
 
     it('shows the Add rule button', async () => {
@@ -177,16 +183,72 @@ describe('ProjectGuardrailsBody — additional branches', () => {
         expect(document.body).toBeTruthy();
     }, 30_000);
 
-    it('Add rule dialog has appliesTo field that accepts input', async () => {
+    it('Add rule dialog asks only for a title and the rule (no dead Applies-to field)', async () => {
         renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
-        await waitFor(() =>
-            expect(screen.getAllByRole('button', { name: /Add rule/i }).length).toBeGreaterThan(0)
+        await userEvent.click((await screen.findAllByRole('button', { name: /Add rule/i }))[0]!);
+        const dialog = await screen.findByRole('dialog', { name: 'Add guard-rail' });
+        expect(within(dialog).getByLabelText('Title')).toBeInTheDocument();
+        expect(within(dialog).queryByLabelText(/Applies to/i)).toBeNull();
+    });
+
+    it('edits a rule: dialog is seeded and PATCHes the rule', async () => {
+        let patched: unknown = null;
+        server.use(
+            http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])),
+            http.patch(`${BASE}/projects/p1/guardrails/r1`, async ({ request }) => {
+                patched = await request.json();
+                return HttpResponse.json({ ...rule1, title: 'Edited' });
+            })
         );
-        const addBtn = screen.getAllByRole('button', { name: /Add rule/i })[0]!;
-        await userEvent.click(addBtn);
-        const appliesTo = screen.getByLabelText(/Applies to/i);
-        await userEvent.type(appliesTo, 'docs');
-        expect((appliesTo as HTMLInputElement).value).toBe('docs');
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Edit No direct DB writes' })
+        );
+        const dialog = await screen.findByRole('dialog', { name: 'Edit guard-rail' });
+        const title = within(dialog).getByLabelText('Title');
+        expect(title).toHaveValue('No direct DB writes');
+        await userEvent.clear(title);
+        await userEvent.type(title, 'Edited');
+        await userEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+        await waitFor(() =>
+            expect(patched).toEqual({ title: 'Edited', body_md: 'Never write SQL directly.' })
+        );
+    });
+
+    it('deletes a rule only after the confirm', async () => {
+        let deleted = false;
+        server.use(
+            http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])),
+            http.delete(`${BASE}/projects/p1/guardrails/r1`, () => {
+                deleted = true;
+                return new HttpResponse(null, { status: 204 });
+            })
+        );
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Delete No direct DB writes' })
+        );
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this rule?' });
+        expect(deleted).toBe(false);
+        await userEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+        await waitFor(() => expect(deleted).toBe(true));
+    });
+
+    it('toasts when pausing a rule fails', async () => {
+        server.use(
+            http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json([rule1])),
+            http.patch(`${BASE}/projects/p1/guardrails/r1/toggle`, () =>
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            )
+        );
+        renderWithProviders(
+            <>
+                <ProjectGuardrailsBody projectId="p1" projectName="Acme" />
+                <Toast />
+            </>
+        );
+        await userEvent.click(await screen.findByLabelText('Pause No direct DB writes'));
+        expect(await screen.findByText('Could not update guard-rail')).toBeInTheDocument();
     });
 
     it('switches back to Rules tab from Scripts tab (setTab branch)', async () => {
@@ -239,5 +301,17 @@ describe('ProjectGuardrailsBody — additional branches', () => {
         );
         // Skeleton renders — container should have child elements
         expect(container.firstChild).toBeTruthy();
+    });
+});
+
+describe('load failure', () => {
+    it('says it could not load, with Retry, instead of spinning or showing the empty state', async () => {
+        server.use(http.get(`${BASE}/projects/p1/guardrails`, () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+        renderWithProviders(<ProjectGuardrailsBody projectId="p1" projectName="Acme" />);
+        expect(await screen.findByText(/Could not load this project's rules/)).toBeInTheDocument();
+        let calls = 0;
+        server.use(http.get(/.*/, () => { calls += 1; return HttpResponse.json({ error: 'boom' }, { status: 500 }); }));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(calls).toBeGreaterThan(0));
     });
 });

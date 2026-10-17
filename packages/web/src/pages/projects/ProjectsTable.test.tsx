@@ -45,8 +45,23 @@ describe('ProjectsTable', () => {
     it('fires onRowClick when a row is clicked', () => {
         const onRowClick = vi.fn();
         renderTable({ onRowClick });
-        fireEvent.click(screen.getByText('Acme'));
+        fireEvent.click(screen.getByText('ATL'));
         expect(onRowClick).toHaveBeenCalledWith('p1');
+    });
+
+    it('the project name is a real link, so a keyboard user can open the row', () => {
+        renderTable();
+        expect(screen.getByRole('link', { name: 'Acme' })).toHaveAttribute('href', '/projects/p1');
+    });
+
+    it('heads the repo-name column "Repos", not "Repo URL", and marks the sorted column', () => {
+        renderTable();
+        expect(screen.getByRole('columnheader', { name: 'Repos' })).toBeInTheDocument();
+        expect(screen.queryByText('Repo URL')).not.toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /Last Activity/ })).toHaveAttribute(
+            'aria-sort',
+            'descending'
+        );
     });
 
     it('toggles sort direction on header click (handleSort same-key branch)', () => {
@@ -86,9 +101,9 @@ describe('ProjectsTable', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
-    it('renders the first repo URL with its +N suffix when the project has several repos', () => {
-        renderTable({ rows: [{ ...sampleRow, gitPath: 'github.com/x/y +2' }] });
-        expect(screen.getByText('github.com/x/y +2')).toBeInTheDocument();
+    it('renders every repo name when the project has several repos', () => {
+        renderTable({ rows: [{ ...sampleRow, gitPath: 'api, web, docs' }] });
+        expect(screen.getByText('api, web, docs')).toBeInTheDocument();
     });
 
     it('opens the row action menu and clicks the actions (onDelete)', () => {

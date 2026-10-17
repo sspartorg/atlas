@@ -18,6 +18,16 @@ export interface ProjectEnvVarMetadata {
     has_value: true;
 }
 
+/** A row to save: a new value, or `keep` = an existing key whose stored value it keeps. */
+export type EnvSaveRow = { key: string; value: string } | { key: string; keep: string };
+
+export class UnknownEnvKeyError extends Error {
+    constructor(readonly key: string) {
+        super(`Cannot keep "${key}": no such stored secret`);
+        this.name = 'UnknownEnvKeyError';
+    }
+}
+
 export const projectEnvFileService = {
     async dbList(projectId: string): Promise<Array<{ key: string; value: string }>> {
         // Kept for INTERNAL callers (setup runner). Never expose on an
@@ -58,10 +68,13 @@ export const projectEnvFileService = {
         return row ? decrypt(row.value_encrypted) : null;
     },
 
-    async dbUpsert(
-        projectId: string,
-        next: Array<{ key: string; value: string }>,
-    ): Promise<void> {
+    /**
+     * Replace the project's set of keys with `next`. A row with `keep` holds
+     * on to the stored value of that existing key (under `key`, so a rename
+     * keeps its value) without the caller ever reading it; such a row that
+     * is neither renamed nor changed is left untouched, `updated_at` included.
+     */
+    async dbUpsert(projectId: string, next: EnvSaveRow[]): Promise<void> {
         const now = new Date().toISOString();
         const desiredKeys = new Set(next.map((u) => u.key));
 
@@ -72,10 +85,14 @@ export const projectEnvFileService = {
             // fix rationale.
             const existingRows = await trx
                 .selectFrom('project_env_vars')
-                .select('key')
+                .select(['key', 'value_encrypted'])
                 .where('project_id', '=', projectId)
                 .execute();
-            const removed = existingRows.map((r) => r.key).filter((k) => !desiredKeys.has(k));
+            const stored = new Map(existingRows.map((r) => [r.key, r.value_encrypted]));
+            for (const v of next) {
+                if ('keep' in v && !stored.has(v.keep)) throw new UnknownEnvKeyError(v.keep);
+            }
+            const removed = [...stored.keys()].filter((k) => !desiredKeys.has(k));
             if (removed.length > 0) {
                 await trx
                     .deleteFrom('project_env_vars')
@@ -84,13 +101,14 @@ export const projectEnvFileService = {
                     .execute();
             }
             for (const v of next) {
+                if ('keep' in v && v.keep === v.key) continue;
                 await trx
                     .insertInto('project_env_vars')
                     .values({
                         id: randomUUID(),
                         project_id: projectId,
                         key: v.key,
-                        value_encrypted: encrypt(v.value),
+                        value_encrypted: 'keep' in v ? stored.get(v.keep)! : encrypt(v.value),
                         updated_at: now,
                     })
                     .onConflict((oc) =>

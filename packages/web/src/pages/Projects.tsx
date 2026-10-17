@@ -33,6 +33,7 @@ import { relativeTime } from '../utils/time.js';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { ApiErrorAlert } from '../components/ApiErrorAlert.js';
 
 const MONO_FONT = '"JetBrains Mono", monospace';
 
@@ -95,9 +96,9 @@ export function Projects() {
     // (e.g. "ATL"), so it lines up with the issue ids (ATL-1, ATL-2, …).
     const displayIdById = useMemo(() => {
         const map = new Map<string, string>();
-        for (const p of sortedProjects) map.set(p.id, p.issue_key_prefix);
+        for (const p of [...allProjectsForEmpty, ...sortedProjects]) map.set(p.id, p.issue_key_prefix);
         return map;
-    }, [sortedProjects]);
+    }, [allProjectsForEmpty, sortedProjects]);
 
     // Map agent.id → agent.category for joining via tasks.
     const agentCategoryById = useMemo(() => {
@@ -144,14 +145,23 @@ export function Projects() {
         return categoriesByProject.get(projectId)?.has(filter as AgentCategory) ?? false;
     }
 
+    // The page holds only `limit` rows, so a category filter (and every chip's
+    // count) reads the full project list — the same total the subtitle shows.
+    const categoryFilter = filter !== 'all' && filter !== 'mine';
+    const everyProject = allProjectsForEmpty.length > 0 ? allProjectsForEmpty : sortedProjects;
     const filteredProjects = useMemo(
-        () => sortedProjects.filter((p) => matchesFilter(p.id)),
-        [sortedProjects, filter, categoriesByProject]
+        () =>
+            categoryFilter
+                ? [...everyProject]
+                      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+                      .filter((p) => matchesFilter(p.id))
+                : sortedProjects,
+        [categoryFilter, everyProject, sortedProjects, filter, categoriesByProject]
     );
 
     const counts: Record<FilterKey, number> = useMemo(() => {
         const byKey = (key: FilterKey) =>
-            sortedProjects.filter((p) => {
+            everyProject.filter((p) => {
                 if (key === 'all' || key === 'mine') return true;
                 return categoriesByProject.get(p.id)?.has(key as AgentCategory) ?? false;
             }).length;
@@ -163,7 +173,7 @@ export function Projects() {
             content: byKey('content'),
             design: byKey('design'),
         };
-    }, [sortedProjects, categoriesByProject]);
+    }, [everyProject, categoriesByProject]);
 
     const totalTasks = allTasks.length;
     const totalSubTasks = allTasks.reduce((n, t) => n + t.sub_task_count, 0);
@@ -173,9 +183,9 @@ export function Projects() {
     // would break the hook count on the transition from loading → loaded.
     const projectById = useMemo(() => {
         const map = new Map<string, IProject>();
-        projects.forEach((p) => map.set(p.id, p));
+        [...allProjectsForEmpty, ...projects].forEach((p) => map.set(p.id, p));
         return map;
-    }, [projects]);
+    }, [allProjectsForEmpty, projects]);
 
     // Rendered both as table rows AND as card-grid props, so the mapping ran
     // twice per render before. Re-derives only when its inputs change.
@@ -204,6 +214,23 @@ export function Projects() {
         return (
             <Box sx={{ minHeight: '60vh', display: 'flex' }}>
                 <BrandedFallback />
+            </Box>
+        );
+    }
+
+    // A failed load is not "No projects yet."
+    if (paged.isError && !paged.data) {
+        return (
+            <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
+                <ApiErrorAlert
+                    error={paged.error}
+                    contextLabel="Could not load projects"
+                    actionSlot={
+                        <Button size="small" onClick={() => void paged.refetch()}>
+                            Retry
+                        </Button>
+                    }
+                />
             </Box>
         );
     }
@@ -335,7 +362,7 @@ export function Projects() {
                     </Box>
 
                     {/* Pagination footer — only renders when there's more than one page. */}
-                    {totalProjects > limit && (
+                    {totalProjects > limit && !categoryFilter && (
                         <Box
                             sx={{
                                 mt: 6,

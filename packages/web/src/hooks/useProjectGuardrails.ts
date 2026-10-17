@@ -12,7 +12,6 @@ export function useProjectGuardrails(projectId: string | undefined) {
 interface CreateInput {
     title: string;
     body_md: string;
-    applies_to?: string;
     icon?: string;
     enabled?: number;
     sort_order?: number;

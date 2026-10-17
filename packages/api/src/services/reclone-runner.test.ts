@@ -5,11 +5,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // ---------------------------------------------------------------------------
 const mocks = vi.hoisted(() => ({
     spawn: vi.fn(),
+    // The HEAD reads around the fast-forward (rev-parse / rev-list) go here, so
+    // the ordered `mocks.spawn` children below stay status → … → fetch → pull.
+    revGit: vi.fn(),
     execFile: vi.fn(),
 }));
 
 vi.mock('node:child_process', () => ({
-    spawn: mocks.spawn,
+    spawn: (bin: string, args: string[], opts: unknown) =>
+        args[0] === 'rev-parse' || args[0] === 'rev-list'
+            ? mocks.revGit(bin, args, opts)
+            : mocks.spawn(bin, args, opts),
     execFile: (
         bin: string,
         args: string[],
@@ -48,6 +54,16 @@ vi.mock('../routes/events.js', () => ({
 
 vi.mock('./git-env.js', () => ({ gitInvokeEnv: vi.fn(() => ({})) }));
 
+// Run the locked body straight away so the fake children's events land on
+// attached listeners; the test below checks the lock key.
+vi.mock('./project-git-lock.js', () => ({
+    withProjectGitLock: vi.fn((_id: string, fn: () => Promise<unknown>) => fn()),
+}));
+
+vi.mock('./notifications.js', () => ({
+    notificationsService: { create: vi.fn().mockResolvedValue({ id: 1 }) },
+}));
+
 // Mock fs/promises — reclone-runner uses mkdir and writeFile for stash patch.
 vi.mock('node:fs/promises', () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
@@ -64,6 +80,8 @@ import { credentialsService } from './credentials.js';
 import { projectReposService } from './project-repos.js';
 import { broadcastSSE } from '../routes/events.js';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { withProjectGitLock } from './project-git-lock.js';
+import { notificationsService } from './notifications.js';
 
 // ---------------------------------------------------------------------------
 // Fake child process helper — mirrors the one in clone-runner tests.
@@ -103,6 +121,17 @@ function makeChild() {
         pid: 9999,
     };
 
+    return child;
+}
+
+// HEAD before the pull is aaa111; three commits came in.
+function revChild(args: string[], out = { head: 'aaa111', count: '3' }, code = 0) {
+    const child = makeChild();
+    // A microtask runs after runGit has attached its listeners.
+    queueMicrotask(() => {
+        child.emitStdout(`${args[0] === 'rev-parse' ? out.head : out.count}\n`);
+        child.emitClose(code);
+    });
     return child;
 }
 
@@ -151,6 +180,7 @@ describe('startReclone', () => {
         // Reset the fs/promises mocks to their default resolved state.
         vi.mocked(mkdir).mockResolvedValue(undefined as never);
         vi.mocked(writeFile).mockResolvedValue(undefined);
+        mocks.revGit.mockImplementation((_bin: string, args: string[]) => revChild(args));
     });
 
     // -----------------------------------------------------------------------
@@ -236,9 +266,56 @@ describe('startReclone', () => {
         expect(completed!.stashPath).toBeNull();
         expect(completed!.status).toBe('ready');
         expect(completed!.recloneId).toBe(recloneId);
+        // git prints no count on a fast-forward; the runner counts old..HEAD.
+        expect(completed!.commitsPulled).toBe(3);
+        expect(mocks.revGit).toHaveBeenCalledWith(
+            'git',
+            ['rev-list', '--count', 'aaa111..HEAD'],
+            expect.anything(),
+        );
 
         // No error events.
         expect(calls.find((c) => c.type === 'reclone_error')).toBeUndefined();
+    });
+
+    it('reports commitsPulled null when HEAD cannot be read before the pull', async () => {
+        setupCredMocks();
+        mocks.revGit.mockImplementation((_bin: string, args: string[]) =>
+            revChild(args, { head: '', count: '' }, 128),
+        );
+        const childStatus = makeChild();
+        const childFetch = makeChild();
+        const childPull = makeChild();
+        mocks.spawn
+            .mockReturnValueOnce(childStatus)
+            .mockReturnValueOnce(childFetch)
+            .mockReturnValueOnce(childPull);
+
+        await startReclone(INPUT);
+        childStatus.emitClose(0);
+        await new Promise((r) => setTimeout(r, 5));
+        childFetch.emitClose(0);
+        await new Promise((r) => setTimeout(r, 5));
+        childPull.emitClose(0);
+        await new Promise((r) => setTimeout(r, 20));
+
+        const completed = sseCalls().find((c) => c.type === 'reclone_completed');
+        expect(completed!.commitsPulled).toBeNull();
+        expect(mocks.revGit).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses the caller-chosen recloneId on every event', async () => {
+        setupCredMocks();
+        const childStatus = makeChild();
+        mocks.spawn.mockReturnValueOnce(childStatus);
+
+        const id = await startReclone({ ...INPUT, recloneId: 'client-id-1234' });
+        childStatus.emitClose(128);
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(id).toBe('client-id-1234');
+        const ids = new Set(sseCalls().map((c) => c.recloneId));
+        expect([...ids]).toEqual(['client-id-1234']);
     });
 
     // -----------------------------------------------------------------------
@@ -394,6 +471,13 @@ describe('startReclone', () => {
         expect(errorEvt!.status).toBe('error');
 
         expect(calls.find((c) => c.type === 'reclone_completed')).toBeUndefined();
+        expect(withProjectGitLock).toHaveBeenCalledWith(FAKE_REPO.id, expect.any(Function));
+        expect(notificationsService.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event_type: 'reclone_failed',
+                message: expect.stringContaining('fatal: unable to access remote'),
+            }),
+        );
     });
 
     it('fetch fails with no stderr: uses fallback message', async () => {
@@ -691,10 +775,12 @@ describe('startReclone', () => {
 
         const childStatus = makeChild();
         const childDiff = makeChild();
+        const childStash = makeChild();
 
         mocks.spawn
             .mockReturnValueOnce(childStatus)
-            .mockReturnValueOnce(childDiff);
+            .mockReturnValueOnce(childDiff)
+            .mockReturnValueOnce(childStash);
 
         await startReclone(INPUT);
 
@@ -706,7 +792,13 @@ describe('startReclone', () => {
         // diff: some diff output, close 0
         childDiff.emitStdout('diff --git a/foo.ts b/foo.ts\n');
         childDiff.emitClose(0);
+        await new Promise((r) => setTimeout(r, 5));
+
+        // The patch is written only after the stash succeeded, under .git so
+        // the stash can't sweep it up.
+        childStash.emitClose(0);
         await new Promise((r) => setTimeout(r, 20));
+        expect(String(vi.mocked(writeFile).mock.calls[0]?.[0])).toMatch(/[\\/]\.git[\\/]atlas-stash[\\/][^\\/]+\.patch$/);
 
         const calls = sseCalls();
         const errorEvt = calls.find((c) => c.type === 'reclone_error') as
@@ -725,13 +817,19 @@ describe('startReclone', () => {
         vi.mocked(mkdir).mockRejectedValueOnce(new Error('disk full'));
 
         const childStatus = makeChild();
-        mocks.spawn.mockReturnValueOnce(childStatus);
+        const childDiff = makeChild();
+        const childStash = makeChild();
+        mocks.spawn.mockReturnValueOnce(childStatus).mockReturnValueOnce(childDiff).mockReturnValueOnce(childStash);
 
         await startReclone(INPUT);
 
-        // status: dirty output then close 0 -> triggers mkdir() for the stash dir
+        // dirty status → diff → stash → mkdir() for the patch dir throws
         childStatus.emitStdout(' M packages/api/src/foo.ts\n');
         childStatus.emitClose(0);
+        await new Promise((r) => setTimeout(r, 5));
+        childDiff.emitClose(0);
+        await new Promise((r) => setTimeout(r, 5));
+        childStash.emitClose(0);
         await new Promise((r) => setTimeout(r, 20));
 
         const calls = sseCalls();

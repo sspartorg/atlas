@@ -4,6 +4,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
@@ -114,6 +115,7 @@ export function GuardrailModal({
             onClose={onClose}
             maxWidth="sm"
             fullWidth
+            aria-labelledby="guardrail-modal-title"
             PaperProps={{
                 sx: {
                     borderRadius: '14px',
@@ -138,12 +140,14 @@ export function GuardrailModal({
                     <LockOutlined sx={{ fontSize: 18, color: ATLAS_PALETTE.brandBlue }} />
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <FormHeading>{editing ? 'Edit rule' : 'Add rule'}</FormHeading>
+                    <Box id="guardrail-modal-title">
+                        <FormHeading>{editing ? 'Edit rule' : 'Add rule'}</FormHeading>
+                    </Box>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                         Merged into every agent prompt on the next run.
                     </Typography>
                 </Box>
-                <IconButton onClick={onClose} size="small" disabled={submitting}>
+                <IconButton onClick={onClose} size="small" disabled={submitting} aria-label="Close">
                     <CloseRounded sx={{ color: ATLAS_PALETTE.slate60 }} />
                 </IconButton>
             </Box>
@@ -155,9 +159,9 @@ export function GuardrailModal({
                         const meta = GUARDRAIL_CATEGORY_META[cat];
                         const selected = cat === category;
                         return (
-                            <Box
+                            <ButtonBase
                                 key={cat}
-                                role="button"
+                                aria-pressed={selected}
                                 onClick={() => setCategory(cat)}
                                 sx={{
                                     display: 'inline-flex',
@@ -191,7 +195,7 @@ export function GuardrailModal({
                                 >
                                     {meta.label}
                                 </Typography>
-                            </Box>
+                            </ButtonBase>
                         );
                     })}
                 </Box>
@@ -234,11 +238,13 @@ export function GuardrailModal({
                     {GUARDRAIL_SEVERITIES.map((sev) => {
                         const selected = severity === sev;
                         return (
-                            <Box
+                            <ButtonBase
                                 key={sev}
-                                role="button"
+                                aria-pressed={selected}
                                 onClick={() => setSeverity(sev)}
                                 sx={{
+                                    display: 'block',
+                                    textAlign: 'left',
                                     border: `2px solid ${selected ? ATLAS_PALETTE.slate : ATLAS_PALETTE.slate10}`,
                                     borderRadius: '10px',
                                     p: 2.5,
@@ -258,7 +264,7 @@ export function GuardrailModal({
                                 >
                                     {GUARDRAIL_SEVERITY_META[sev].description}
                                 </Typography>
-                            </Box>
+                            </ButtonBase>
                         );
                     })}
                 </Box>
@@ -308,12 +314,12 @@ export function GuardrailModal({
                     <Button
                         variant="contained"
                         color="success"
-                        startIcon={<AddRounded sx={{ fontSize: 16 }} />}
+                        startIcon={editing ? undefined : <AddRounded sx={{ fontSize: 16 }} />}
                         onClick={() => void handleSubmit()}
                         disabled={submitting || !ruleText.trim()}
                         sx={{ textTransform: 'none', fontWeight: 600 }}
                     >
-                        {editing ? 'Save Changes' : 'Add Rule'}
+                        {editing ? 'Save changes' : 'Add rule'}
                     </Button>
                 </Box>
             </Box>
@@ -332,7 +338,7 @@ export function GuardrailModal({
                     >
                         Removes this rule from{' '}
                         <Box component="span" sx={{ fontWeight: 600 }}>
-                            {editing?.category.replace('_', ' ')}
+                            {editing && GUARDRAIL_CATEGORY_META[editing.category].label}
                         </Box>
                         . Agents won&apos;t see it on their next run. You can re-add it later.
                     </Typography>

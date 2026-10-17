@@ -14,7 +14,7 @@ import { startDelete } from '../services/delete-runner.js';
 import { startReclone } from '../services/reclone-runner.js';
 import { getProjectGitStatus } from '../services/git-status.js';
 import { credentialsService } from '../services/credentials.js';
-import { projectEnvFileService } from '../services/project-env-file.js';
+import { projectEnvFileService, UnknownEnvKeyError, type EnvSaveRow } from '../services/project-env-file.js';
 import {
     folderExists,
     hasGitDir,
@@ -32,6 +32,7 @@ import {
     UpdateProjectSchema,
 } from '@atlas/shared';
 import { requireMcpToken } from '../plugins/mcp-auth.js';
+import { unregisterOne } from '../services/schedule-registry.js';
 
 /** The Health card's window; its label says "30 d". */
 const PROJECT_HEALTH_DAYS = 30;
@@ -122,41 +123,48 @@ export async function projectsRoutes(app: FastifyInstance) {
         const { id, repoId } = req.params as { id: string; repoId: string };
         const repo = await repoOr404(id, repoId, reply);
         if (!repo) return reply;
-        /* v8 ignore next 13 */
-        const bin =
+        // `opened_in` names the app so the toast can say what really happened.
+        const opener: { bin: string; opened_in: string } | null =
             process.platform === 'win32'
-                ? 'explorer.exe'
+                ? { bin: 'explorer.exe', opened_in: 'File Explorer' }
                 : process.platform === 'darwin'
-                  ? 'open'
+                  ? { bin: 'open', opened_in: 'Finder' }
                   : process.platform === 'linux'
-                    ? 'xdg-open'
+                    ? { bin: 'xdg-open', opened_in: 'file manager' }
                     : null;
-        if (!bin) {
+        if (!opener) {
             return reply
                 .status(400)
                 .send({ error: `Reveal is not supported on ${process.platform}` });
         }
+        // The opener is detached and its exit code is unreliable (explorer.exe
+        // exits 1 on success), so check the folder up front.
+        if (!folderExists(repo.git_path)) {
+            return reply.status(409).send({ error: `Folder not found on disk: ${repo.git_path}` });
+        }
         try {
-            const child = spawn(bin, [repo.git_path], {
+            const child = spawn(opener.bin, [repo.git_path], {
                 detached: true,
                 stdio: 'ignore',
                 windowsHide: false,
             });
+            // A missing opener binary surfaces as an async 'error', not a throw.
+            await new Promise<void>((resolve, reject) => {
+                child.once('spawn', resolve);
+                child.once('error', reject);
+            });
             child.unref();
-            return reply.send({ ok: true, path: repo.git_path });
+            return reply.send({ ok: true, path: repo.git_path, opened_in: opener.opened_in });
         } catch (err) {
-            /* v8 ignore next 3 */
-            return reply
-                .status(500)
-                .send({
-                    error: err instanceof Error ? err.message : 'Could not open file browser',
-                });
+            return reply.status(500).send({
+                error: err instanceof Error ? err.message : 'Could not open file browser',
+            });
         }
     });
 
     app.post('/api/projects/:id/repos/:repoId/reclone', { preHandler: requireMcpToken }, async (req, reply) => {
         /* v8 ignore next */
-        RecloneProjectSchema.parse(req.body ?? {});
+        const body = RecloneProjectSchema.parse(req.body ?? {});
         const { id, repoId } = req.params as { id: string; repoId: string };
         const repo = await repoOr404(id, repoId, reply);
         if (!repo) return reply;
@@ -165,6 +173,7 @@ export async function projectsRoutes(app: FastifyInstance) {
                 repoId: repo.id,
                 destination: repo.git_path,
                 branch: repo.default_branch,
+                ...(body.reclone_id ? { recloneId: body.reclone_id } : {}),
             });
             return reply.status(202).send({ reclone_id: recloneId });
         } catch (err) {
@@ -368,6 +377,8 @@ export async function projectsRoutes(app: FastifyInstance) {
     app.delete('/api/projects/:id/repos/:repoId', { preHandler: requireMcpToken }, async (req, reply) => {
         const { id, repoId } = req.params as { id: string; repoId: string };
         await projectReposService.remove(id, repoId);
+        // The row went with the repo (FK cascade, migration 018); stop its cron too.
+        unregisterOne(repoId);
         return reply.status(204).send();
     });
 
@@ -380,7 +391,11 @@ export async function projectsRoutes(app: FastifyInstance) {
             return reply.status(400).send({ error: 'Project name confirmation does not match' });
         }
         try {
-            const deleteId = startDelete({ projectId: id, mode: body.mode });
+            const deleteId = startDelete({
+                projectId: id,
+                mode: body.mode,
+                ...(body.delete_id ? { deleteId: body.delete_id } : {}),
+            });
             return reply.status(202).send({ delete_id: deleteId });
         } catch (err) {
             /* v8 ignore next */
@@ -444,7 +459,7 @@ export async function projectsRoutes(app: FastifyInstance) {
                 const templateName = workflowsService.listTemplates().find((t) => t.id === 'ai-readiness')?.name;
                 const existing = (await workflowsService.list(id)).find((w) => w.name === templateName);
                 const workflow = existing ?? (await workflowsService.createFromTemplate('ai-readiness', id));
-                const runId = await startWorkflowRun(workflow.id, null);
+                const runId = await startWorkflowRun(workflow.id, null, undefined, { repoIds: [repo.id] });
                 return reply.status(202).send({ run_id: runId, workflow_id: workflow.id });
             } catch (err) {
                 return reply.status(500).send({
@@ -503,11 +518,15 @@ export async function projectsRoutes(app: FastifyInstance) {
         }
         const KEY_RE = /^[A-Z][A-Z0-9_]*$/;
         const seen = new Set<string>();
-        const next: Array<{ key: string; value: string }> = [];
+        const next: EnvSaveRow[] = [];
         for (const item of raw.vars) {
-            const v = item as { key?: unknown; value?: unknown };
-            if (typeof v.key !== 'string' || typeof v.value !== 'string') {
-                return reply.status(400).send({ error: 'Each row must have string key and value' });
+            const v = item as { key?: unknown; value?: unknown; keep?: unknown };
+            const hasValue = typeof v.value === 'string';
+            const hasKeep = typeof v.keep === 'string';
+            if (typeof v.key !== 'string' || hasValue === hasKeep) {
+                return reply
+                    .status(400)
+                    .send({ error: 'Each row must have a string key and exactly one of value or keep' });
             }
             if (!KEY_RE.test(v.key)) {
                 return reply
@@ -518,12 +537,13 @@ export async function projectsRoutes(app: FastifyInstance) {
                 return reply.status(400).send({ error: `Duplicate key "${v.key}"` });
             }
             seen.add(v.key);
-            next.push({ key: v.key, value: v.value });
+            next.push(hasKeep ? { key: v.key, keep: v.keep as string } : { key: v.key, value: v.value as string });
         }
 
         try {
             await projectEnvFileService.dbUpsert(project.id, next);
         } catch (err) {
+            if (err instanceof UnknownEnvKeyError) return reply.status(400).send({ error: err.message });
             /* v8 ignore next 3 */
             return reply
                 .status(500)

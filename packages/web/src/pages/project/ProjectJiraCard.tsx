@@ -10,6 +10,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import AddRounded from '@mui/icons-material/AddRounded';
 import DeleteOutlineRounded from '@mui/icons-material/DeleteOutlineRounded';
@@ -52,7 +53,7 @@ export function ProjectJiraCard({ project }: Props) {
     const { data: repos = [] } = useProjectRepos(projectId);
     const { data: workflows = [] } = useWorkflows();
     const remove = useDeleteJiraSource(projectId);
-    const sync = useSyncJira();
+    const sync = useSyncJira(projectId);
     const toast = useToast();
     const [adding, setAdding] = useState(false);
     const [editing, setEditing] = useState<IJiraSource | null>(null);
@@ -78,9 +79,8 @@ export function ProjectJiraCard({ project }: Props) {
     async function runSync() {
         try {
             const r = await sync.mutateAsync();
-            // Same wording as Settings → Jira: one sync, one sentence.
             toast.show({
-                message: `Jira sync: ${r.imported} imported, ${r.comments_posted} comment(s) posted`,
+                message: `Jira sync for ${project.name}: ${r.imported} imported, ${r.comments_posted} comment(s) posted`,
             });
         } catch (e) {
             toast.show({ message: e instanceof Error ? e.message : 'Sync failed' });
@@ -115,21 +115,27 @@ export function ProjectJiraCard({ project }: Props) {
                     </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1.5, flexShrink: 0 }}>
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        startIcon={<SyncRounded />}
-                        onClick={() => void runSync()}
-                        disabled={sync.isPending || !cfg?.api_token_set || !cfg?.enabled}
+                    {/* The span carries the hover: a disabled button gets no pointer events. */}
+                    <Tooltip
                         title={
-                            cfg?.enabled
-                                ? undefined
-                                : 'Turn on Import in Settings → Jira to sync — a sync writes comments to the matched Jira issues.'
+                            cfg && !cfg.enabled
+                                ? 'Turn on Import in Settings → Jira to sync — a sync writes comments to the matched Jira issues.'
+                                : "Runs this project's sources now. Other projects sync on the next poll."
                         }
-                        sx={{ textTransform: 'none' }}
                     >
-                        {sync.isPending ? 'Syncing…' : 'Sync now'}
-                    </Button>
+                        <Box component="span" sx={{ display: 'inline-flex' }}>
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<SyncRounded />}
+                                onClick={() => void runSync()}
+                                disabled={sync.isPending || !cfg?.api_token_set || !cfg?.enabled}
+                                sx={{ textTransform: 'none' }}
+                            >
+                                {sync.isPending ? 'Syncing…' : 'Sync now'}
+                            </Button>
+                        </Box>
+                    </Tooltip>
                     <Button
                         variant="outlined"
                         size="small"

@@ -35,7 +35,7 @@ Domain terms used throughout Atlas. One line each. When in doubt, this file wins
 | **Tool catalog** | Read-only directory of the Atlas MCP tools (`tool_catalog`), re-synced from `@atlas/mcp` registrations on every boot. No per-agent enforcement. |
 | **Auto-fetch** | A scheduled `git fetch` per **repo** (ADR 0018). Configured from Project Detail's Repos tab via the AutoFetchScheduleModal; jobs registered per repo id in `services/schedule-registry.ts`. |
 | **Conflict policy / dirty guard / idle guard / agents guard** | Per-schedule rules that decide whether to skip a fire if the worktree is dirty / an agent is running / etc. |
-| **Reclone** | Wipe the worktree and re-clone the same git URL with the same credential. Useful after auth-credential rotation. |
+| **Reclone** | Internal name (route, runner, SSE events) for the Repos tab's **Pull from remote**: stash local changes if dirty, `git fetch --prune`, `git pull --ff-only`. It does not wipe or re-clone. |
 | **Workspace** | The root folder selected during onboarding. Holds the SQLite DB (`atlas.db`) and every project's worktree. |
 | **ATL-12** (and similar) | Item ids: `<project issue_key_prefix>-<seq>`, one counter per project shared by Tasks and sub-tasks (`services/items.ts::createItem`). Used as-is in headers, tables and URLs (`/tasks/ATL-12`). |
 | **AppShell** | The post-onboarding layout: Sidenav (left) + Topbar (top) + Outlet for the routed page. Lives in `App.tsx`. |

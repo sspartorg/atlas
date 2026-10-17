@@ -154,3 +154,24 @@ describe('DELETE /api/projects/:projectId/guardrail-scripts/:id', () => {
         expect(res.statusCode).toBe(404);
     });
 });
+
+describe('script slugs are per project', () => {
+    it('two projects can both own the same slug, and neither can edit or delete the other', async () => {
+        await insertProject('p2', 'OTH');
+        for (const p of ['p1', 'p2']) {
+            const res = await app.inject({ method: 'POST', url: `/api/projects/${p}/guardrail-scripts`, payload: VALID_SCRIPT });
+            expect(res.statusCode).toBe(201);
+        }
+        const patched = await app.inject({
+            method: 'PATCH',
+            url: `/api/projects/p2/guardrail-scripts/${VALID_SCRIPT.id}`,
+            payload: { name: 'Only p2' },
+        });
+        expect(JSON.parse(patched.body)).toMatchObject({ project_id: 'p2', name: 'Only p2' });
+        expect((await app.inject({ method: 'DELETE', url: `/api/projects/p2/guardrail-scripts/${VALID_SCRIPT.id}` })).statusCode).toBe(204);
+
+        const p1 = JSON.parse((await app.inject({ method: 'GET', url: '/api/projects/p1/guardrail-scripts' })).body);
+        expect(p1).toMatchObject([{ id: VALID_SCRIPT.id, name: VALID_SCRIPT.name }]);
+        expect((await app.inject({ method: 'DELETE', url: `/api/projects/p2/guardrail-scripts/${VALID_SCRIPT.id}` })).statusCode).toBe(404);
+    });
+});

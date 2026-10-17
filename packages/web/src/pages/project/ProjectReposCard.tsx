@@ -84,10 +84,10 @@ export function ProjectReposCard({ project, displayId }: Props) {
     async function openFolder(repo: IProjectRepo) {
         try {
             const res = await api.projects.reveal(projectId, repo.id);
-            toast.show({ message: 'Opened in File Explorer', detail: res.path });
+            toast.show({ message: `Opened in ${res.opened_in}`, detail: res.path });
         } catch (e) {
             toast.show({
-                message: 'Could not open File Explorer',
+                message: 'Could not open folder',
                 detail: e instanceof Error ? e.message : 'Unknown error',
             });
         }
@@ -221,7 +221,7 @@ export function ProjectReposCard({ project, displayId }: Props) {
                                 onClick: () => setScheduling(repo),
                             },
                             {
-                                label: 'Re-clone from remote',
+                                label: 'Pull from remote…',
                                 icon: <RefreshRounded fontSize="small" />,
                                 onClick: () => setRecloning(repo),
                             },

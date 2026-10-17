@@ -9,6 +9,14 @@ import { makeProject, makeProjectRepo } from '../../test-utils/factories.js';
 import { defaultHandlers } from '../../test-utils/mock-handlers.js';
 import { DeleteProjectModal } from './DeleteProjectModal.js';
 import { projectsPagedKey } from '../../hooks/useProjects.js';
+import { Route, Routes } from 'react-router-dom';
+
+// The modal picks the job id itself (it subscribes before POSTing).
+const JOB_ID = 'job-under-test';
+vi.mock('../../hooks/sse-hub.js', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    newJobId: () => JOB_ID,
+}));
 
 // Stub EventSource so we can fire SSE events in tests. sse-hub (Batch-6
 // SSE-hub refactor) sets handlers via `.onmessage = fn` property
@@ -297,7 +305,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         // Fire the SSE delete_completed event with mode=unregister
         const es = StubEventSource.instances[0]!;
         act(() =>
-            es.fire({ type: 'delete_completed', deleteId: 'del-success', mode: 'unregister' })
+            es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'unregister' })
         );
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
         // Success view shows Close and Back to projects buttons
@@ -332,7 +340,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-cache', mode: 'unregister' }));
+        act(() => es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'unregister' }));
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
         const invalidatedKeys = invalidateSpy.mock.calls.map(
             (call) => (call[0] as { queryKey?: unknown[] })?.queryKey?.[0]
@@ -359,7 +367,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-unreg', mode: 'unregister' }));
+        act(() => es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'unregister' }));
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
         // The header subtitle should say "Unregistered from Atlas..."
         expect(screen.getByText(/Unregistered from Atlas/i)).toBeInTheDocument();
@@ -381,7 +389,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Delete project and content/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-purge-ok', mode: 'purge' }));
+        act(() => es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'purge' }));
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
         // purge success text
         expect(screen.getByText(/Workspace folder removed/i)).toBeInTheDocument();
@@ -400,7 +408,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-close', mode: 'unregister' }));
+        act(() => es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'unregister' }));
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
         // Click the Close button
         const closeBtn = screen.getAllByRole('button', { name: /Close/i })[0]!;
@@ -408,7 +416,7 @@ describe('DeleteProjectModal — success view via SSE', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('success view with purge stats — purgeStats files + bytes show', async () => {
+    it('success view — purge mode reports the elapsed time', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/delete`, () =>
                 HttpResponse.json({ delete_id: 'del-stats' })
@@ -423,17 +431,8 @@ describe('DeleteProjectModal — success view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Delete project and content/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        // Fire output lines that match purgeStats regex
-        act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-stats',
-                output: 'Removed 42 files (12.5 MiB)',
-            })
-        );
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-stats', mode: 'purge' }));
+        act(() => es.fire({ type: 'delete_completed', deleteId: JOB_ID, mode: 'purge' }));
         await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
-        // purgeStats.files = 42, bytes = '12.5 MiB'
         expect(screen.getByText(/Removed in/i)).toBeInTheDocument();
     });
 });
@@ -452,7 +451,7 @@ describe('DeleteProjectModal — error view via SSE', () => {
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
         act(() =>
-            es.fire({ type: 'delete_error', deleteId: 'del-err-sse', errorDetail: 'Access denied' })
+            es.fire({ type: 'delete_error', deleteId: JOB_ID, errorDetail: 'Access denied' })
         );
         await waitFor(() =>
             expect(screen.getAllByText(/Delete failed/i).length).toBeGreaterThan(0)
@@ -473,7 +472,7 @@ describe('DeleteProjectModal — error view via SSE', () => {
         await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
-        act(() => es.fire({ type: 'delete_error', deleteId: 'del-retry', errorDetail: 'failed' }));
+        act(() => es.fire({ type: 'delete_error', deleteId: JOB_ID, errorDetail: 'failed' }));
         await waitFor(() =>
             expect(screen.getAllByText(/Delete failed/i).length).toBeGreaterThan(0)
         );
@@ -498,7 +497,7 @@ describe('DeleteProjectModal — error view via SSE', () => {
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
         act(() =>
-            es.fire({ type: 'delete_error', deleteId: 'del-purge-err', errorDetail: 'folder busy' })
+            es.fire({ type: 'delete_error', deleteId: JOB_ID, errorDetail: 'folder busy' })
         );
         await waitFor(() =>
             expect(screen.getAllByText(/Delete failed/i).length).toBeGreaterThan(0)
@@ -520,7 +519,7 @@ describe('DeleteProjectModal — error view via SSE', () => {
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
         const es = StubEventSource.instances[0]!;
         act(() =>
-            es.fire({ type: 'delete_error', deleteId: 'del-unreg-err', errorDetail: 'DB locked' })
+            es.fire({ type: 'delete_error', deleteId: JOB_ID, errorDetail: 'DB locked' })
         );
         await waitFor(() =>
             expect(screen.getAllByText(/Delete failed/i).length).toBeGreaterThan(0)
@@ -530,112 +529,97 @@ describe('DeleteProjectModal — error view via SSE', () => {
     });
 });
 
-describe('DeleteProjectModal — deleting view checklist + deriveStepIndex', () => {
-    it('fires SSE output lines to advance stepIndex via deriveStepIndex', async () => {
+describe('DeleteProjectModal — deleting view checklist', () => {
+    it('lists only the steps the runner performs (unregister)', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/delete`, () =>
-                HttpResponse.json({ delete_id: 'del-steps' })
-            )
+            http.post(`${BASE}/projects/p1/delete`, () => HttpResponse.json({ delete_id: JOB_ID }))
         );
         renderWithProviders(
             <DeleteProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
-        await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
-        const es = StubEventSource.instances[0]!;
-        // Fire output lines that advance each step in deriveStepIndex
-        act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-steps',
-                output: 'Stopping attached agents...',
-            })
-        );
-        act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-steps',
-                output: 'Revoking credential lease...',
-            })
-        );
-        act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-steps',
-                output: 'Unregistering project...',
-            })
-        );
-        act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-steps',
-                output: 'Workspace folder kept',
-            })
-        );
-        // The deleting view still renders with lines appended
-        await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
-        expect(document.body).toBeTruthy();
+        expect(await screen.findByText(/Step 1 of 1 · Unregister from Atlas/i)).toBeInTheDocument();
+        expect(screen.queryByText(/Stop attached agents|Revoke credential lease|Finalize/i)).toBeNull();
     });
 
-    it('fires purge mode workspace removal line — deriveStepIndex max(idx, 4) branch', async () => {
+    it('purge: removes repo folders first, then unregisters', async () => {
         server.use(
-            http.post(`${BASE}/projects/p1/delete`, () =>
-                HttpResponse.json({ delete_id: 'del-purge-steps' })
-            )
+            http.post(`${BASE}/projects/p1/delete`, () => HttpResponse.json({ delete_id: JOB_ID }))
         );
         renderWithProviders(
             <DeleteProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
         await userEvent.click(screen.getByText('Delete project and content'));
-        const input = screen.getByPlaceholderText('Acme');
-        await userEvent.type(input, 'Acme');
+        await userEvent.type(screen.getByPlaceholderText('Acme'), 'Acme');
         await userEvent.click(screen.getByRole('button', { name: /Delete project and content/i }));
-        await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
+        expect(await screen.findByText(/Step 1 of 2 · Remove repo folders/i)).toBeInTheDocument();
         const es = StubEventSource.instances[0]!;
-        // purge mode: "Removing workspace folder" advances to idx=4 (mode=purge path)
         act(() =>
             es.fire({
                 type: 'delete_output',
-                deleteId: 'del-purge-steps',
-                output: 'Removing workspace folder',
+                deleteId: JOB_ID,
+                output: 'Unregistering project from Atlas...',
             })
         );
-        act(() =>
-            es.fire({ type: 'delete_output', deleteId: 'del-purge-steps', output: 'Finalize' })
-        );
-        await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
-        expect(document.body).toBeTruthy();
+        expect(await screen.findByText(/Step 2 of 2 · Unregister from Atlas/i)).toBeInTheDocument();
     });
 });
 
-describe('DeleteProjectModal — purgeStats fm truthy branch (L222)', () => {
-    it('purgeStats.files updated when SSE output line matches "Removed N files"', async () => {
+describe('DeleteProjectModal — missed-event race and leaving the page', () => {
+    it('does not miss a delete_completed broadcast before the 202 arrives', async () => {
+        // The runner broadcasts before its 202 reaches the client and the
+        // stream has no replay; the handler fires the event first, then answers.
         server.use(
-            http.post(`${BASE}/projects/p1/delete`, () =>
-                HttpResponse.json({ delete_id: 'del-fm' })
-            )
+            http.post(`${BASE}/projects/p1/delete`, async ({ request }) => {
+                const body = (await request.json()) as { delete_id?: string };
+                const id = body.delete_id ?? 'server-made-id';
+                StubEventSource.instances[0]?.fire({
+                    type: 'delete_completed',
+                    deleteId: id,
+                    mode: 'unregister',
+                });
+                return HttpResponse.json({ delete_id: id }, { status: 202 });
+            })
         );
         renderWithProviders(
             <DeleteProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />
         );
-        await userEvent.click(screen.getByText('Delete project and content'));
-        const input = screen.getByPlaceholderText('Acme');
-        await userEvent.type(input, 'Acme');
-        await userEvent.click(screen.getByRole('button', { name: /Delete project and content/i }));
+        await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
+        expect(await screen.findByText('Project deleted')).toBeInTheDocument();
+    });
+
+    it('"Back to projects" leaves the deleted project for /projects and drops its cache', async () => {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+        qc.setQueryData(['projects', 'p1'], project);
+        server.use(
+            http.post(`${BASE}/projects/p1/delete`, () => HttpResponse.json({ delete_id: JOB_ID }))
+        );
+        const onClose = vi.fn();
+        renderWithProviders(
+            <Routes>
+                <Route
+                    path="/projects/:id"
+                    element={
+                        <DeleteProjectModal open project={project} displayId="ACM" onClose={onClose} />
+                    }
+                />
+                <Route path="/projects" element={<p>Projects list</p>} />
+            </Routes>,
+            { queryClient: qc, initialEntries: ['/projects/p1'] }
+        );
+        await userEvent.click(screen.getByRole('button', { name: /Remove from Atlas/i }));
         await waitFor(() => expect(screen.getByText(/Deleting project/i)).toBeInTheDocument());
-        const es = StubEventSource.instances[0]!;
-        // Line matches /Removed/i AND /(\d+)\s+files/ — exercises the fm truthy branch (L222)
         act(() =>
-            es.fire({
-                type: 'delete_output',
-                deleteId: 'del-fm',
-                output: 'Removed 5 files from git history',
+            StubEventSource.instances[0]!.fire({
+                type: 'delete_completed',
+                deleteId: JOB_ID,
+                mode: 'unregister',
             })
         );
-        act(() => es.fire({ type: 'delete_completed', deleteId: 'del-fm', mode: 'purge' }));
-        await waitFor(() => expect(screen.getByText(/Project deleted/i)).toBeInTheDocument());
-        // purgeStats.files=5 — success view renders the "Removed in" stats row
-        expect(screen.getByText(/Removed in/i)).toBeInTheDocument();
+        await userEvent.click(await screen.findByRole('button', { name: /Back to projects/i }));
+        expect(await screen.findByText('Projects list')).toBeInTheDocument();
+        expect(onClose).toHaveBeenCalled();
+        expect(qc.getQueryData(['projects', 'p1'])).toBeUndefined();
     });
 });
 
@@ -654,7 +638,7 @@ describe('DeleteProjectModal — "No stderr captured." fallback (L840)', () => {
         const es = StubEventSource.instances[0]!;
         // errorDetail is empty string (falsy) and no prior log lines — exercises the
         // third fallback "No stderr captured." in job.errorDetail || lines || fallback (L840)
-        act(() => es.fire({ type: 'delete_error', deleteId: 'del-nostderr', errorDetail: '' }));
+        act(() => es.fire({ type: 'delete_error', deleteId: JOB_ID, errorDetail: '' }));
         await waitFor(() =>
             expect(screen.getAllByText(/Delete failed/i).length).toBeGreaterThan(0)
         );

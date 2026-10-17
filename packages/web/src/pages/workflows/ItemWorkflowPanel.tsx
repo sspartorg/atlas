@@ -57,10 +57,13 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
     const latest = runs[0];
     const live = latest && LIVE_WORKFLOW_RUN_STATUSES.includes(latest.status);
     const assigned = workflows.find((w) => w.id === workflowId);
+    // The engine refuses to start a run on a Done item, so neither is offered.
+    const isDone = task?.status === 'done';
+    const canStart = !live && !isDone;
     // After a finished run, new or reopened sub-tasks go through the Sub-tasks
     // steps on the same branch and into the same PR — no re-planning.
     const canContinue =
-        !live &&
+        canStart &&
         latest?.status === 'completed' &&
         openSubtasks > 0 &&
         Boolean(assigned?.graph.nodes.some((n) => n.type === 'subtasks'));
@@ -148,25 +151,23 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                     </Link>
                 </InfoRow>
             )}
-            {workflowId && (!live || canContinue) && (
+            {workflowId && canStart && (
                 <InfoRow label="Actions">
-                    {!live && (
-                        <Button
-                            size="small"
-                            variant="outlined"
-                            disabled={start.isPending}
-                            onClick={() => (restartsReview ? setConfirmRestart(true) : startRun())}
-                            sx={{
-                                textTransform: 'none',
-                                fontSize: 12,
-                                py: 0,
-                                minWidth: 0,
-                                whiteSpace: 'nowrap',
-                            }}
-                        >
-                            {restartsReview ? 'Restart' : 'Start now'}
-                        </Button>
-                    )}
+                    <Button
+                        size="small"
+                        variant="outlined"
+                        disabled={start.isPending}
+                        onClick={() => (restartsReview ? setConfirmRestart(true) : startRun())}
+                        sx={{
+                            textTransform: 'none',
+                            fontSize: 12,
+                            py: 0,
+                            minWidth: 0,
+                            whiteSpace: 'nowrap',
+                        }}
+                    >
+                        {restartsReview ? 'Restart' : 'Start now'}
+                    </Button>
                     {canContinue && (
                         <Tooltip
                             describeChild
@@ -202,9 +203,11 @@ export function ItemWorkflowPanel({ itemId, projectId }: Props) {
                 title="Restart the workflow on an item in review?"
                 body={`This does not resume where the run stopped — it runs the whole workflow again from the first step.
 
-The item goes back to In Progress, and the run branch is reset to the latest default branch, so any uncommitted work in its worktree is discarded. A pull request that is already open is updated in place.
-
-To pick up open sub-tasks instead, cancel and use "Continue".`}
+The item goes back to In Progress, and the run branch is reset to the latest default branch, so any uncommitted work in its worktree is discarded. A pull request that is already open is updated in place.${
+                    canContinue
+                        ? '\n\nTo pick up open sub-tasks instead, cancel and use "Continue".'
+                        : ''
+                }`}
                 confirmLabel="Restart from the beginning"
                 tone="destructive"
                 busy={start.isPending}

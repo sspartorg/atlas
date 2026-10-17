@@ -70,11 +70,18 @@ describe('useRecloneJob', () => {
         expect(result.current.errorDetail).toBe('fail');
     });
 
-    it('falls back to "Re-clone failed" when error has no detail', () => {
+    it('carries the commit count from reclone_completed', () => {
+        const { result } = renderHook(() => useRecloneJob('r1'));
+        const es = StubEventSource.instances[0]!;
+        act(() => es.fire({ type: 'reclone_completed', recloneId: 'r1', commitsPulled: 4 }));
+        expect(result.current.commitsPulled).toBe(4);
+    });
+
+    it('falls back to "Pull failed" when error has no detail', () => {
         const { result } = renderHook(() => useRecloneJob('r1'));
         const es = StubEventSource.instances[0]!;
         act(() => es.fire({ type: 'reclone_error', recloneId: 'r1' }));
-        expect(result.current.errorDetail).toBe('Re-clone failed');
+        expect(result.current.errorDetail).toBe('Pull failed');
     });
 
     it('completes with stashPath=null when reclone_completed has no stashPath (payload.stashPath ?? null branch)', () => {
@@ -83,6 +90,7 @@ describe('useRecloneJob', () => {
         act(() => es.fire({ type: 'reclone_completed', recloneId: 'r1' }));
         expect(result.current.status).toBe('ready');
         expect(result.current.stashPath).toBeNull();
+        expect(result.current.commitsPulled).toBeNull();
     });
 
     it('ignores unknown event types (false branch of reclone_error else-if)', () => {

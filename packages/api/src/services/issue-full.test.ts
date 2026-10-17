@@ -28,6 +28,9 @@ describe('issueFullService', () => {
             expect(res.sub_tasks.map((s) => s.id)).toEqual(['ATL-2', 'ATL-3']);
             expect(res.sub_tasks[0]!.task_id).toBe('ATL-1');
             expect(res.agents).toHaveLength(1);
+            // Names for the page, never the prompts.
+            expect(res.agents[0]!.name).toBeTruthy();
+            expect(res.agents[0]!.prompt_md).toBe('');
             expect(Array.isArray(res.related_links)).toBe(true);
             expect(Array.isArray(res.activity)).toBe(true);
         });

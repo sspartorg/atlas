@@ -453,4 +453,22 @@ describe('WorkItemKanban — long columns', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Show 10 more · 10 hidden' }));
         expect(screen.getByText('Card 59')).toBeInTheDocument();
     });
+
+    it('a card opens from the keyboard', async () => {
+        const onOpen = vi.fn();
+        renderWithProviders(
+            <WorkItemKanban
+                items={[makeItem({ title: 'Keyboard card' })]}
+                agents={[]}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                onTransition={vi.fn()}
+                onOpen={onOpen}
+            />
+        );
+        const card = screen.getByText('Keyboard card').closest<HTMLElement>('[role="button"]')!;
+        expect(card).toHaveAttribute('tabindex', '0');
+        fireEvent.keyDown(card, { key: 'Enter' });
+        expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ title: 'Keyboard card' }));
+    });
 });

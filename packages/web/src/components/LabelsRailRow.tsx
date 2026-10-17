@@ -85,10 +85,14 @@ export function LabelsRailRow({ labels, onChange, suggestions }: Props) {
         const next = clean(staged);
         setStaged(null);
         if (arraysEq(next, labels)) return;
-        // The parent mutation hook (useUpdateTask) /
-        // SubTaskDetail.patchSubTask already invalidates `['labels']` on success — no need to do it
-        // here as well.
-        await onChange(next);
+        // The parent mutation hook (useUpdateTask / useUpdateSubTask) invalidates
+        // `['labels']` on success and toasts a failure; the chips fall back to
+        // the saved labels either way.
+        try {
+            await onChange(next);
+        } catch {
+            // Toasted by the caller's mutation.
+        }
     }
 
     function beginEdit() {

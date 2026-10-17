@@ -524,6 +524,7 @@ describe('workflow runs over HTTP', () => {
 
         const status = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/status', payload: { status: 'done' } });
         expect(status.statusCode).toBe(409);
+        expect(status.json().error).toBe('A workflow run is working on this item and owns its status and assignee. Stop the run to change them by hand.');
         const assign = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/assign', payload: { assignee_agent_id: null } });
         expect(assign.statusCode).toBe(409);
         // Field edits (e.g. an agent writing spec_md) stay allowed.

@@ -74,6 +74,8 @@ export const defaultHandlers = [
     // (ADR 0018). Default to the one repo the project factory describes;
     // tests that need several override via server.use(...).
     http.get(`${BASE}/projects/:id/repos`, () => HttpResponse.json([makeProjectRepo()])),
+    // The detail rail reads an item's workflow runs for the routing lock.
+    http.get(`${BASE}/items/:id/workflow-runs`, () => HttpResponse.json([])),
     // The projects list reads every repo in one round trip.
     http.get(`${BASE}/repos`, () => HttpResponse.json([makeProjectRepo()])),
 ];

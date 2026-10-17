@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+    newJobId,
     getSSEState,
     subscribeSSEState,
     subscribeToEvents,
@@ -129,5 +130,13 @@ describe('sse-hub diagnostics', () => {
         const first = hub().getRecentEventTypes();
         first.length = 0;
         expect(hub().getRecentEventTypes().length).toBeGreaterThan(0);
+    });
+});
+
+describe('newJobId', () => {
+    it('is 32 hex chars, fits the API job-id rule, and does not repeat', () => {
+        const ids = new Set(Array.from({ length: 50 }, () => newJobId()));
+        expect(ids.size).toBe(50);
+        for (const id of ids) expect(id).toMatch(/^[0-9a-f]{32}$/);
     });
 });

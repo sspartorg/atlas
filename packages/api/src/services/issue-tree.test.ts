@@ -46,6 +46,8 @@ describe('buildIssueTree', () => {
         const p1Only = await buildIssueTree({ projectId: 'p1' });
         expect(p1Only.tree.map((n) => n.id)).toEqual(['ATL-1']);
         expect(p1Only.tasks.map((t) => t.id)).toEqual(['ATL-1']);
+        expect(all.projects.map((p) => p.id).sort()).toEqual(['p1', 'p2']);
+        expect(p1Only.projects.map((p) => p.id)).toEqual(['p1']);
     });
 
     // Exercise the `includeArchived: true` arm (default is false). A

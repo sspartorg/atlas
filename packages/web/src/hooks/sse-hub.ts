@@ -158,6 +158,18 @@ export function subscribeToEvents(listener: SSEEventListener): () => void {
 }
 
 /**
+ * Id for a job the client starts and then follows over SSE (project delete, repo
+ * pull). The caller subscribes with it BEFORE the POST that sends it: the
+ * runner broadcasts before its 202 arrives and the stream has no replay.
+ * `crypto.randomUUID` is missing on plain-http LAN origins; getRandomValues isn't.
+ */
+export function newJobId(): string {
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) =>
+        b.toString(16).padStart(2, '0')
+    ).join('');
+}
+
+/**
  * Test-only hook. Vitest suites that touch these hooks share the module
  * scope; explicitly resetting between suites prevents cross-test bleed.
  * @internal

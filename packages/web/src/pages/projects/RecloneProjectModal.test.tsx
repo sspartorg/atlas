@@ -10,9 +10,16 @@ import { RecloneProjectModal } from './RecloneProjectModal.js';
 
 type PushSse = (e: object) => void;
 
+// The modal picks the job id itself (it subscribes before POSTing).
+const JOB_ID = 'job-under-test';
+vi.mock('../../hooks/sse-hub.js', async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    newJobId: () => JOB_ID,
+}));
+
 const BASE = 'http://localhost:3000/api';
 const project = makeProject({ id: 'p1', name: 'Acme' });
-// ADR 0018 — a re-clone names the repo it acts on.
+// ADR 0018 — a pull names the repo it acts on.
 const repo = makeProjectRepo({
     id: 'r1',
     name: 'api',
@@ -73,7 +80,7 @@ describe('RecloneProjectModal — confirm view', () => {
                 onClose={vi.fn()}
             />
         );
-        expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument();
+        expect(screen.getByText('Pull from remote?')).toBeInTheDocument();
         expect(screen.getByText('Acme')).toBeInTheDocument();
     });
 
@@ -107,11 +114,13 @@ describe('RecloneProjectModal — confirm view', () => {
         expect(onClose).toHaveBeenCalled();
     });
 
-    it('Stash & re-clone button starts reclone job', async () => {
+    it('Pull button starts the job, sending the id it subscribed with', async () => {
+        let sent: unknown;
         server.use(
-            http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
-                HttpResponse.json({ reclone_id: 'rc-1' })
-            )
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, async ({ request }) => {
+                sent = await request.json();
+                return HttpResponse.json({ reclone_id: JOB_ID });
+            })
         );
         renderWithProviders(
             <RecloneProjectModal
@@ -124,8 +133,46 @@ describe('RecloneProjectModal — confirm view', () => {
         );
         // Wait for status to load before clicking submit
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
+        await waitFor(() => expect(sent).toEqual({ reclone_id: JOB_ID }));
+    });
+
+    it('does not miss a reclone_completed broadcast before the 202 arrives', async () => {
+        // The runner can finish (or at least start broadcasting) before the
+        // POST returns; the stream has no replay. The handler fires the event
+        // first, then answers.
+        server.use(
+            http.post(`${BASE}/projects/p1/repos/r1/reclone`, async ({ request }) => {
+                const body = (await request.json()) as { reclone_id?: string };
+                const id = body.reclone_id ?? 'server-made-id';
+                (window as Window & { __pushSse?: PushSse }).__pushSse?.({
+                    type: 'reclone_completed',
+                    recloneId: id,
+                    stashPath: null,
+                    commitsPulled: 0,
+                });
+                return HttpResponse.json({ reclone_id: id }, { status: 202 });
+            })
+        );
+        renderWithProviders(
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />
+        );
+        await waitFor(() => screen.getByText('clean'));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        expect(await screen.findByText('Pulled from remote')).toBeInTheDocument();
+    });
+
+    it('labels the button "Stash & pull" when there are local changes', async () => {
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r1/status`, () =>
+                HttpResponse.json({ ...statusOk, uncommitted: 2 })
+            )
+        );
+        renderWithProviders(
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(await screen.findByRole('button', { name: 'Stash & pull' })).toBeInTheDocument();
     });
 
     it('shows error alert when reclone API call fails', async () => {
@@ -144,7 +191,7 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
         await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     });
 
@@ -184,6 +231,11 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => expect(screen.getByText(/3 uncommitted files/i)).toBeInTheDocument());
+        // Where reclone-runner.ts actually writes the patch (inside .git, so the
+        // stash does not sweep it up); the copy used to say .atlas/stash/.
+        expect(screen.getByRole('alert')).toHaveTextContent(
+            '3 uncommitted files will be stashed to .git/atlas-stash/ before pulling. Restore them afterwards with git stash pop.'
+        );
     });
 
     it('close button does nothing while reclone is running (handleClose guard)', async () => {
@@ -203,9 +255,9 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
         // Now in 'running' view — close button is hidden, but onClose must not fire
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
         // No close button rendered in running view
         expect(screen.queryByRole('button', { name: /close/i })).not.toBeInTheDocument();
         expect(onClose).not.toHaveBeenCalled();
@@ -227,14 +279,14 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         // Push the completed SSE event
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_completed',
-                recloneId: 'rc-ok',
+                recloneId: JOB_ID,
                 stashPath: null,
             });
         });
@@ -242,7 +294,7 @@ describe('RecloneProjectModal — confirm view', () => {
         await waitFor(() =>
             expect(screen.getByRole('button', { name: /Open project/i })).toBeInTheDocument()
         );
-        expect(screen.getByText('Project re-cloned')).toBeInTheDocument();
+        expect(screen.getByText('Pulled from remote')).toBeInTheDocument();
     });
 
     it('transitions to error view on reclone_error SSE and Try again resets to confirm', async () => {
@@ -261,23 +313,23 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_error',
-                recloneId: 'rc-fail',
+                recloneId: JOB_ID,
                 errorDetail: 'fatal: diverged history',
             });
         });
 
-        await waitFor(() => expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Pull failed/i)).toBeInTheDocument());
         expect(screen.getByText(/fatal: diverged history/i)).toBeInTheDocument();
 
         // Click "Try again" — should go back to confirm view
         await userEvent.click(screen.getByRole('button', { name: /Try again/i }));
-        await waitFor(() => expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Pull from remote?')).toBeInTheDocument());
     });
 
     it('shows deriveStepIndex progress when reclone_output lines match step keywords', async () => {
@@ -296,28 +348,28 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         // Push reclone_output lines that advance stepIndex
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-steps',
+                recloneId: JOB_ID,
                 output: 'Stashing local changes...',
             });
         });
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-steps',
+                recloneId: JOB_ID,
                 output: 'Fetching remote... ok',
             });
         });
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-steps',
+                recloneId: JOB_ID,
                 output: 'Fast-forwarding 3 commits, 12 files changed',
             });
         });
@@ -349,7 +401,7 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
         await waitFor(() =>
             expect(screen.getByText(/Original credential was deleted/i)).toBeInTheDocument()
         );
@@ -380,7 +432,7 @@ describe('RecloneProjectModal — confirm view', () => {
         expect(screen.queryByText(/https?:\/\/.*·.*\/tmp\/only-path/)).not.toBeInTheDocument();
     });
 
-    it('deriveStepIndex matches /Re-indexing/i keyword via SSE output line', async () => {
+    it('the step header names the step in progress, not the one before it', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-reidx' })
@@ -396,22 +448,24 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-reidx',
-                output: 'Re-indexing project files...',
+                recloneId: JOB_ID,
+                output: 'Fetching remote... ok',
             });
         });
 
-        // Step 3 of 3 indicates the /Re-indexing/i branch advanced stepIndex
-        await waitFor(() => expect(screen.getByText(/Step 3 of 3/i)).toBeInTheDocument());
+        // Stash + fetch done: the fast-forward is running.
+        await waitFor(() =>
+            expect(screen.getByText(/Step 3 of 3 · Fast-forward default branch/i)).toBeInTheDocument()
+        );
     });
 
-    it('success view shows commits/files stats parsed from Fast-forward output', async () => {
+    it('success view shows the commit count the server measured and git\'s file count', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-stats' })
@@ -427,22 +481,24 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         // Push a Fast-forward line so the regex populates `commits` and `files`
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-stats',
-                output: 'Fast-forward updated 7 commits, 42 files changed',
+                recloneId: JOB_ID,
+                // What git really prints on a fast-forward: no commit count.
+                output: ' 42 files changed, 10 insertions(+), 2 deletions(-)',
             });
         });
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_completed',
-                recloneId: 'rc-stats',
+                recloneId: JOB_ID,
                 stashPath: null,
+                commitsPulled: 7,
             });
         });
 
@@ -474,23 +530,23 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_completed',
-                recloneId: 'rc-stash',
-                stashPath: '.atlas/stash/2026-06-25-abc',
+                recloneId: JOB_ID,
+                stashPath: '.git/atlas-stash/2026-06-25-abc',
             });
         });
 
         await waitFor(() =>
-            expect(screen.getByText(/\.atlas\/stash\/2026-06-25-abc/i)).toBeInTheDocument()
+            expect(screen.getByText(/\.git\/atlas-stash\/2026-06-25-abc/i)).toBeInTheDocument()
         );
     });
 
-    it('success view shows "Already up to date" when no commits regex matched', async () => {
+    it('success view shows "Already up to date" when the server pulled 0 commits', async () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r1/reclone`, () =>
                 HttpResponse.json({ reclone_id: 'rc-noop' })
@@ -506,22 +562,23 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
-        // Complete with no commits/files lines pushed → stats.commits === 0
+        // The runner counted old..HEAD and got 0.
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-noop',
+                recloneId: JOB_ID,
                 output: 'Already up to date.',
             });
         });
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_completed',
-                recloneId: 'rc-noop',
+                recloneId: JOB_ID,
                 stashPath: null,
+                commitsPulled: 0,
             });
         });
 
@@ -554,14 +611,14 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         // Push an output line first so job.lines is non-empty
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_output',
-                recloneId: 'rc-no-detail',
+                recloneId: JOB_ID,
                 output: 'some pre-error chatter',
             });
         });
@@ -572,12 +629,12 @@ describe('RecloneProjectModal — confirm view', () => {
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_error',
-                recloneId: 'rc-no-detail',
+                recloneId: JOB_ID,
                 errorDetail: '',
             });
         });
 
-        await waitFor(() => expect(screen.getByText(/Re-clone failed/i)).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText(/Pull failed/i)).toBeInTheDocument());
         // The stderr panel should fall back to job.lines content
         expect(screen.getByText(/some pre-error chatter/i)).toBeInTheDocument();
     });
@@ -599,13 +656,13 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         act(() => {
             (window as Window & { __pushSse?: PushSse }).__pushSse?.({
                 type: 'reclone_completed',
-                recloneId: 'rc-open',
+                recloneId: JOB_ID,
                 stashPath: null,
             });
         });
@@ -638,7 +695,7 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
         const manageBtn = await screen.findByRole('button', { name: /Manage credentials/i });
         await userEvent.click(manageBtn);
         expect(onClose).toHaveBeenCalled();
@@ -660,7 +717,7 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
 
         // Immediately after starting the job, no output lines have arrived yet.
         // The terminal box renders the fallback text.
@@ -684,8 +741,8 @@ describe('RecloneProjectModal — confirm view', () => {
             />
         );
         await waitFor(() => screen.getByText('clean'));
-        await userEvent.click(screen.getByRole('button', { name: /Stash & re-clone/i }));
-        await waitFor(() => expect(screen.getByText(/Re-cloning project/i)).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Pull$/ }));
+        await waitFor(() => expect(screen.getByText(/Pulling from remote/i)).toBeInTheDocument());
 
         // Close the modal by setting open=false — the useEffect resets state back to confirm
         rerender(
@@ -708,6 +765,6 @@ describe('RecloneProjectModal — confirm view', () => {
                 onClose={onClose}
             />
         );
-        await waitFor(() => expect(screen.getByText('Re-clone from remote?')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText('Pull from remote?')).toBeInTheDocument());
     });
 });

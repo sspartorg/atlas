@@ -159,4 +159,14 @@ describe('LinkPickerDialog', () => {
         fireEvent.click(screen.getByRole('button', { name: /Cancel/i }));
         expect(onClose).toHaveBeenCalled();
     });
+
+    it('results are buttons and the close icon has a name', async () => {
+        const user = userEvent.setup();
+        server.use(handlers.listTasks([makeTaskListItem({ id: 'ATL-51', title: 'Key Target' })]));
+        const onClose = renderPicker('relates_to');
+        await search('Key');
+        expect(await screen.findByRole('button', { name: /ATL-51.*Key Target/ })).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: 'Close' }));
+        expect(onClose).toHaveBeenCalled();
+    });
 });

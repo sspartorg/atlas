@@ -3,10 +3,9 @@ import { api } from '../api/api.js';
 
 // Batch-9 audit (enterprise-secrets read model). See
 // hooks/useEnvironmentSecrets.ts for the same shape at global scope.
-export interface IProjectEnvVar {
-    key: string;
-    value: string;
-}
+
+/** A row to save: a new value, or keep: an existing key whose stored value it keeps. */
+export type EnvSaveRow = { key: string; value: string } | { key: string; keep: string };
 
 export function useProjectEnv(projectId: string | null, enabled: boolean = true) {
     return useQuery({
@@ -19,7 +18,7 @@ export function useProjectEnv(projectId: string | null, enabled: boolean = true)
 export function useSaveProjectEnv(projectId: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: (vars: IProjectEnvVar[]) => api.projects.saveEnv(projectId, vars),
+        mutationFn: (vars: EnvSaveRow[]) => api.projects.saveEnv(projectId, vars),
         onSuccess: (data) => {
             qc.setQueryData(['projects', projectId, 'env'], data);
         },

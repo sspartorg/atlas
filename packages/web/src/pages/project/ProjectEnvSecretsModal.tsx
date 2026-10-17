@@ -26,6 +26,7 @@ import {
     useProjectEnv,
     useSaveProjectEnv,
     useRevealProjectEnv,
+    type EnvSaveRow,
 } from '../../hooks/useProjectEnv.js';
 import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { useToast } from '../../hooks/useToast.js';
@@ -120,7 +121,7 @@ function serializeJsonSecrets(rows: Array<{ key: string; value: string }>): stri
 
 export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Props) {
     const projectId = project?.id ?? null;
-    const { data, isLoading } = useProjectEnv(projectId, open);
+    const { data, isLoading, isError } = useProjectEnv(projectId, open);
     // ADR 0018 — the secrets are injected into a repo's checkout, so a project
     // with no repos has nowhere to put them.
     const { data: repos } = useProjectRepos(projectId ?? '');
@@ -299,11 +300,15 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
         setRows((rs) => rs.filter((r) => r.rid !== rid));
     }
 
-    function copy(value: string, label: string) {
-        void navigator.clipboard.writeText(value).then(
-            () => toast.show({ message: `${label} copied` }),
-            () => toast.show({ message: 'Clipboard blocked' })
-        );
+    // `navigator.clipboard` is undefined on a plain-http LAN origin, so the
+    // call itself can throw; await inside try so that case toasts too.
+    async function copy(value: string, label: string) {
+        try {
+            await navigator.clipboard.writeText(value);
+            toast.show({ message: `${label} copied` });
+        } catch {
+            toast.show({ message: 'Clipboard blocked' });
+        }
     }
 
     function onPickImport() {
@@ -422,43 +427,17 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
             toast.show({ message: `Fix ${errCount} row${errCount === 1 ? '' : 's'} first` });
             return;
         }
-        // Batch-9 audit (enterprise-secrets read model): the PUT
-        // endpoint is replace-all; the API list no longer returns
-        // plaintext, so untouched rows have `value === ''` and would
-        // wipe the stored secret on save. Reveal each untouched row
-        // just-in-time (keyed on `originalKey` so a rename doesn't
-        // 404 the reveal or push an empty value under the new name).
-        const preserved: Array<{ key: string; value: string }> = [];
-        const preservedRids = new Set<string>();
-        try {
-            for (const r of rows) {
-                if (!r.key || !KEY_RE.test(r.key)) continue;
-                if (r.originalKey && r.value === '') {
-                    // Existing stored row, Owner didn't type a new
-                    // value → preserve by revealing the ORIGINAL server
-                    // key then re-sending under the CURRENT (possibly
-                    // renamed) key.
-                    // Already revealed on screen → reuse it rather than
-                    // firing a second decrypt (each reveal is audited).
-                    const value =
-                        r.revealedValue ?? (await reveal.mutateAsync(r.originalKey)).value;
-                    preserved.push({ key: r.key, value });
-                    preservedRids.add(r.rid);
-                }
-            }
-        } catch (err) {
-            toast.show({
-                message: 'Could not save secrets',
-                detail:
-                    'Failed to read existing values while composing the save payload — ' +
-                    (err instanceof Error ? err.message : String(err)),
-            });
-            return;
-        }
-        const edited = rows
-            .filter((r) => r.key && KEY_RE.test(r.key) && !preservedRids.has(r.rid))
-            .map((r) => ({ key: r.key, value: r.value }));
-        const payload = [...preserved, ...edited];
+        // The list never returns plaintext, so a stored row the Owner didn't
+        // retype has `value === ''`. Send it as `keep: originalKey` and the
+        // server holds on to the stored value (under the current key, so a
+        // rename keeps it) without anything being revealed.
+        const payload: EnvSaveRow[] = rows
+            .filter((r) => r.key && KEY_RE.test(r.key))
+            .map((r) =>
+                r.originalKey && r.value === ''
+                    ? { key: r.key, keep: r.originalKey }
+                    : { key: r.key, value: r.value },
+            );
         try {
             await save.mutateAsync(payload);
             toast.show({ message: 'Project secrets saved' });
@@ -483,6 +462,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
             onClose={onClose}
             maxWidth="md"
             fullWidth
+            aria-labelledby="project-secrets-title"
             PaperProps={{
                 sx: {
                     borderRadius: '14px',
@@ -520,6 +500,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                             <Typography
+                                id="project-secrets-title"
                                 sx={{
                                     fontSize: 16,
                                     fontWeight: 600,
@@ -543,11 +524,14 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             </Box>
                         </Box>
                         <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 1 }}>
-                            Injected into every agent run inside <strong>{project.name}</strong>.
-                            In-flight runs continue under the previous values.
+                            Substituted into <strong>{project.name}</strong>&apos;s setup script as{' '}
+                            <Box component="span" sx={{ fontFamily: MONO }}>
+                                ${'{variable.KEY}'}
+                            </Box>{' '}
+                            — not passed to agent runs. Runs already set up keep the previous values.
                         </Typography>
                     </Box>
-                    <IconButton onClick={onClose} size="small">
+                    <IconButton onClick={onClose} size="small" aria-label="Close">
                         <CloseRounded />
                     </IconButton>
                 </Box>
@@ -636,6 +620,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                         variant="outlined"
                         startIcon={<FileUploadRounded sx={{ fontSize: 16 }} />}
                         onClick={onPickImport}
+                        disabled={!data}
                         sx={{
                             textTransform: 'none',
                             color: ATLAS_PALETTE.slate,
@@ -725,7 +710,11 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                             overflowY: 'auto',
                         }}
                     >
-                        {isLoading ? (
+                        {isError ? (
+                            <Box role="alert" sx={{ p: 4, textAlign: 'center', color: ATLAS_PALETTE.error, fontSize: 13 }}>
+                                Could not load this project's secrets. Close and try again.
+                            </Box>
+                        ) : isLoading ? (
                             <Box sx={{ p: 4, display: 'flex', justifyContent: 'center' }}>
                                 <CircularProgress
                                     size={20}
@@ -902,7 +891,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                                                     const shown =
                                                                         r.revealedValue ?? r.value;
                                                                     if (shown !== '') {
-                                                                        copy(
+                                                                        void copy(
                                                                             shown,
                                                                             r.key || 'value'
                                                                         );
@@ -915,7 +904,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                                                         r.originalKey!
                                                                     ).then((v) => {
                                                                         if (v !== null) {
-                                                                            copy(
+                                                                            void copy(
                                                                                 v,
                                                                                 r.key || 'value'
                                                                             );
@@ -983,6 +972,7 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                         variant="outlined"
                         startIcon={<AddRounded sx={{ fontSize: 16 }} />}
                         onClick={addRow}
+                        disabled={!data}
                         sx={{
                             textTransform: 'none',
                             color: ATLAS_PALETTE.slate,
@@ -1056,7 +1046,10 @@ export function ProjectEnvSecretsModal({ open, project, displayId, onClose }: Pr
                                 save.isPending ||
                                 hasErrors ||
                                 noWorkspace ||
-                                (dirtyCount === 0 && rows.length > 0)
+                                // Save replaces the whole set: never send it before
+                                // the stored set has loaded, or it would wipe it.
+                                !data ||
+                                dirtyCount === 0
                             }
                             startIcon={
                                 save.isPending ? (

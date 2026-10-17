@@ -185,7 +185,7 @@ test.describe('Jira bridge', () => {
         await expect(page.getByText('Source added')).toBeVisible();
 
         await page.getByRole('button', { name: 'Sync now' }).click();
-        await expect(page.getByText(/Jira sync: 1 imported/)).toBeVisible();
+        await expect(page.getByText(/Jira sync for .+: 1 imported/)).toBeVisible();
 
         const tasks = await apiGet<
             Array<{ id: string; title: string; status: string; workflow_id: string | null }>
@@ -238,7 +238,7 @@ test.describe('Jira bridge', () => {
         // Idempotent: another sync neither re-imports nor re-closes.
         calls = [];
         await page.getByRole('button', { name: 'Sync now' }).click();
-        await expect(page.getByText(/Jira sync: 0 imported, 0 comment\(s\) posted/)).toBeVisible();
+        await expect(page.getByText(/Jira sync( for .+)?: 0 imported, 0 comment\(s\) posted/)).toBeVisible();
         expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
     });
 

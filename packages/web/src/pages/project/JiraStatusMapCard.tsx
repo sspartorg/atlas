@@ -138,8 +138,8 @@ export function JiraStatusMapCard({ project }: { project: IProject }) {
                 Only issues in a Draft or Ready status import (leave Draft empty if your board has
                 no backlog column); moving one to Ready in Jira queues it; Atlas moves the Jira
                 issue to the first status listed as work progresses; and moving a Done issue back to
-                Draft or Ready (in Jira or here) reopens the same Task. Leave it empty to ignore
-                Jira's status.
+                Draft or Ready (in Jira or here) reopens the same Task. A mapping needs at least one
+                Ready status; to ignore Jira's status, don't save one (or use Clear mapping).
             </Typography>
             {!project.jira_status_map && (
                 <Alert severity="info" sx={{ mb: 3 }}>

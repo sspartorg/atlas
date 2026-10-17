@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react';
+import { useState, type MouseEvent, type ReactElement } from 'react';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
@@ -7,7 +7,7 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Divider from '@mui/material/Divider';
 import Tooltip from '@mui/material/Tooltip';
-import Typography from '@mui/material/Typography';
+import ListSubheader from '@mui/material/ListSubheader';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 interface Props {
@@ -19,8 +19,8 @@ interface Props {
     // that don't wire it (e.g., a future read-only project view)
     // don't have to bother; menu item hidden when absent.
     onGenerateAiScaffold?: () => void;
-    /** When false, the AI-Readiness item shows as disabled with a
-     *  tooltip explaining the prerequisite (not cloned yet). */
+    /** When false, the AI-Readiness item shows as disabled and says why
+     *  (no cloned repo yet). */
     aiScaffoldEnabled?: boolean;
 }
 
@@ -30,6 +30,7 @@ interface Item {
     label: string;
     onSelect?: () => void;
     disabled?: boolean;
+    disabledReason?: string;
     danger?: boolean;
     group: 'EDIT' | 'WORKSPACE';
 }
@@ -84,6 +85,7 @@ export function ProjectActionsMenu({
                       label: 'Generate AI scaffold…',
                       group: 'WORKSPACE' as const,
                       disabled: !aiScaffoldEnabled,
+                      ...(aiScaffoldEnabled ? {} : { disabledReason: 'Needs a cloned repo first' }),
                       onSelect: onGenerateAiScaffold,
                   },
               ]
@@ -134,10 +136,36 @@ export function ProjectActionsMenu({
                 transformOrigin={{ vertical: 'top', horizontal: 'right' }}
                 slotProps={{ paper: { sx: { minWidth: 248, borderRadius: '10px', mt: 1 } } }}
             >
-                {items.map((it) => {
+                {/* Flat children: MenuList's arrow-key focus walks its direct
+                    children, so wrapping items in a Box left ArrowUp/Down dead. */}
+                {items.flatMap((it) => {
                     const showGroupHeader = it.group !== lastGroup;
                     lastGroup = it.group;
-                    const inner = (
+                    const out: ReactElement[] = [];
+                    if (showGroupHeader) {
+                        if (it.group !== 'EDIT') out.push(<Divider key={`${it.key}-div`} sx={{ my: 1 }} />);
+                        out.push(
+                            <ListSubheader
+                                key={`${it.key}-head`}
+                                disableSticky
+                                sx={{
+                                    px: 2,
+                                    pt: 1,
+                                    pb: 0.5,
+                                    lineHeight: 1.5,
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    letterSpacing: '0.08em',
+                                    textTransform: 'uppercase',
+                                    color: ATLAS_PALETTE.slate40,
+                                    bgcolor: 'transparent',
+                                }}
+                            >
+                                {it.group === 'EDIT' ? 'Edit' : 'Workspace'}
+                            </ListSubheader>
+                        );
+                    }
+                    out.push(
                         <MenuItem
                             key={it.key}
                             onClick={() => {
@@ -170,48 +198,19 @@ export function ProjectActionsMenu({
                                     {it.icon}
                                 </Box>
                             </ListItemIcon>
-                            <ListItemText primaryTypographyProps={{ sx: { fontSize: 13 } }}>
-                                {it.label}
-                            </ListItemText>
+                            <ListItemText
+                                primary={it.label}
+                                // A disabled item gets no pointer events, so a
+                                // tooltip could never explain it; say why inline.
+                                secondary={it.disabledReason}
+                                slotProps={{
+                                    primary: { sx: { fontSize: 13 } },
+                                    secondary: { sx: { fontSize: 11.5 } },
+                                }}
+                            />
                         </MenuItem>
                     );
-                    const wrapped = it.disabled ? (
-                        <Tooltip
-                            key={it.key}
-                            title="Coming soon"
-                            placement="left"
-                            disableInteractive
-                        >
-                            <Box>{inner}</Box>
-                        </Tooltip>
-                    ) : (
-                        inner
-                    );
-
-                    return (
-                        <Box key={`${it.key}-wrap`}>
-                            {showGroupHeader && (
-                                <>
-                                    {lastGroup !== 'EDIT' && <Divider sx={{ my: 1 }} />}
-                                    <Typography
-                                        sx={{
-                                            px: 2,
-                                            pt: 1,
-                                            pb: 0.5,
-                                            fontSize: 10,
-                                            fontWeight: 600,
-                                            letterSpacing: '0.08em',
-                                            textTransform: 'uppercase',
-                                            color: ATLAS_PALETTE.slate40,
-                                        }}
-                                    >
-                                        {it.group === 'EDIT' ? 'Edit' : 'Workspace'}
-                                    </Typography>
-                                </>
-                            )}
-                            {wrapped}
-                        </Box>
-                    );
+                    return out;
                 })}
             </Menu>
         </>

@@ -56,8 +56,10 @@ export async function buildIssueTree(opts: BuildOpts = {}): Promise<IIssueTreeRe
         else subTasks.push(rowToSubTask(r as never));
     }
 
-    // 2. Projects — a small table, fetch in full.
-    const projectRows = await db.selectFrom('projects').selectAll().execute();
+    // 2. Projects — just the one when scoped, else the (small) table in full.
+    let projectsQ = db.selectFrom('projects').selectAll();
+    if (projectId) projectsQ = projectsQ.where('id', '=', projectId);
+    const projectRows = await projectsQ.execute();
     const projects = projectRows.map((r) => projectFromRow(r as never));
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const taskById = new Map(tasks.map((t) => [t.id, t]));

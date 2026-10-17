@@ -470,11 +470,8 @@ export const agentsService = {
                 'i.title as item_title',
                 'r.status as status',
                 sql<string | null>`NULL::text`.as('prompt_snapshot'),
-                sql<string | null>`CASE
-                    WHEN r.output_text IS NULL THEN NULL
-                    WHEN length(r.output_text) <= 400 THEN r.output_text
-                    ELSE left(r.output_text, 100) || E'\n…[elided]…\n' || right(r.output_text, 300)
-                END`.as('output_text'),
+                // Head only — see OUTPUT_TEXT_LIST_SQL in routes/run.ts.
+                sql<string | null>`left(r.output_text, 100)`.as('output_text'),
                 'r.started_at as started_at',
                 'r.completed_at as completed_at',
                 'r.created_at as created_at',

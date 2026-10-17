@@ -158,7 +158,7 @@ function AddSubTaskForm({
 export function TaskDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    useSetPageTitle('Task');
+    useSetPageTitle(id ?? '', 'Task');
 
     const { data: full, isLoading } = useTaskFull(id ?? '');
     const { data: settings } = useSettings();
@@ -220,19 +220,14 @@ export function TaskDetail() {
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
     const labelSuggestions = projectLabels?.labels ?? [];
 
-    // Lock the assignee picker whenever an item is in progress so an agent
-    // mid-task isn't yanked out from under itself. Toggle the item back to a
-    // non-running status first if you need to reassign.
-    const reassignLocked = task.status === 'in_progress';
-
     const addOptions: AddRelatedMenuOption[] = [
         {
-            label: 'Add relates-to',
+            label: 'Link an item',
             icon: <LinkRounded sx={{ fontSize: 16 }} />,
             onClick: () => setPickerMode('relates_to'),
         },
         {
-            label: 'Add blocked-by',
+            label: 'Add dependency',
             icon: <BlockRounded sx={{ fontSize: 16 }} />,
             onClick: () => setPickerMode('depends_on'),
         },
@@ -275,28 +270,18 @@ export function TaskDetail() {
                             externalLinks={full?.external_links}
                             status={task.status}
                             onStatusPick={(next, override) =>
-                                void transitionTask.mutateAsync({
-                                    id: task.id,
-                                    status: next,
-                                    override,
-                                })
+                                transitionTask.mutate({ id: task.id, status: next, override })
                             }
                             assigneeAgentId={task.assignee_agent_id}
-                            onAssign={(agentId) =>
-                                void assignTask.mutateAsync({ id: task.id, agentId })
-                            }
+                            onAssign={(agentId) => assignTask.mutate({ id: task.id, agentId })}
                             assignee={assignee}
-                            reassignLocked={reassignLocked}
                             project={project}
                             reporter={reporter}
                             ownerName={ownerName}
                             ownerAccent={ownerAccent}
                             priority={task.priority}
                             onPriorityPick={(next) =>
-                                void updateTask.mutateAsync({
-                                    id: task.id,
-                                    data: { priority: next },
-                                })
+                                updateTask.mutate({ id: task.id, data: { priority: next } })
                             }
                             labels={task.labels ?? []}
                             labelSuggestions={labelSuggestions}
@@ -326,7 +311,7 @@ export function TaskDetail() {
                     title="Description"
                     value={task.description}
                     placeholder="Describe what this task is for…"
-                    emptyHint="No description yet — click to add one."
+                    emptyHint="Click to add a description…"
                     saving={updateTask.isPending}
                     onSave={(next) =>
                         updateTask.mutateAsync({ id: task.id, data: { description: next } })

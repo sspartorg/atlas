@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { projectReposService } from './project-repos.js';
+import { schedulesService } from './schedules.js';
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertItem, insertProject, insertProjectRepo } from '../../tests/_items.js';
 
@@ -45,6 +46,30 @@ describe('projectReposService', () => {
         await projectReposService.remove('p1', 'p1');
 
         expect(await projectReposService.list('p1')).toEqual([]);
+    });
+
+    it('takes the removed repo\'s auto-fetch schedule with it (migration 018)', async () => {
+        await insertProject('p1', 'ATL');
+        const web = await insertProjectRepo('p1', { name: 'web' });
+        for (const repo_id of ['p1', web]) {
+            await schedulesService.upsert({
+                repo_id,
+                project_id: 'p1',
+                enabled: true,
+                preset: 'daily',
+                cron_expression: '0 6 * * *',
+                time_of_day: '06:00',
+                weekday: null,
+                skip_if_dirty: true,
+                pause_while_agents_active: false,
+                conflict_policy: 'skip',
+                next_run_at: null,
+            });
+        }
+
+        await projectReposService.remove('p1', web);
+
+        expect((await schedulesService.listEnabled()).map((s) => s.repo_id)).toEqual(['p1']);
     });
 
     it('drops a removed repo from its Tasks', async () => {

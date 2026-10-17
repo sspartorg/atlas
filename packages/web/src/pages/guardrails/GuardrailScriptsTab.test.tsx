@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -9,6 +9,34 @@ const BASE = 'http://localhost:3000/api';
 const ISO = '2026-05-16T00:00:00.000Z';
 
 describe('GuardrailScriptsTab', () => {
+    it('shows a plain "Loading…" (no mojibake) while scripts load', () => {
+        server.use(http.get(`${BASE}/guardrail-scripts`, () => new Promise<never>(() => {})));
+        renderWithProviders(<GuardrailScriptsTab />);
+        expect(screen.getByText('Loading…')).toBeInTheDocument();
+    });
+
+    it('script cards are native buttons', async () => {
+        server.use(
+            http.get(`${BASE}/guardrail-scripts`, () =>
+                HttpResponse.json([
+                    {
+                        id: 'lint',
+                        name: 'Lint',
+                        description: '',
+                        body_sh: 'x',
+                        body_ps1: 'x',
+                        sort_order: 0,
+                        created_at: '2026-01-01T00:00:00.000Z',
+                        updated_at: '2026-01-01T00:00:00.000Z',
+                    },
+                ])
+            )
+        );
+        renderWithProviders(<GuardrailScriptsTab />);
+        const card = await screen.findByRole('button', { name: /Lint/ });
+        expect(card.tagName).toBe('BUTTON');
+    });
+
     it('renders the empty state and Add-first button when no scripts', async () => {
         server.use(http.get(`${BASE}/guardrail-scripts`, () => HttpResponse.json([])));
         renderWithProviders(<GuardrailScriptsTab />);
@@ -152,12 +180,12 @@ describe('GuardrailScriptsTab', () => {
         // Open edit modal
         fireEvent.click(screen.getByText('Delete Me'));
         await waitFor(() => expect(screen.queryAllByRole('dialog').length).toBeGreaterThan(0));
-        // Find delete button in modal
-        const delBtn = screen.queryByRole('button', { name: /delete|remove/i });
-        if (delBtn) {
-            fireEvent.click(delBtn);
-            await waitFor(() => expect(deleted).toBe(true), { timeout: 3000 });
-        }
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        // Nothing is deleted until the confirm is accepted.
+        expect(deleted).toBe(false);
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this script?' });
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+        await waitFor(() => expect(deleted).toBe(true), { timeout: 3000 });
     });
 
     it('renders singular "1 script configured" when exactly one script exists (line 158 ternary)', async () => {
@@ -228,5 +256,17 @@ describe('GuardrailScriptsTab', () => {
             fireEvent.click(saveBtn);
             await waitFor(() => expect(updateCalled).toBe(true), { timeout: 3000 });
         }
+    });
+});
+
+describe('load failure', () => {
+    it('says it could not load, with Retry, instead of spinning or showing the empty state', async () => {
+        server.use(http.get(`${BASE}/guardrail-scripts`, () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+        renderWithProviders(<GuardrailScriptsTab />);
+        expect(await screen.findByText(/Could not load scripts/)).toBeInTheDocument();
+        let calls = 0;
+        server.use(http.get(/.*/, () => { calls += 1; return HttpResponse.json({ error: 'boom' }, { status: 500 }); }));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(calls).toBeGreaterThan(0));
     });
 });

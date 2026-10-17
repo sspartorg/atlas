@@ -16,6 +16,7 @@ import { useTeamConfig } from '../../hooks/useTeamConfig.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
 const MONO = '"JetBrains Mono", monospace';
+const PROBE_TIMEOUT_MS = 8000;
 
 interface Props {
     open: boolean;
@@ -46,11 +47,17 @@ export function NewProjectModal({ open, onClose }: Props) {
     const { data: teamConfig } = useTeamConfig();
     const isPublisher = teamConfig?.role === 'publisher';
     const [submitError, setSubmitError] = useState<string | null>(null);
+    // Set once the POST succeeds, so a retry after a failed team-config PATCH
+    // doesn't create the project again (and 409 on its own prefix).
+    const [createdId, setCreatedId] = useState<string | null>(null);
     const [prefixStatus, setPrefixStatus] = useState<
         | { kind: 'idle' }
         | { kind: 'invalid' }
         | { kind: 'checking' }
         | { kind: 'ok' }
+        // The probe failed or hung: Create stays possible — its POST is the
+        // authoritative check and 409s a taken prefix.
+        | { kind: 'unverified' }
         | { kind: 'collision'; conflict: string | null }
     >({ kind: 'idle' });
 
@@ -63,6 +70,7 @@ export function NewProjectModal({ open, onClose }: Props) {
             setTeamManaged(true);
             setSubmitting(false);
             setSubmitError(null);
+            setCreatedId(null);
             setPrefixStatus({ kind: 'idle' });
         }
     }, [open]);
@@ -93,42 +101,66 @@ export function NewProjectModal({ open, onClose }: Props) {
             return;
         }
         setPrefixStatus({ kind: 'checking' });
+        let live = true;
+        let timer: number | undefined;
         const handle = window.setTimeout(() => {
-            void api.projects
-                .prefixAvailable(issueKeyPrefix)
+            const timeout = new Promise<never>((_, reject) => {
+                timer = window.setTimeout(() => reject(new Error('timeout')), PROBE_TIMEOUT_MS);
+            });
+            void Promise.race([api.projects.prefixAvailable(issueKeyPrefix), timeout])
                 .then((r) => {
+                    if (!live) return;
                     if (r.available) setPrefixStatus({ kind: 'ok' });
                     else if (r.reason === 'in_use')
                         setPrefixStatus({ kind: 'collision', conflict: r.conflict ?? null });
                     else setPrefixStatus({ kind: 'invalid' });
                 })
                 .catch(() => {
-                    // Network error — stays "checking"; the Owner can retry.
-                });
+                    if (live) setPrefixStatus({ kind: 'unverified' });
+                })
+                .finally(() => window.clearTimeout(timer));
         }, 350);
-        return () => window.clearTimeout(handle);
+        return () => {
+            live = false;
+            window.clearTimeout(handle);
+            window.clearTimeout(timer);
+        };
     }, [issueKeyPrefix, open]);
 
-    const canSubmit = name.trim().length > 0 && prefixStatus.kind === 'ok' && !submitting;
+    const canSubmit =
+        name.trim().length > 0 &&
+        (prefixStatus.kind === 'ok' || prefixStatus.kind === 'unverified' || createdId !== null) &&
+        !submitting;
 
     async function handleCreate() {
         setSubmitting(true);
         setSubmitError(null);
+        let id = createdId;
         try {
-            const project = await api.projects.create({
-                name: name.trim(),
-                issue_key_prefix: issueKeyPrefix,
-                ...(description.trim() ? { description: description.trim() } : {}),
-            });
+            if (id === null) {
+                const project = await api.projects.create({
+                    name: name.trim(),
+                    issue_key_prefix: issueKeyPrefix,
+                    ...(description.trim() ? { description: description.trim() } : {}),
+                });
+                id = project.id;
+                setCreatedId(id);
+            }
             // Create doesn't take team_managed; the publisher-only flag goes through update.
-            if (isPublisher && teamManaged) await api.projects.update(project.id, { team_managed: true });
+            if (isPublisher && teamManaged) await api.projects.update(id, { team_managed: true });
             await qc.invalidateQueries({ queryKey: ['projects'] });
             onClose();
             // Straight to Repos: a project with no repo can't run a workflow,
             // so the next step is adding one.
-            navigate(`/projects/${project.id}?tab=repos`);
+            navigate(`/projects/${id}?tab=repos`);
         } catch (e) {
             const msg = e instanceof Error ? e.message : 'Could not create the project';
+            if (id !== null) {
+                void qc.invalidateQueries({ queryKey: ['projects'] });
+                setSubmitError(`The project was created, but adding it to the team config failed: ${msg}`);
+                setSubmitting(false);
+                return;
+            }
             if (/prefix/i.test(msg)) {
                 // Another tab claimed the prefix between our probe and this POST.
                 setPrefixStatus({ kind: 'collision', conflict: null });
@@ -148,6 +180,11 @@ export function NewProjectModal({ open, onClose }: Props) {
             };
         if (prefixStatus.kind === 'checking')
             return { text: 'Checking availability…', error: false };
+        if (prefixStatus.kind === 'unverified')
+            return {
+                text: "Couldn't check availability. Create still refuses a prefix that's taken.",
+                error: false,
+            };
         if (prefixStatus.kind === 'collision')
             return {
                 text: `Already used by "${prefixStatus.conflict ?? 'another project'}"`,
@@ -258,7 +295,7 @@ export function NewProjectModal({ open, onClose }: Props) {
                             }
                             label={
                                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
-                                    Include in team config — publishes this project&apos;s repos, guardrails,
+                                    Include in team config — publishes this project&apos;s repos, guard-rails,
                                     scripts, Jira queries, workflows and their agents to the team repo. Never
                                     its secrets. You can change this later on the project page.
                                 </Typography>

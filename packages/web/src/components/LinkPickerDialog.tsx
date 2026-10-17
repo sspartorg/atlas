@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import IconButton from '@mui/material/IconButton';
@@ -210,6 +211,7 @@ export function LinkPickerDialog({
                 <IconButton
                     onClick={onClose}
                     size="small"
+                    aria-label="Close"
                     sx={{ color: ATLAS_PALETTE.slate60, flexShrink: 0 }}
                 >
                     <CloseRounded fontSize="small" />
@@ -275,10 +277,13 @@ export function LinkPickerDialog({
                         </Typography>
                     ) : (
                         matches.map((m) => (
-                            <Box
+                            <ButtonBase
                                 key={`${m.type}:${m.id}`}
                                 onClick={() => void handlePick(m)}
                                 sx={{
+                                    width: '100%',
+                                    justifyContent: 'stretch',
+                                    textAlign: 'left',
                                     display: 'grid',
                                     gridTemplateColumns: '20px 92px 1fr',
                                     alignItems: 'center',
@@ -290,7 +295,7 @@ export function LinkPickerDialog({
                                     border: `1px solid ${ATLAS_PALETTE.slate10}`,
                                     cursor: 'pointer',
                                     transition: 'border-color 120ms ease',
-                                    '&:hover': {
+                                    '&:hover, &.Mui-focusVisible': {
                                         borderColor: ATLAS_PALETTE.brandBlue,
                                         background: ATLAS_PALETTE.cloud,
                                     },
@@ -298,6 +303,7 @@ export function LinkPickerDialog({
                             >
                                 <KindIcon kind={m.type} size={14} />
                                 <Typography
+                                    component="span"
                                     sx={{
                                         fontFamily: MONO,
                                         fontSize: 12,
@@ -307,6 +313,7 @@ export function LinkPickerDialog({
                                     {m.shortId}
                                 </Typography>
                                 <Typography
+                                    component="span"
                                     sx={{
                                         fontSize: 13,
                                         color: ATLAS_PALETTE.slate,
@@ -318,7 +325,7 @@ export function LinkPickerDialog({
                                 >
                                     {m.title}
                                 </Typography>
-                            </Box>
+                            </ButtonBase>
                         ))
                     )}
                 </Box>

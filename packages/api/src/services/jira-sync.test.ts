@@ -14,7 +14,7 @@ vi.mock('./external-notifications.js', () => ({ sendExternalForNotification: sen
 import { closeTestDb, testDb, truncateAll } from '../../tests/_pg-db.js';
 import { insertAgent, insertProject } from '../../tests/_items.js';
 import { commentsService } from './comments.js';
-import { composeCommentsSection, composeFilesSection, composeTaskDescription, jiraSync } from './jira-sync.js';
+import { composeCommentsSection, composeFilesSection, composeTaskDescription, jiraSync, flatten, jiraErrorText } from './jira-sync.js';
 
 const SITE = 'https://acme.atlassian.net';
 
@@ -522,6 +522,46 @@ describe('jira bridge pull', () => {
             .where('item_id', '=', t1.id)
             .executeTakeFirstOrThrow();
         expect(note.message).toContain('also matches Project p1 / repo in another project');
+    });
+
+    it("a project sync imports only that project's issues and leaves the poll clock alone", async () => {
+        await insertProject('p2', 'WEB');
+        await insertRepo('r-site', 'p2', 'site');
+        issues = [issue('ATL-1', ['api']), issue('ATL-2', ['site'])];
+        await configure();
+        await setSources(
+            { jql: 'labels = api', workflow_id: 'wf-dev' },
+            { project_id: 'p2', jql: 'labels = site', workflow_id: null, repo_ids: ['r-site'] }
+        );
+
+        const result = await jiraSync.syncNow({ id: 'p1', name: 'Project p1' });
+
+        expect(result).toMatchObject({ imported: 1 });
+        expect((await taskFor('ATL-1')).project_id).toBe('p1');
+        const linked = await testDb.selectFrom('jira_issues').select('jira_key').execute();
+        expect(linked.map((r) => r.jira_key)).toEqual(['ATL-1']);
+        const cfg = await testDb
+            .selectFrom('jira_config')
+            .select(['last_sync_at', 'last_sync_message'])
+            .executeTakeFirstOrThrow();
+        expect(cfg.last_sync_at).toBeNull();
+        expect(cfg.last_sync_message).toMatch(/^Project p1: Imported 1/);
+    });
+
+    it("a project sync leaves an issue a lower-id source in another project wins", async () => {
+        await insertProject('p2', 'WEB');
+        await insertRepo('r-site', 'p2', 'site');
+        issues = [issue('ATL-1', ['api', 'site'])];
+        await configure();
+        await setSources(
+            { project_id: 'p2', jql: 'labels = site', workflow_id: null, repo_ids: ['r-site'] },
+            { jql: 'labels = api', workflow_id: 'wf-dev' }
+        );
+
+        const result = await jiraSync.syncNow({ id: 'p1', name: 'Project p1' });
+
+        expect(result.imported).toBe(0);
+        expect(await testDb.selectFrom('jira_issues').select('jira_key').execute()).toEqual([]);
     });
 
     it('never re-imports a Task the Owner deleted', async () => {
@@ -1943,6 +1983,45 @@ describe('jira bridge attachments — edge cases', () => {
         expect((await jiraSync.getConfig()).last_sync_message).toMatch(/x\.png not copied/);
         expect(await testDb.selectFrom('jira_attachments').selectAll().execute()).toHaveLength(0);
         fakeFetch.mockImplementation(realFetch);
+    });
+});
+
+
+describe('flatten (Jira digest line)', () => {
+    it('reads a markdown table, list and code fence as one clean line', () => {
+        const md = [
+            '## Result',
+            '',
+            'Owner comment from Atlas.',
+            '',
+            '| Check | Result |',
+            '|---|:---:|',
+            '| Import | **ok** |',
+            '',
+            '- first `point`',
+            '```',
+            'npm test',
+            '```',
+        ].join('\n');
+        expect(flatten(md)).toBe('Result Owner comment from Atlas. Check · Result; Import · ok; first point npm test');
+    });
+});
+
+describe('jiraErrorText', () => {
+    it('reads Jira\'s error body as its messages', () => {
+        const raw = JSON.stringify({
+            errorMessages: ["Error in JQL Query: Expecting either a value, list or function but got '='."],
+            errors: {},
+        });
+        expect(jiraErrorText(raw)).toBe("Error in JQL Query: Expecting either a value, list or function but got '='.");
+        expect(jiraErrorText(JSON.stringify({ errorMessages: [], errors: { project: 'Project is required' } }))).toBe(
+            'project: Project is required'
+        );
+    });
+
+    it('passes a non-JSON body through, trimmed', () => {
+        expect(jiraErrorText('<html>Bad gateway</html>')).toBe('<html>Bad gateway</html>');
+        expect(jiraErrorText('x'.repeat(400))).toHaveLength(300);
     });
 });
 

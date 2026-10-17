@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Menu from '@mui/material/Menu';
@@ -301,9 +302,16 @@ export function SortableHeader<K extends string>({
     align,
 }: SortableHeaderProps<K>) {
     const active = current === sortKey;
+    // A button, so the sort is reachable by keyboard; its name says the order.
     return (
-        <Box
+        <ButtonBase
+            disabled={!sortKey}
             onClick={() => sortKey && onChange(sortKey)}
+            aria-label={
+                active
+                    ? `${label}, sorted ${dir === 'asc' ? 'ascending' : 'descending'}`
+                    : `Sort by ${label}`
+            }
             sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -311,6 +319,7 @@ export function SortableHeader<K extends string>({
                 cursor: sortKey ? 'pointer' : 'default',
                 userSelect: 'none',
                 justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+                '&.Mui-focusVisible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}` },
             }}
         >
             <Typography
@@ -337,6 +346,6 @@ export function SortableHeader<K extends string>({
                     {active && dir === 'asc' ? 'arrow_drop_up' : 'arrow_drop_down'}
                 </Box>
             )}
-        </Box>
+        </ButtonBase>
     );
 }

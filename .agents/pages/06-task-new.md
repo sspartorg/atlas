@@ -59,7 +59,7 @@ Single-page form to draft a Task and either save it as a draft or submit it. Sub
 ## Edge cases / quirks
 - **The assignee is informational** — agents never pick up items on their own (ADR 0014); the workflow is what runs.
 - A bad `workflow_id` (deleted since the list loaded, or moved project) fails the whole create with the API's 404/400 toast — nothing is saved, since the API validates before inserting.
-- Submit with None: if the `ready` transition fails after a successful create, the toast says "Saved" and the Task stays `draft`.
+- Submit with None: if the `ready` transition fails after a successful create, the one toast is `useTransitionTask`'s "Couldn't move <id>" with the API's reason, and the Task stays `draft`.
 - "OWNER" is a select sentinel mapped to `null` in the payload.
 - The draft guard covers app-level navigation only (`BrowserRouter`, no `useBlocker`); **Cancel**, the breadcrumb and the post-submit redirect leave without asking.
 - Browser automation typing at ~4–5 ms per key drops ~1 char per 50 in these controlled fields; set values via the native setter + `input` event or type with a per-key delay (verified 2026-09-14, not an app bug).

@@ -2,12 +2,18 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import LinkRounded from '@mui/icons-material/LinkRounded';
+import ErrorOutlineRounded from '@mui/icons-material/ErrorOutlineRounded';
 import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
 const MONO = '"JetBrains Mono", monospace';
 
+// Toasts carry no tone, so read it off the wording every failure toast uses.
+const FAILURE = /\b(couldn'?t|could not|cannot|can'?t|failed|blocked|error)\b/i;
+
 function iconForMessage(message: string) {
+    if (FAILURE.test(message))
+        return <ErrorOutlineRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.error }} />;
     if (/copied/i.test(message))
         return <LinkRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.success }} />;
     return <FolderOpenRounded sx={{ fontSize: 16, color: ATLAS_PALETTE.success }} />;

@@ -144,6 +144,27 @@ describe('ProjectActionsMenu', () => {
             (el) => el.hasAttribute('disabled') || el.getAttribute('aria-disabled') === 'true'
         );
         expect(disabledItem).toBeTruthy();
+        // The real prerequisite, not "Coming soon".
+        expect(disabledItem).toHaveTextContent('Needs a cloned repo first');
+        expect(screen.queryByText('Coming soon')).toBeNull();
+    });
+
+    it('arrow keys move between items (no wrapper elements in the menu list)', async () => {
+        renderWithProviders(
+            <ProjectActionsMenu
+                onRename={vi.fn()}
+                onEditGuardrails={vi.fn()}
+                onManageSecrets={vi.fn()}
+                onDelete={vi.fn()}
+            />
+        );
+        await userEvent.click(screen.getByRole('button', { name: 'Project actions' }));
+        const rename = await screen.findByRole('menuitem', { name: 'Rename project…' });
+        await waitFor(() => expect(rename).toHaveFocus());
+        await userEvent.keyboard('{ArrowDown}');
+        expect(screen.getByRole('menuitem', { name: 'Edit guard-rails' })).toHaveFocus();
+        await userEvent.keyboard('{ArrowDown}');
+        expect(screen.getByRole('menuitem', { name: 'Manage Secrets' })).toHaveFocus();
     });
 
     it('clicking a disabled menu item does NOT invoke onSelect (line 138 early-return branch)', async () => {

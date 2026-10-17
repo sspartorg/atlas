@@ -514,6 +514,19 @@ describe('ProjectEnvSecretsModal — clipboard failure', () => {
         await userEvent.click(copyBtns[0]!);
         await waitFor(() => expect(screen.getByText('Clipboard blocked')).toBeInTheDocument());
     });
+
+    it('also toasts on a plain-http origin, where navigator.clipboard is undefined', async () => {
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+        renderWithProviders(
+            <>
+                <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+                <Toast />
+            </>
+        );
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getAllByLabelText(/^Copy$/)[0]!);
+        await waitFor(() => expect(screen.getByText('Clipboard blocked')).toBeInTheDocument());
+    });
 });
 
 // ─── 9. value TextField onChange (L657) ──────────────────────────────────────
@@ -869,5 +882,86 @@ describe('ProjectEnvSecretsModal — revealing stored secrets', () => {
         await userEvent.click(screen.getAllByLabelText(/^Copy$/)[0]!);
         await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
         expect(writeText.mock.calls[0]?.[0]).toBe('postgres://prod/acme');
+    });
+});
+
+// ─── Save never wipes or reveals stored secrets ──────────────────────────────
+
+describe('ProjectEnvSecretsModal — save safety', () => {
+    // What the real API returns: keys and timestamps, never values.
+    const metadataOnly = {
+        vars: [
+            { key: 'DATABASE_URL', updated_at: '2026-10-01T00:00:00Z', has_value: true },
+            { key: 'API_SECRET', updated_at: '2026-10-01T00:00:00Z', has_value: true },
+        ],
+    };
+
+    it('Add, Import and Save stay disabled while the stored list is loading', async () => {
+        server.use(http.get(`${BASE}/projects/p1/env`, () => new Promise<never>(() => {})));
+        renderWithProviders(
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+        );
+        for (const name of [/Add variable/i, /Import/i, /Save secrets/i]) {
+            expect(screen.getByRole('button', { name })).toBeDisabled();
+        }
+    });
+
+    it('a failed load says so and keeps Add, Import and Save disabled', async () => {
+        server.use(http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+        renderWithProviders(
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(await screen.findByText(/Could not load this project's secrets/)).toBeInTheDocument();
+        expect(screen.queryByText(/No secrets yet/i)).not.toBeInTheDocument();
+        for (const name of [/Add variable/i, /Import/i, /Save secrets/i]) {
+            expect(screen.getByRole('button', { name })).toBeDisabled();
+        }
+    });
+
+    it('untouched rows are sent as keep and nothing is revealed', async () => {
+        let body: unknown;
+        let reveals = 0;
+        server.use(
+            http.get(`${BASE}/projects/p1/env`, () => HttpResponse.json(metadataOnly)),
+            http.get(`${BASE}/projects/p1/env/:key/value`, () => {
+                reveals += 1;
+                return HttpResponse.json({ key: 'X', value: 'x' });
+            }),
+            http.put(`${BASE}/projects/p1/env`, async ({ request }) => {
+                body = await request.json();
+                return HttpResponse.json(metadataOnly);
+            }),
+        );
+        const onClose = vi.fn();
+        renderWithProviders(
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={onClose} />
+        );
+        await waitFor(() => screen.getByDisplayValue('DATABASE_URL'));
+        await userEvent.click(screen.getByRole('button', { name: /Add variable/i }));
+        await userEvent.type(screen.getAllByPlaceholderText('MY_KEY').at(-1)!, 'NEW_KEY');
+        const valueInputs = screen.getAllByPlaceholderText(/value/i);
+        await userEvent.type(valueInputs.at(-1)!, 'v1');
+        await userEvent.click(screen.getByRole('button', { name: /Save secrets/i }));
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(reveals).toBe(0);
+        expect(body).toEqual({
+            vars: [
+                { key: 'DATABASE_URL', keep: 'DATABASE_URL' },
+                { key: 'API_SECRET', keep: 'API_SECRET' },
+                { key: 'NEW_KEY', value: 'v1' },
+            ],
+        });
+    }, 30_000);
+});
+
+describe('ProjectEnvSecretsModal — copy and a11y', () => {
+    it('names the dialog and its close button, and says where secrets go', async () => {
+        renderWithProviders(
+            <ProjectEnvSecretsModal open project={project} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(screen.getByRole('dialog', { name: 'Project Secrets' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+        expect(screen.queryByText(/Injected into every agent run/)).not.toBeInTheDocument();
+        expect(screen.getByText(/not passed to agent runs/)).toBeInTheDocument();
     });
 });

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
@@ -21,7 +22,7 @@ export interface ProjectRow {
     id: string;
     displayId: string;
     name: string;
-    /** First repo's remote, with a `+N` suffix when the project has more (ADR 0018). */
+    /** Every repo's name, comma-joined (ADR 0018); '' when there are none. */
     gitPath: string;
     tasks: number;
     subTasks: number;
@@ -51,7 +52,7 @@ interface IColumn {
 const COLUMNS: IColumn[] = [
     { key: 'displayId', label: 'ID' },
     { key: 'name', label: 'Project' },
-    { key: 'gitPath', label: 'Repo URL' },
+    { key: 'gitPath', label: 'Repos' },
     { key: 'tasks', label: 'Tasks' },
     { key: 'subTasks', label: 'Sub-tasks' },
     { key: 'lastActivity', label: 'Last Activity' },
@@ -122,6 +123,9 @@ export function ProjectsTable({
                                     <TableCell
                                         key={col.key}
                                         align="left"
+                                        {...(isActive
+                                            ? { 'aria-sort': sortDir === 'asc' ? 'ascending' : 'descending' }
+                                            : {})}
                                         sx={{
                                             textTransform: 'uppercase',
                                             fontSize: '0.6875rem',
@@ -193,7 +197,15 @@ export function ProjectsTable({
                                     }}
                                 >
                                     <Stack direction="row" alignItems="center" spacing={1}>
-                                        <span>{row.name}</span>
+                                        {/* The row click is for the mouse; the link is the keyboard path. */}
+                                        <Box
+                                            component={RouterLink}
+                                            to={`/projects/${row.id}`}
+                                            onClick={(e: MouseEvent) => e.stopPropagation()}
+                                            sx={{ color: 'inherit', textDecoration: 'none' }}
+                                        >
+                                            {row.name}
+                                        </Box>
                                         {(() => {
                                             const sched = scheduleMap?.get(row.id);
                                             if (!sched) return null;

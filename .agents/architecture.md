@@ -379,7 +379,7 @@ All long-running work runs in spawned subprocesses, never inline in the request 
 |---|---|---|---|
 | `agent-runner.ts` | `claude` or `copilot` CLI (`cli = ollama` spawns `claude` with the Ollama env overlay) | prompt built from agent `prompt_md` + issue context; `.atlas/*` staged in the workflow worktree or a temp dir | stdout â†’ `agent_output` SSE; on exit, cost + outcome persisted and the step reported to `workflow-engine.onStepFinished` |
 | `clone-runner.ts` | `git clone` | repo URL, credential (decrypted in-memory), target path | output â†’ `clone_output` SSE; on success, project `clone_status` â†’ cloned |
-| `reclone-runner.ts` | `rm -rf` + `git clone` | project_id | sequence of SSE events |
+| `reclone-runner.ts` | `git stash` + `fetch --prune` + `pull --ff-only` | repo_id | sequence of SSE events |
 | `delete-runner.ts` | `rm -rf` (workspace folder) | project_id | SSE events |
 | `auto-fetch-runner.ts` | `git fetch` | scheduled via Croner from `project_schedules` | SSE events + external notification on auth failure |
 

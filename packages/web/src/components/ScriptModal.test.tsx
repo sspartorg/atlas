@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ScriptModal } from './ScriptModal.js';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 
@@ -253,10 +253,31 @@ describe('ScriptModal', () => {
                 onDelete={onDelete}
             />
         );
-        const deleteBtn = screen.getByRole('button', { name: /delete/i });
-        fireEvent.click(deleteBtn);
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+        // Asks first — a script is no longer one click from gone.
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this script?' });
+        expect(onDelete).not.toHaveBeenCalled();
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
         await waitFor(() => expect(onDelete).toHaveBeenCalledWith('s1'));
         await waitFor(() => expect(onClose).toHaveBeenCalled());
+    });
+
+    it('Cancel on the delete confirm keeps the script', async () => {
+        const onDelete = vi.fn();
+        renderWithProviders(
+            <ScriptModal
+                open
+                editing={{ id: 's1', name: 'Lint', description: '', body_sh: 'echo', body_ps1: 'echo' }}
+                onClose={vi.fn()}
+                onSubmit={() => {}}
+                onDelete={onDelete}
+            />
+        );
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this script?' });
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete this script?' })).not.toBeInTheDocument());
+        expect(onDelete).not.toHaveBeenCalled();
     });
 
     it('handleDelete catch branch — onDelete throws an Error', async () => {
@@ -276,8 +297,9 @@ describe('ScriptModal', () => {
                 onDelete={onDelete}
             />
         );
-        const deleteBtn = screen.getByRole('button', { name: /delete/i });
-        fireEvent.click(deleteBtn);
+        fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this script?' });
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
         await waitFor(() => expect(screen.getByText('Delete failed')).toBeInTheDocument());
     });
 

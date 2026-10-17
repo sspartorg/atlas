@@ -165,6 +165,38 @@ describe('Projects page', () => {
         });
     });
 
+    it('chip counts cover every project, matching the subtitle total, not just the page', async () => {
+        const many = Array.from({ length: 25 }, (_, i) =>
+            makeProject({ id: `p${i + 1}`, name: `Project ${i + 1}` })
+        );
+        server.use(
+            http.get(`${BASE}/projects/paged`, () =>
+                HttpResponse.json({ rows: many.slice(0, 20), total: 25, page: 1, limit: 20 })
+            ),
+            http.get(`${BASE}/projects`, () => HttpResponse.json(many)),
+            ...defaultHandlers
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
+        expect(await screen.findByText(/^25 projects/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^All\s*25$/ })).toBeInTheDocument();
+    });
+
+    it('a failed load shows an error with Retry, not "No projects yet."', async () => {
+        server.use(
+            http.get(`${BASE}/projects/paged`, () =>
+                HttpResponse.json({ error: 'db down', kind: 'internal_error' }, { status: 500 })
+            ),
+            http.get(`${BASE}/projects`, () =>
+                HttpResponse.json({ error: 'db down', kind: 'internal_error' }, { status: 500 })
+            ),
+            ...defaultHandlers
+        );
+        renderWithProviders(<Projects />, { initialEntries: ['/projects'] });
+        expect(await screen.findByText(/Could not load projects/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+        expect(screen.queryByText('No projects yet.')).not.toBeInTheDocument();
+    });
+
     it('card menu offers only project-wide actions — repo actions moved to Project Detail', async () => {
         // ADR 0018: re-clone, auto-fetch and reveal each need one repo, and a
         // project has 0..N — the list page can't pick one, so it doesn't offer them.

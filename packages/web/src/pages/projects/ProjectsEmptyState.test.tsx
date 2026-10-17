@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { ProjectsEmptyState } from './ProjectsEmptyState.js';
 
-import { fireEvent } from '@testing-library/react';
 
 describe('ProjectsEmptyState', () => {
     it('renders and fires the New Project CTA', async () => {
@@ -15,12 +14,18 @@ describe('ProjectsEmptyState', () => {
         expect(onNewProject).toHaveBeenCalled();
     });
 
-    it('clicking "Settings → Credentials" link fires navigate (covers inline arrow fn)', () => {
+    it('describes the current create flow, not the old paste-a-URL clone', () => {
         renderWithProviders(<ProjectsEmptyState onNewProject={vi.fn()} />);
-        // Find the credentials link text and click it
-        const credLink = screen.getByText(/Settings.*Credentials|Credentials/);
-        fireEvent.click(credLink);
-        // No assertion needed — just confirm no crash and the page still renders
-        expect(screen.getByText(/No projects yet/)).toBeInTheDocument();
+        expect(screen.queryByText(/Paste a GitHub/)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Point Atlas at a git URL/)).not.toBeInTheDocument();
+        expect(screen.getByText(/You.ll add its repos/)).toBeInTheDocument();
+    });
+
+    it('"Settings → Credentials" is a real, focusable link', () => {
+        renderWithProviders(<ProjectsEmptyState onNewProject={vi.fn()} />);
+        expect(screen.getByRole('link', { name: 'Settings → Credentials' })).toHaveAttribute(
+            'href',
+            '/settings/credentials'
+        );
     });
 });

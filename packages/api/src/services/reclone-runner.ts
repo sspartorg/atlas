@@ -6,11 +6,15 @@ import { broadcastSSE } from '../routes/events.js';
 import { projectReposService } from './project-repos.js';
 import { credentialsService } from './credentials.js';
 import { gitInvokeEnv } from './git-env.js';
+import { withProjectGitLock } from './project-git-lock.js';
+import { notificationsService } from './notifications.js';
 
 export interface StartRecloneInput {
     repoId: string;
     destination: string;
     branch: string;
+    /** Chosen by the client so it can subscribe before POSTing (see RecloneProjectSchema). */
+    recloneId?: string;
 }
 
 interface GitSpawnResult {
@@ -95,7 +99,7 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
 
     const authB64 = Buffer.from(`${cred.username}:${token}`, 'utf8').toString('base64');
     const authHeader = `AUTHORIZATION: basic ${authB64}`;
-    const recloneId = randomUUID();
+    const recloneId = input.recloneId ?? randomUUID();
     broadcastSSE({ type: 'reclone_status', recloneId, status: 'pending' });
 
     const redact = (line: string): string => line.split(authB64).join('***').split(token).join('***');
@@ -105,8 +109,23 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
 
     let stashPath: string | null = null;
     const collectedStderr: string[] = [];
+    // The modal shows the error live; the notification is for an Owner who
+    // closed it, and records that local changes may now sit in a stash.
+    const fail = async (detail: string): Promise<void> => {
+        broadcastSSE({ type: 'reclone_error', recloneId, status: 'error', errorDetail: detail });
+        await notificationsService
+            .create({
+                event_type: 'reclone_failed',
+                project_id: repo.project_id,
+                message: `Pull failed on "${repo.name}": ${detail.split('\n')[0]}${
+                    stashPath ? ` Local changes were stashed to ${stashPath}.` : ''
+                }`,
+            })
+            .catch(() => undefined);
+    };
 
-    void (async () => {
+    // Same clone as worktree provisioning and auto-fetch: serialize on the repo.
+    void withProjectGitLock(repo.id, async () => {
         try {
             // 1. Detect dirty working tree
             const status = await runGit(
@@ -119,29 +138,25 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
             if (status.code !== 0) {
                 const msg = status.stderr.trim() || `git status failed with exit code ${status.code}`;
                 emit(msg);
-                broadcastSSE({
-                    type: 'reclone_error',
-                    recloneId,
-                    status: 'error',
-                    errorDetail: redact(msg),
-                });
+                await fail(redact(msg));
                 return;
             }
 
             // 2. If dirty, stash + dump patch
             const isDirty = status.stdout.trim().length > 0;
             if (isDirty) {
-                const stashDir = join(input.destination, '.atlas', 'stash');
-                await mkdir(stashDir, { recursive: true });
+                // The patch lives under .git: inside the working tree it would
+                // be swept into this very stash (--include-untracked), and a
+                // patch left behind would make the next pull's tree "dirty".
+                const stashDir = join(input.destination, '.git', 'atlas-stash');
                 const stamp = formatStamp(new Date());
                 const stashFile = join(stashDir, `${stamp}.patch`);
 
                 const diff = await runGit(
-                    ['-c', 'credential.helper=', 'diff'],
+                    ['-c', 'credential.helper=', 'diff', 'HEAD'],
                     input.destination,
                     () => undefined,
                 );
-                await writeFile(stashFile, diff.stdout, 'utf8');
 
                 emit(`Stashing local changes -> ${stashFile}`);
                 const stashPush = await runGit(
@@ -159,14 +174,11 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
                 );
                 if (stashPush.code !== 0) {
                     emit(`git stash push failed with exit code ${stashPush.code}`);
-                    broadcastSSE({
-                        type: 'reclone_error',
-                        recloneId,
-                        status: 'error',
-                        errorDetail: redact(stashPush.stderr || `git stash push failed`),
-                    });
+                    await fail(redact(stashPush.stderr || `git stash push failed`));
                     return;
                 }
+                await mkdir(stashDir, { recursive: true });
+                await writeFile(stashFile, diff.stdout, 'utf8');
                 emit('Stashing local changes... ok');
                 stashPath = stashFile;
             } else {
@@ -199,19 +211,17 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
             );
             if (fetchRes.code !== 0) {
                 emit(`Fetch failed with exit code ${fetchRes.code}`);
-                broadcastSSE({
-                    type: 'reclone_error',
-                    recloneId,
-                    status: 'error',
-                    errorDetail: redact(
+                await fail(redact(
                         collectedStderr.join('\n') || `git fetch failed with exit code ${fetchRes.code}`,
-                    ),
-                });
+                    ));
                 return;
             }
             emit('Fetching remote... ok');
 
-            // 4. Fast-forward only
+            // 4. Fast-forward only. git prints no commit count on a
+            // fast-forward, so count old..new HEAD ourselves.
+            const before = await runGit(['rev-parse', 'HEAD'], input.destination, () => undefined);
+            const oldHead = before.code === 0 ? before.stdout.trim() : null;
             emit(`Fast-forwarding ${input.branch}...`);
             // `--` sentinel — see fetch above.
             const pullRes = await runGit(
@@ -234,18 +244,22 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
             );
             if (pullRes.code !== 0) {
                 emit(`Fast-forward failed with exit code ${pullRes.code}`);
-                broadcastSSE({
-                    type: 'reclone_error',
-                    recloneId,
-                    status: 'error',
-                    errorDetail: redact(
+                await fail(redact(
                         collectedStderr.join('\n') || `git pull failed with exit code ${pullRes.code}`,
-                    ),
-                });
+                    ));
                 return;
             }
 
-            emit('Re-indexing project... ok');
+            let commitsPulled: number | null = null;
+            if (oldHead) {
+                const count = await runGit(
+                    ['rev-list', '--count', `${oldHead}..HEAD`],
+                    input.destination,
+                    () => undefined,
+                );
+                if (count.code === 0) commitsPulled = Number(count.stdout.trim());
+            }
+            emit(`Fast-forwarding ${input.branch}... ok`);
 
             // 2026-06-10 (Phase 5) — `.env` restore step removed. The
             // per-project setup runner (project-setup-runner.ts) is now
@@ -259,16 +273,12 @@ export async function startReclone(input: StartRecloneInput): Promise<string> {
                 recloneId,
                 status: 'ready',
                 stashPath,
+                commitsPulled,
             });
         } catch (err) {
-            broadcastSSE({
-                type: 'reclone_error',
-                recloneId,
-                status: 'error',
-                errorDetail: redact(err instanceof Error ? err.message : String(err)),
-            });
+            await fail(redact(err instanceof Error ? err.message : String(err)));
         }
-    })();
+    });
 
     return recloneId;
 }

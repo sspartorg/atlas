@@ -196,6 +196,27 @@ function toIso(d: Date | string | null | undefined): string | null {
     return d ? new Date(d).toISOString() : null;
 }
 
+/**
+ * Jira's error body is `{errorMessages: [...], errors: {field: msg}}`; the
+ * Owner reads it in a toast and a phone notification, so send the messages,
+ * not the JSON. Anything else passes through, trimmed.
+ */
+export function jiraErrorText(raw: string): string {
+    try {
+        const body = JSON.parse(raw) as { errorMessages?: unknown; errors?: unknown };
+        const messages = [
+            ...(Array.isArray(body.errorMessages) ? body.errorMessages : []),
+            ...(body.errors && typeof body.errors === 'object'
+                ? Object.entries(body.errors as Record<string, unknown>).map(([k, v]) => `${k}: ${String(v)}`)
+                : []),
+        ].filter((m): m is string => typeof m === 'string' && m.length > 0);
+        if (messages.length > 0) return messages.join(' ').slice(0, 300);
+    } catch {
+        // Not JSON: an HTML error page or plain text.
+    }
+    return raw.slice(0, 300);
+}
+
 async function jiraFetch<T>(
     c: Creds,
     path: string,
@@ -217,7 +238,7 @@ async function jiraFetch<T>(
         throw new ApiError('upstream_unavailable', `Jira is unreachable: ${errMsg(err)}`, 502);
     }
     if (!res.ok) {
-        const detail = (await res.text().catch(() => '')).slice(0, 300);
+        const detail = jiraErrorText(await res.text().catch(() => ''));
         const where = path.split('?')[0];
         if (res.status === 401 || res.status === 403) {
             throw new ApiError(
@@ -1046,11 +1067,25 @@ async function refreshIssue(
 }
 
 /** Returns notes for the sync message (sources skipped because their repo is gone). */
-async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Promise<string[]> {
+async function pull(
+    row: ConfigRow,
+    creds: Creds,
+    result: IJiraSyncResult,
+    projectId: string | null = null
+): Promise<string[]> {
     const cfg = rowToConfig(row);
     // Ordered by id across every project: the lowest-id matching source wins an
     // issue that several match, because one issue is one Task.
-    const sources = await listAllSources();
+    let sources = await listAllSources();
+    if (projectId !== null) {
+        // A project sync still searches every other project's lower-id source,
+        // so an issue both match goes to the same project a full sync picks.
+        const own = sources.filter((s) => s.project_id === projectId);
+        if (own.length === 0)
+            throw new ApiError('validation_error', 'Add a Jira source on this project first', 400);
+        const maxOwn = Math.max(...own.map((s) => s.id));
+        sources = sources.filter((s) => s.project_id === projectId || s.id < maxOwn);
+    }
     if (sources.length === 0)
         throw new ApiError(
             'validation_error',
@@ -1081,6 +1116,7 @@ async function pull(row: ConfigRow, creds: Creds, result: IJiraSyncResult): Prom
     const extra = await resolveExtraFields(creds, cfg.extra_fields);
     const maps = await statusMaps();
     for (const { issue, first, matches } of found.values()) {
+        if (projectId !== null && first.source.project_id !== projectId) continue;
         const existing = await loadIssueRow(issue.key);
         const map = maps.get(first.source.project_id) ?? null;
         const group = statusGroup(map, jiraStatusOf(issue));
@@ -1138,9 +1174,22 @@ function adfDoc(head: AdfText[], items: AdfText[][]) {
     };
 }
 
-// Agent comments are Markdown; Jira shows the digest as plain text.
-function flatten(md: string): string {
+// Agent comments are Markdown; Jira shows the digest as one plain-text line
+// per comment. Structure that reads as noise on one line goes: table
+// separator rows and code fences drop, a table row becomes "a · b;", and
+// heading / bullet markers are stripped.
+const TABLE_SEPARATOR = /^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$/;
+export function flatten(md: string): string {
     return md
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => !TABLE_SEPARATOR.test(line) && !/^(```|~~~)/.test(line))
+        .map((line) =>
+            /^\|.*\|$/.test(line)
+                ? `${line.slice(1, -1).split('|').map((c) => c.trim()).join(' · ')};`
+                : line.replace(/^#{1,6}\s+/, '').replace(/^[-*+]\s+/, '')
+        )
+        .join(' ')
         .replace(/\*\*|__|`/g, '')
         .replace(/\s+/g, ' ')
         .trim();
@@ -1295,7 +1344,8 @@ async function rememberJiraStatus(key: string, status: string): Promise<void> {
  */
 async function push(
     creds: Creds,
-    flushDigests: boolean
+    flushDigests: boolean,
+    projectId: string | null = null
 ): Promise<{ posted: number; errors: string[] }> {
     const rows = await db
         .selectFrom('jira_issues as j')
@@ -1320,6 +1370,7 @@ async function push(
         .$if(!flushDigests, (q) =>
             q.where((eb) => eb('i.status', 'is distinct from', eb.ref('j.pushed_status')))
         )
+        .$if(projectId !== null, (q) => q.where('i.project_id', '=', projectId as string))
         .execute();
     let posted = 0;
     const errors: string[] = [];
@@ -1473,23 +1524,32 @@ function summarize(r: IJiraSyncResult): string {
     );
 }
 
-async function fullSync(): Promise<IJiraSyncResult> {
+/**
+ * `project` scopes the pass to one project's sources and Tasks. It does not
+ * stamp `last_sync_at`, so the poller's schedule for every other project is
+ * unchanged.
+ */
+async function fullSync(
+    project: { id: string; name: string } | null = null
+): Promise<IJiraSyncResult> {
     const result = { ...EMPTY_RESULT };
+    const prefix = project ? `${project.name}: ` : '';
+    const stamp = project === null;
     try {
         const row = await loadRow();
         const creds = credsOf(row);
         // credsOf proved the row exists.
-        const notes = await pull(row as ConfigRow, creds, result);
-        const { posted, errors } = await push(creds, true);
+        const notes = await pull(row as ConfigRow, creds, result, project?.id ?? null);
+        const { posted, errors } = await push(creds, true, project?.id ?? null);
         result.comments_posted = posted;
         await recordSync(
             errors.length === 0 && notes.length === 0,
-            [summarize(result), ...notes, ...errors].join(' '),
-            true
+            prefix + [summarize(result), ...notes, ...errors].join(' '),
+            stamp
         );
         return result;
     } catch (err) {
-        await recordSync(false, errMsg(err), true);
+        await recordSync(false, prefix + errMsg(err), stamp);
         throw err;
     }
 }
@@ -1532,7 +1592,7 @@ export const jiraSync = {
         return credsOf(row).token;
     },
 
-    syncNow: async () => {
+    syncNow: async (project: { id: string; name: string } | null = null) => {
         const row = await loadRow();
         // credsOf first: "connect the site" is the more useful complaint when
         // nothing is configured at all, and it's what the API already promised.
@@ -1542,7 +1602,7 @@ export const jiraSync = {
                 'Jira sync is switched off. Turn on Import in Settings → Jira to sync.'
             );
         }
-        return exclusive(fullSync);
+        return exclusive(() => fullSync(project));
     },
     tick,
     // Sources belong to a project (migration 010).

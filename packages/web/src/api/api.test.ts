@@ -35,6 +35,39 @@ function captureMethod(
     return captured;
 }
 
+describe('api error path', () => {
+    it("keeps a route's plain-text `detail` in the thrown message", async () => {
+        server.use(
+            http.post('http://localhost:3000/api/projects/p1/generate-ai-scaffold', () =>
+                HttpResponse.json(
+                    {
+                        error: 'Repo has no credential attached',
+                        detail: 'Attach a credential before generating AI scaffold — git push needs it.',
+                    },
+                    { status: 409 },
+                ),
+            ),
+        );
+        await expect(api.projects.generateAiScaffold('p1')).rejects.toMatchObject({
+            status: 409,
+            message:
+                'Repo has no credential attached — Attach a credential before generating AI scaffold — git push needs it.',
+        });
+    });
+
+    it('a body without `detail` keeps just the error', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/projects/p1', () =>
+                HttpResponse.json({ error: 'Project not found', kind: 'not_found' }, { status: 404 }),
+            ),
+        );
+        await expect(api.projects.get('p1')).rejects.toMatchObject({
+            message: 'Project not found',
+            kind: 'not_found',
+        });
+    });
+});
+
 describe('api.health', () => {
     it('hits GET /api/health', async () => {
         const cap = captureGet('/health', { status: 'ok' });
@@ -197,7 +230,7 @@ describe('api.projects', () => {
         await api.projects.deleteJob('p1', { mode: 'unregister' });
         // ADR 0018 — every git call names the repo it acts on.
         captureMethod('post', '/projects/p1/repos/r1/reclone', { reclone_id: 'r1' });
-        await api.projects.reclone('p1', 'r1');
+        await api.projects.reclone('p1', 'r1', 'job-1');
         captureGet('/projects/p1/repos/r1/status', { local_head: 'h', remote_head: 'r', behind: 0, uncommitted: 0 });
         await api.projects.status('p1', 'r1');
         captureMethod('post', '/projects/p1/repos/r1/reveal', { ok: true, path: '/' });

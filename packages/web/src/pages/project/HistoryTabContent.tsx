@@ -9,6 +9,7 @@ import ArrowForwardRounded from '@mui/icons-material/ArrowForwardRounded';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { runStatusPaletteEntry } from '../../theme/runStatusPalette.js';
 import { useProjectAgentRuns } from '../../hooks/useAgents.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import { useAgents } from '../../hooks/useAgents.js';
 import { AgentChip } from '../../components/AgentChip.js';
 import { KindIcon } from '../../components/KindIcon.js';
@@ -192,7 +193,7 @@ interface Props {
 }
 
 export function HistoryTabContent({ projectId }: Props) {
-    const { data: runs, isPending } = useProjectAgentRuns(projectId);
+    const { data: runs, isPending, error, refetch } = useProjectAgentRuns(projectId);
     // Agents are session-stable (staleTime: Infinity in useAgents) so this
     // is a cache read in the common case — no extra network for the rail.
     const { data: agents = [] } = useAgents();
@@ -215,6 +216,16 @@ export function HistoryTabContent({ projectId }: Props) {
         return hasAny ? sum : null;
     }, [runs]);
     const paged = usePaged(runs ?? []);
+
+    if (runs === undefined && error) {
+        return (
+            <RetryAlert
+                error={error}
+                label="Could not load agent activity"
+                onRetry={() => void refetch()}
+            />
+        );
+    }
 
     if (isPending) {
         return (

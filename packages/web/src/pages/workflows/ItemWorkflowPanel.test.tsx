@@ -166,6 +166,8 @@ describe('ItemWorkflowPanel', () => {
             await screen.findByText(/runs the whole workflow again from the first step/i)
         ).toBeInTheDocument();
         expect(screen.getByText(/uncommitted work in its worktree is discarded/i)).toBeInTheDocument();
+        // No Continue is offered here, so the dialog doesn't point at one.
+        expect(screen.queryByText(/use "Continue"/)).not.toBeInTheDocument();
 
         await user.click(screen.getByRole('button', { name: 'Cancel' }));
         expect(started).toBe(false);
@@ -173,5 +175,24 @@ describe('ItemWorkflowPanel', () => {
         await user.click(await screen.findByRole('button', { name: 'Restart' }));
         await user.click(screen.getByRole('button', { name: 'Restart from the beginning' }));
         await waitFor(() => expect(started).toBe(true));
+    });
+
+    it('offers no Start now on a Done Task (the engine refuses it)', async () => {
+        mount({ workflowId: 'wf-1', runs: [summary({ status: 'completed' })], taskStatus: 'done' });
+        expect(await screen.findByText('Workflow run')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Start now' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Actions')).not.toBeInTheDocument();
+    });
+
+    it('the Restart confirm points at Continue only when Continue is offered', async () => {
+        const user = userEvent.setup();
+        mount({
+            workflowId: 'wf-delivery',
+            runs: [summary({ status: 'completed', workflow_id: 'wf-delivery' })],
+            subTaskStatuses: ['ready'],
+            taskStatus: 'in_review',
+        });
+        await user.click(await screen.findByRole('button', { name: 'Restart' }));
+        expect(await screen.findByText(/use "Continue"/)).toBeInTheDocument();
     });
 });

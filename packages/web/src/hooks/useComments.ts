@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../api/api.js';
 import type { IssueType } from '@atlas/shared';
+import { useToast } from './useToast.js';
 
 // Detail pages render comments + activity from the composite `*-full`
 // payload, not from the standalone `useComments` / `useActivity` queries.
@@ -30,8 +31,10 @@ export function useComments(issueType: IssueType, issueId: string) {
     });
 }
 
+// Comment writes toast their own failure with the API's reason.
 export function useCreateComment() {
     const qc = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: (data: {
             author: 'owner' | 'agent';
@@ -43,16 +46,19 @@ export function useCreateComment() {
         onSuccess: (_c, vars) => {
             invalidateCommentCaches(qc, vars.issue_type, vars.issue_id);
         },
+        onError: (err) => toast.show({ message: "Couldn't post the comment", detail: err.message }),
     });
 }
 
 export function useUpdateComment(issueType: IssueType, issueId: string) {
     const qc = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: ({ id, body }: { id: number; body: string }) =>
             api.comments.update(id, body),
         onSuccess: () => {
             invalidateCommentCaches(qc, issueType, issueId);
         },
+        onError: (err) => toast.show({ message: "Couldn't save the comment", detail: err.message }),
     });
 }

@@ -20,6 +20,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { IProject, IProjectRepo } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { useRecloneJob } from '../../hooks/useRecloneJob.js';
+import { newJobId } from '../../hooks/sse-hub.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { FormHeading } from '../../components/FormHeading.js';
 
@@ -30,7 +31,7 @@ type View = 'confirm' | 'running' | 'success' | 'error';
 interface Props {
     open: boolean;
     project: IProject | null;
-    /** ADR 0018 — a re-clone acts on one repo of the project. */
+    /** ADR 0018 — a pull acts on one repo of the project. */
     repo: IProjectRepo | null;
     displayId: string;
     onClose: () => void;
@@ -41,18 +42,20 @@ interface ChecklistStep {
     label: string;
 }
 
+// What reclone-runner.ts does, in order: no clone, no re-index.
 const STEPS: ChecklistStep[] = [
     { key: 'stash', label: 'Stash local changes' },
     { key: 'fetch', label: 'Fetch from remote' },
-    { key: 'index', label: 'Re-index project' },
+    { key: 'ff', label: 'Fast-forward default branch' },
 ];
 
+/** Index of the step in progress (STEPS.length once all are done). */
 function deriveStepIndex(lines: string[]): number {
     let idx = 0;
     for (const line of lines) {
         if (/Stashing local changes/i.test(line)) idx = Math.max(idx, 1);
         if (/Fetching remote\.\.\. ok/i.test(line)) idx = Math.max(idx, 2);
-        if (/Fast-forwarding|Re-indexing/i.test(line)) idx = Math.max(idx, 3);
+        if (/Fast-forwarding .*\.\.\. ok/i.test(line)) idx = Math.max(idx, 3);
     }
     return idx;
 }
@@ -182,17 +185,17 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
 
     const stepIndex = useMemo(() => deriveStepIndex(job.lines), [job.lines]);
 
-    const stats = useMemo(() => {
-        let commits = 0;
+    // git's own diffstat on a fast-forward (" 3 files changed, …"); the
+    // commit count comes from the runner, which compares HEAD before/after.
+    const filesChanged = useMemo(() => {
         let files = 0;
         for (const line of job.lines) {
-            const c = line.match(/Fast-forward.*?(\d+)\s+commits?/i);
-            if (c) commits = Number(c[1]);
             const f = line.match(/(\d+)\s+files?\s+changed/i);
             if (f) files = Number(f[1]);
         }
-        return { commits, files };
+        return files;
     }, [job.lines]);
+    const activeStep = STEPS[Math.min(stepIndex, STEPS.length - 1)];
 
     function handleClose() {
         if (view === 'running') return;
@@ -202,14 +205,18 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
     async function startReclone() {
         if (!project || !repo) return;
         setSubmitError(null);
+        // Subscribe (via useRecloneJob) before the POST — see newJobId.
+        const id = newJobId();
+        setRecloneId(id);
+        setStartedAt(Date.now());
+        setElapsedMs(0);
+        setView('running');
         try {
-            const res = await api.projects.reclone(project.id, repo.id);
-            setRecloneId(res.reclone_id);
-            setStartedAt(Date.now());
-            setElapsedMs(0);
-            setView('running');
+            await api.projects.reclone(project.id, repo.id, id);
         } catch (e) {
-            setSubmitError(e instanceof Error ? e.message : 'Could not start reclone');
+            setRecloneId(null);
+            setView('confirm');
+            setSubmitError(e instanceof Error ? e.message : 'Could not start the pull');
         }
     }
 
@@ -268,17 +275,17 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                     <FormHeading>
-                        {view === 'confirm' && 'Re-clone from remote?'}
-                        {view === 'running' && 'Re-cloning project…'}
-                        {view === 'success' && 'Project re-cloned'}
-                        {view === 'error' && 'Re-clone failed'}
+                        {view === 'confirm' && 'Pull from remote?'}
+                        {view === 'running' && 'Pulling from remote…'}
+                        {view === 'success' && 'Pulled from remote'}
+                        {view === 'error' && 'Pull failed'}
                     </FormHeading>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                         {view === 'confirm' &&
                             'Stash local changes, fetch from remote, and fast-forward.'}
-                        {view === 'running' && 'Running reclone-project.ps1 in the background.'}
+                        {view === 'running' && 'Running git in the background.'}
                         {view === 'success' && 'Workspace is now in sync with the remote.'}
-                        {view === 'error' && 'The PowerShell script returned a non-zero exit code.'}
+                        {view === 'error' && 'A git command failed.'}
                     </Typography>
                 </Box>
                 {view !== 'running' && (
@@ -392,9 +399,13 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                         </Box>{' '}
                                         will be stashed to{' '}
                                         <Box component="span" sx={{ fontFamily: MONO }}>
-                                            .atlas/stash/
+                                            .git/atlas-stash/
                                         </Box>{' '}
-                                        before pulling. You can restore them after the re-clone.
+                                        before pulling. Restore them afterwards with{' '}
+                                        <Box component="span" sx={{ fontFamily: MONO }}>
+                                            git stash pop
+                                        </Box>
+                                        .
                                     </Alert>
                                 )}
                             </>
@@ -416,7 +427,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 <strong>Original credential was deleted</strong>
                                 <Box sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70, mt: 0.5 }}>
                                     Re-attach a credential in Settings → Credentials before
-                                    re-cloning.
+                                    pulling.
                                 </Box>
                             </Alert>
                         ) : submitError ? (
@@ -465,7 +476,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                     startIcon={<RefreshRounded />}
                                     sx={{ textTransform: 'none', fontWeight: 600 }}
                                 >
-                                    Stash &amp; re-clone
+                                    {uncommitted > 0 ? 'Stash & pull' : 'Pull'}
                                 </Button>
                             )}
                         </Box>
@@ -485,12 +496,8 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                         color: ATLAS_PALETTE.slate60,
                                     }}
                                 >
-                                    Step {Math.max(1, stepIndex)} of {STEPS.length} ·{' '}
-                                    {
-                                        STEPS[
-                                            Math.min(Math.max(0, stepIndex - 1), STEPS.length - 1)
-                                        ]?.label
-                                    }
+                                    Step {Math.min(stepIndex + 1, STEPS.length)} of {STEPS.length}{' '}
+                                    · {activeStep?.label}
                                 </Typography>
                                 <Typography
                                     sx={{
@@ -574,7 +581,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 mb: 1,
                             }}
                         >
-                            reclone-project.ps1 · live output
+                            git · live output
                         </Typography>
                         <Box
                             ref={terminalRef}
@@ -604,7 +611,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                             }}
                         >
                             <Typography sx={{ fontSize: 11, color: ATLAS_PALETTE.slate60 }}>
-                                Closing disabled — re-clone in progress
+                                Closing disabled — pull in progress
                             </Typography>
                             <Button
                                 variant="contained"
@@ -612,7 +619,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 startIcon={<CircularProgress size={14} color="inherit" />}
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
-                                Re-cloning…
+                                Pulling…
                             </Button>
                         </Box>
                     </>
@@ -630,10 +637,13 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                             }}
                         >
                             <strong>
-                                {stats.commits > 0
-                                    ? `Fast-forwarded ${stats.commits} commits`
-                                    : 'Already up to date'}
-                                {stats.files > 0 && ` · ${stats.files} files changed`}
+                                {job.commitsPulled === null
+                                    ? 'Pull complete'
+                                    : job.commitsPulled > 0
+                                      ? `Fast-forwarded ${job.commitsPulled} commit${job.commitsPulled === 1 ? '' : 's'}`
+                                      : 'Already up to date'}
+                                {filesChanged > 0 &&
+                                    ` · ${filesChanged} file${filesChanged === 1 ? '' : 's'} changed`}
                                 {` · ${Math.max(1, Math.round(elapsedMs / 1000))}s`}
                             </strong>
                             {job.stashPath && (
@@ -661,7 +671,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 mb: 1,
                             }}
                         >
-                            reclone-project.ps1 · transcript
+                            git · transcript
                         </Typography>
                         <Box
                             sx={{
@@ -679,7 +689,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                             }}
                         >
                             {job.lines.slice(-30).join('\n')}
-                            {`\n\nCompleted in ${Math.max(1, Math.round(elapsedMs / 1000))}s · exit 0`}
+                            {`\n\nCompleted in ${Math.max(1, Math.round(elapsedMs / 1000))}s`}
                         </Box>
 
                         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
@@ -708,7 +718,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 '& .MuiAlert-message': { fontSize: 13 },
                             }}
                         >
-                            <strong>Fast-forward failed</strong>
+                            <strong>{activeStep?.label} failed</strong>
                             <Box sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70, mt: 0.5 }}>
                                 Possible cause: diverged history, missing branch, or auth failure.
                                 See stderr below.
@@ -726,7 +736,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                                 mb: 1,
                             }}
                         >
-                            reclone-project.ps1 · stderr
+                            git · stderr
                         </Typography>
                         <Box
                             sx={{

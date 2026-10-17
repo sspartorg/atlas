@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '../test-utils/renderWithProviders.js';
 import { makeAgent, makeTaskListItem, makeProject } from '../test-utils/factories.js';
 import { TaskTable } from './TaskTable.js';
@@ -186,8 +187,8 @@ describe('TaskTable', () => {
         );
         // Pagination footer has « ‹ › » buttons. On the last page (2 of 2),
         // « and ‹ are enabled while › and » are disabled.
-        const firstBtn = screen.getByRole('button', { name: '«' });
-        const prevBtn = screen.getByRole('button', { name: '‹' });
+        const firstBtn = screen.getByRole('button', { name: 'First page' });
+        const prevBtn = screen.getByRole('button', { name: 'Previous page' });
         fireEvent.click(firstBtn);
         fireEvent.click(prevBtn);
         expect(onPageChange).toHaveBeenCalled();
@@ -210,8 +211,8 @@ describe('TaskTable', () => {
                 onPageSizeChange={vi.fn()}
             />
         );
-        const nextBtn = screen.getByRole('button', { name: '›' });
-        const lastBtn = screen.getByRole('button', { name: '»' });
+        const nextBtn = screen.getByRole('button', { name: 'Next page' });
+        const lastBtn = screen.getByRole('button', { name: 'Last page' });
         fireEvent.click(nextBtn);
         fireEvent.click(lastBtn);
         expect(onPageChange).toHaveBeenCalledWith(2);
@@ -232,7 +233,7 @@ describe('TaskTable', () => {
         );
         // The internal page state defaults to 1. Clicking the next button
         // exercises the internal setPage path.
-        const nextBtn = screen.getByRole('button', { name: '›' });
+        const nextBtn = screen.getByRole('button', { name: 'Next page' });
         fireEvent.click(nextBtn);
         // Change page size internally too.
         const select = screen.getByRole('combobox');
@@ -527,8 +528,8 @@ describe('TaskTable', () => {
         );
         expect(screen.getByText(/page 1 of 2/)).toBeInTheDocument();
         // At the clamped-low boundary, first/prev should be disabled.
-        expect(screen.getByRole('button', { name: '«' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: '‹' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'First page' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     });
 
     it('clamps clampedPage to pageCount when the page prop exceeds it', () => {
@@ -549,7 +550,68 @@ describe('TaskTable', () => {
         );
         expect(screen.getByText(/page 2 of 2/)).toBeInTheDocument();
         // At the clamped-high boundary, next/last should be disabled.
-        expect(screen.getByRole('button', { name: '›' })).toBeDisabled();
-        expect(screen.getByRole('button', { name: '»' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Last page' })).toBeDisabled();
+    });
+
+    it('rows and sort headers are keyboard buttons', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+            <Routes>
+                <Route
+                    path="/tasks"
+                    element={
+                        <TaskTable
+                            rows={[
+                                makeTaskListItem({ id: 'ATL-1', title: 'Alpha' }),
+                                makeTaskListItem({ id: 'ATL-2', title: 'Beta' }),
+                            ]}
+                            projects={[]}
+                            agents={[]}
+                            ownerName="Owner"
+                            ownerAccent="#0A0A0A"
+                        />
+                    }
+                />
+                <Route path="/tasks/:id" element={<>task page</>} />
+            </Routes>,
+            { initialEntries: ['/tasks'] }
+        );
+        expect(screen.getByRole('button', { name: 'Updated, sorted descending' })).toBeInTheDocument();
+        screen.getByRole('button', { name: 'Sort by Task' }).focus();
+        await user.keyboard('{Enter}');
+        expect(screen.getByRole('button', { name: 'Task, sorted ascending' })).toBeInTheDocument();
+        screen.getByText('Alpha').closest<HTMLElement>('[role="button"]')!.focus();
+        await user.keyboard('{Enter}');
+        expect(await screen.findByText('task page')).toBeInTheDocument();
+    });
+
+    it('the phone list follows the table sort', () => {
+        const origMatchMedia = window.matchMedia;
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes('(max-width'),
+            media: query,
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+        }));
+        renderWithProviders(
+            <TaskTable
+                rows={[
+                    makeTaskListItem({ id: 'ATL-1', title: 'Older', updated_at: '2026-01-01T00:00:00.000Z' }),
+                    makeTaskListItem({ id: 'ATL-2', title: 'Newer', updated_at: '2026-02-01T00:00:00.000Z' }),
+                ]}
+                projects={[]}
+                agents={[]}
+                ownerName="Owner"
+                ownerAccent="#0A0A0A"
+            />
+        );
+        const text = document.body.textContent ?? '';
+        expect(text.indexOf('Newer')).toBeLessThan(text.indexOf('Older'));
+        window.matchMedia = origMatchMedia;
     });
 }, 15000);

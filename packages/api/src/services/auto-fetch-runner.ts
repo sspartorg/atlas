@@ -11,6 +11,7 @@ import { notificationsService } from './notifications.js';
 import { sendExternalForNotification } from './external-notifications.js';
 import { performAutoFetch, type AutoFetchCode } from './auto-fetch.js';
 import { gitInvokeEnv } from './git-env.js';
+import { withProjectGitLock } from './project-git-lock.js';
 import type { IProjectSchedule, ScheduleRunStatus } from '@atlas/shared';
 
 const execFileP = promisify(execFile);
@@ -151,7 +152,8 @@ export async function runAutoFetch(repoId: string): Promise<void> {
     broadcastSSE({ type: 'autofetch_status', autofetchId, projectId, repoId, status: 'fetching' });
 
     const redact = (line: string) => line.split(authB64).join('***').split(token).join('***');
-    const fetchResult = await performAutoFetch({
+    // Same clone as worktree provisioning and re-clone: serialize on the repo.
+    const fetchResult = await withProjectGitLock(repo.id, () => performAutoFetch({
         destination: repo.git_path,
         branch: repo.default_branch,
         remoteUrl: repo.git_url,
@@ -170,7 +172,7 @@ export async function runAutoFetch(repoId: string): Promise<void> {
                 });
             }
         },
-    });
+    }));
 
     const { result, detail } = mapCode(fetchResult.code, fetchResult.detail);
 

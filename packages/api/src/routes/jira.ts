@@ -92,6 +92,25 @@ export async function jiraRoutes(app: FastifyInstance) {
         return project;
     }
 
+    // "Sync now" on a project's Jira tab: only that project's sources and Tasks.
+    app.post(
+        '/api/projects/:projectId/jira-sync',
+        { preHandler: requireMcpToken },
+        async (req, reply) => {
+            const { projectId } = req.params as { projectId: string };
+            const project = await projectOr404(projectId, reply);
+            if (!project) return;
+            try {
+                return reply.send(await jiraSync.syncNow({ id: project.id, name: project.name }));
+            } catch (err) {
+                if (err instanceof JiraSyncDisabledError) {
+                    return reply.status(409).send({ error: err.message, kind: 'conflict' });
+                }
+                throw err;
+            }
+        }
+    );
+
     app.get('/api/projects/:projectId/jira-sources', async (req, reply) => {
         const { projectId } = req.params as { projectId: string };
         if (!(await projectOr404(projectId, reply))) return;
