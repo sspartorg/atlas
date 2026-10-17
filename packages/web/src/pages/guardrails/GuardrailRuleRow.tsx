@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import type { IGuardrailRule } from '@atlas/shared';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
@@ -16,12 +17,14 @@ interface Props {
 // every rule row when the rule prop is referentially stable.
 export const GuardrailRuleRow = memo(function GuardrailRuleRow({ rule, onEdit }: Props) {
     return (
-        <Box
-            role="button"
+        <ButtonBase
             onClick={onEdit}
             sx={{
                 display: 'flex',
                 flexDirection: 'column',
+                alignItems: 'stretch',
+                width: '100%',
+                textAlign: 'left',
                 gap: 0.75,
                 py: 2.5,
                 px: 1.5,
@@ -64,6 +67,6 @@ export const GuardrailRuleRow = memo(function GuardrailRuleRow({ rule, onEdit }:
                     <InlineRuleText text={rule.detail} />
                 </Typography>
             )}
-        </Box>
+        </ButtonBase>
     );
 });

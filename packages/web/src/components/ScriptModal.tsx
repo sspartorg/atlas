@@ -12,6 +12,7 @@ import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import CloseRounded from '@mui/icons-material/CloseRounded';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
+import { ConfirmActionModal } from './ConfirmActionModal.js';
 
 // Phase 1.5b — shared add/edit modal for guardrail SCRIPTS.
 // Used by both Atlas-level and project-level Scripts tabs.
@@ -62,6 +63,7 @@ export function ScriptModal({
     const [bodyPs1, setBodyPs1] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -116,6 +118,7 @@ export function ScriptModal({
 
     async function handleDelete() {
         if (!editing?.id || !onDelete) return;
+        setConfirmDeleteOpen(false);
         setSubmitting(true);
         setError(null);
         try {
@@ -271,7 +274,7 @@ export function ScriptModal({
                         color="error"
                         variant="outlined"
                         startIcon={<DeleteOutline />}
-                        onClick={handleDelete}
+                        onClick={() => setConfirmDeleteOpen(true)}
                         disabled={submitting}
                     >
                         Delete
@@ -298,6 +301,15 @@ export function ScriptModal({
                     </Button>
                 </Box>
             </DialogActions>
+            <ConfirmActionModal
+                open={confirmDeleteOpen}
+                title="Delete this script?"
+                body={`Removes "${editing?.name ?? ''}". Agents no longer get it from the next run.`}
+                confirmLabel="Delete"
+                tone="destructive"
+                onConfirm={() => void handleDelete()}
+                onCancel={() => setConfirmDeleteOpen(false)}
+            />
         </Dialog>
     );
 }

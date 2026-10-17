@@ -6,9 +6,7 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
-import { AtlasApiError } from '../api/api.js';
 import { useProjectRepos } from '../hooks/useProjectRepos.js';
-import { useToast } from '../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { InfoRow } from './InfoPanel.js';
 import { RepoSelect } from './RepoSelect.js';
@@ -25,7 +23,6 @@ interface Props {
 /** Task Details rail row (ADR 0018). Editable when the project has another repo to pick. */
 export function TaskReposRow({ projectId, repoIds, onChange }: Props) {
     const { data: repos = [] } = useProjectRepos(projectId);
-    const toast = useToast();
     const [draft, setDraft] = useState<string[] | null>(null);
     const [saving, setSaving] = useState(false);
 
@@ -37,15 +34,9 @@ export function TaskReposRow({ projectId, repoIds, onChange }: Props) {
         setSaving(true);
         try {
             await onChange(next);
-        } catch (e) {
-            toast.show({
-                message:
-                    e instanceof AtlasApiError && e.status === 409
-                        ? 'Stop the workflow run to change repos'
-                        : e instanceof Error
-                          ? e.message
-                          : 'Could not change the repos',
-            });
+        } catch {
+            // useUpdateTask toasts the API's reason (a live run: "Stop the
+            // workflow run on this Task before changing its repos").
         } finally {
             setSaving(false);
             setDraft(null);

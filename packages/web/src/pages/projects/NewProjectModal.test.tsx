@@ -97,6 +97,47 @@ describe('NewProjectModal', () => {
         expect(patched).toEqual({ team_managed: true });
     });
 
+    it('a failed team-config PATCH retries the PATCH without creating the project again', async () => {
+        let creates = 0;
+        let patches = 0;
+        server.use(
+            http.get(`${BASE}/team-config`, () => HttpResponse.json({ role: 'publisher' })),
+            http.post(`${BASE}/projects`, () => {
+                creates++;
+                return creates === 1
+                    ? HttpResponse.json({ id: 'p9', name: 'Atlas Web' }, { status: 201 })
+                    : HttpResponse.json({ error: 'Issue key prefix ATL is taken' }, { status: 409 });
+            }),
+            http.patch(`${BASE}/projects/p9`, () => {
+                patches++;
+                return patches === 1
+                    ? HttpResponse.json({ error: 'team repo unreachable' }, { status: 500 })
+                    : HttpResponse.json({ id: 'p9' });
+            })
+        );
+        mount();
+        await userEvent.type(screen.getByLabelText(/^Name/), 'Atlas Web');
+        await screen.findByText(/Available\./);
+        await userEvent.click(screen.getByRole('button', { name: /Create project/i }));
+        expect(await screen.findByText(/The project was created, but adding it to the team config failed/)).toBeInTheDocument();
+        expect(navigate).not.toHaveBeenCalled();
+
+        await userEvent.click(screen.getByRole('button', { name: /Create project/i }));
+        await waitFor(() => expect(navigate).toHaveBeenCalledWith('/projects/p9?tab=repos'));
+        expect(creates).toBe(1);
+        expect(patches).toBe(2);
+    });
+
+    it("doesn't hang on \"Checking availability…\" when the probe fails", async () => {
+        server.use(
+            http.get(`${BASE}/projects/prefix-available`, () => HttpResponse.error())
+        );
+        mount();
+        await userEvent.type(screen.getByLabelText(/^Name/), 'Atlas Web');
+        expect(await screen.findByText(/Couldn't check availability/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Create project/i })).toBeEnabled();
+    });
+
     it('refuses a prefix another project already holds', async () => {
         server.use(
             http.get(`${BASE}/projects/prefix-available`, () =>

@@ -11,13 +11,6 @@ export function useTasks(projectId?: string, includeArchived = false) {
     });
 }
 
-export function useTaskStats() {
-    return useQuery({
-        queryKey: ['tasks-stats'],
-        queryFn: () => api.tasks.stats(),
-    });
-}
-
 // Composite hook backing TaskDetail. One HTTP call returns the task plus
 // project, sub-tasks, related links, activity feed, and the agent
 // dictionary. Mutations under `useUpdateTask` / `useTransitionTask` /
@@ -42,7 +35,6 @@ export function useCreateTask() {
         mutationFn: (data: Partial<ITask>) => api.tasks.create(data),
         onSuccess: () => {
             void qc.invalidateQueries({ queryKey: ['tasks'] });
-            void qc.invalidateQueries({ queryKey: ['tasks-stats'] });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
             // New labels on the freshly created task should show up in the
             // suggestions dropdown on the next edit.
@@ -51,8 +43,11 @@ export function useCreateTask() {
     });
 }
 
+// Every Task mutation toasts its own failure with the API's reason, so a
+// caller that awaits `mutateAsync` only has to keep its edit state open.
 export function useUpdateTask() {
     const qc = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: ({ id, data }: { id: string; data: Partial<ITask> }) =>
             api.tasks.update(id, data),
@@ -61,6 +56,7 @@ export function useUpdateTask() {
             void qc.setQueryData(['tasks', updated.id], updated);
             void qc.invalidateQueries({ queryKey: ['labels'] });
         },
+        onError: (err, vars) => toast.show({ message: `Couldn't save ${vars.id}`, detail: err.message }),
     });
 }
 
@@ -82,7 +78,6 @@ export function useTransitionTask() {
         onSuccess: (updated) => {
             void qc.invalidateQueries({ queryKey: ['tasks'] });
             void qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-            void qc.invalidateQueries({ queryKey: ['tasks-stats'] });
             void qc.setQueryData(['tasks', updated.id], updated);
         },
         onError: (err, vars) => {
@@ -98,7 +93,8 @@ export function useTransitionTask() {
                 return;
             }
             // P16 — surface closure-rule 422 in a toast listing open sub-tasks.
-            transitionItemOnError(toast, err);
+            if (transitionItemOnError(toast, err)) return;
+            toast.show({ message: `Couldn't move ${vars.id}`, detail: err.message });
         },
     });
     return mutation;
@@ -117,6 +113,7 @@ export function useReorderSubTasks() {
 
 export function useAssignTask() {
     const qc = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: ({ id, agentId }: { id: string; agentId: string | null }) =>
             api.tasks.assign(id, agentId),
@@ -124,6 +121,7 @@ export function useAssignTask() {
             void qc.invalidateQueries({ queryKey: ['tasks'] });
             void qc.setQueryData(['tasks', updated.id], updated);
         },
+        onError: (err, vars) => toast.show({ message: `Couldn't reassign ${vars.id}`, detail: err.message }),
     });
 }
 
@@ -131,9 +129,10 @@ export function useDeleteTask() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: (id: string) => api.tasks.delete(id),
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: ['tasks'] });
-            void qc.invalidateQueries({ queryKey: ['tasks-stats'] });
+        onSuccess: (_data, id) => {
+            // Not the deleted Task's own query: refetching it only 404s while
+            // its page is still up.
+            void qc.invalidateQueries({ queryKey: ['tasks'], predicate: (q) => q.queryKey[1] !== id });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
         },
     });

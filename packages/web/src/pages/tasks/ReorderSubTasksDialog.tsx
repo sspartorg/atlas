@@ -31,10 +31,11 @@ function Arrow({ name }: { name: string }) {
     );
 }
 
-/** Sets the order a Task's Sub-tasks steps run its open sub-tasks in. */
+/** Sets the order a Task's Sub-tasks steps run its sub-tasks in. */
 export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
     const [order, setOrder] = useState(subTasks);
     const reorder = useReorderSubTasks();
+    const unchanged = order.every((s, i) => s.id === subTasks[i]?.id);
     const move = (i: number, by: -1 | 1) =>
         setOrder((o) => {
             const next = [...o];
@@ -45,10 +46,13 @@ export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
 
     return (
         <Dialog open onClose={reorder.isPending ? undefined : onClose} maxWidth="sm" fullWidth>
-            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 1 }}>Sub-task order</DialogTitle>
+            <DialogTitle sx={{ fontSize: 18, fontWeight: 600, pb: 1 }}>
+                Reorder sub-tasks
+            </DialogTitle>
             <DialogContent sx={{ pt: '8px !important' }}>
                 <Typography sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 2 }}>
-                    The Task&apos;s workflow runs its open sub-tasks top to bottom, one at a time.
+                    The Task&apos;s workflow runs its sub-tasks top to bottom, one at a time,
+                    skipping any that are in review or done.
                 </Typography>
                 <Box
                     component="ol"
@@ -119,7 +123,7 @@ export function ReorderSubTasksDialog({ taskId, subTasks, onClose }: Props) {
                 </Button>
                 <Button
                     variant="contained"
-                    disabled={reorder.isPending}
+                    disabled={reorder.isPending || unchanged}
                     onClick={() =>
                         reorder.mutate(
                             { taskId, ids: order.map((s) => s.id) },

@@ -54,6 +54,24 @@ describe('runRepos', () => {
         expect(md).toContain('../<other-repo>/');
     });
 
+    it('a project-scope run works the repo it was started on, not the first repo', async () => {
+        await testDb.insertInto('workflows').values({ id: 'wf-ai', project_id: 'p1', name: 'AI', graph: '{"nodes":[],"edges":[]}' } as never).execute();
+        await testDb
+            .insertInto('workflow_runs')
+            .values({
+                id: 'run-ai',
+                workflow_id: 'wf-ai',
+                item_id: null,
+                project_id: 'p1',
+                graph_snapshot: '{"nodes":[],"edges":[]}',
+                branch: 'atlas/wf/run-ai',
+                repo_ids: JSON.stringify(['repo-web']),
+            })
+            .execute();
+        const r = await runRepos({ project_id: 'p1', item_id: null, branch: 'atlas/wf/run-ai', worktree_path: '/wt/ai' });
+        expect(r.repos.map((x) => [x.repo.id, x.path])).toEqual([['repo-web', '/wt/ai']]);
+    });
+
     it("hangs the workspace off the Task's first repo", async () => {
         await testDb
             .updateTable('items')

@@ -476,7 +476,7 @@ export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) 
                             </Box>
                             <Button
                                 variant="contained"
-                                onClick={() => void handleSave(true)}
+                                onClick={() => void handleSave(enabled)}
                                 disabled={save.isPending}
                                 startIcon={
                                     save.isPending ? (

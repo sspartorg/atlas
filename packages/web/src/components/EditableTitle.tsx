@@ -37,7 +37,12 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
             cancel();
             return;
         }
-        await onSave(next);
+        try {
+            await onSave(next);
+        } catch {
+            // The caller's mutation toasts the reason; keep the draft open.
+            return;
+        }
         setEditing(false);
     };
     const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -76,6 +81,7 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
                     size="small"
                     onClick={() => void save()}
                     disabled={saving || !draft.trim()}
+                    aria-label="Save title"
                     sx={{ color: ATLAS_PALETTE.brandBlue }}
                 >
                     <CheckRounded sx={{ fontSize: 22 }} />
@@ -84,6 +90,7 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
                     size="small"
                     onClick={cancel}
                     disabled={saving}
+                    aria-label="Cancel title edit"
                     sx={{ color: ATLAS_PALETTE.slate60 }}
                 >
                     <CloseRounded sx={{ fontSize: 22 }} />
@@ -100,7 +107,7 @@ export function EditableTitle({ value, onSave, saving = false }: Props) {
                 gap: 1.5,
                 minWidth: 0,
                 flex: 1,
-                '&:hover .edit-affordance': { opacity: 1 },
+                '&:hover .edit-affordance, & .edit-affordance:focus-visible': { opacity: 1 },
             }}
         >
             <Typography

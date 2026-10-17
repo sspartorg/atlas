@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 
@@ -58,30 +59,27 @@ interface InfoRowProps {
 }
 
 export function InfoRow({ label, children, onClick, clickable = false }: InfoRowProps) {
-    return (
-        <Box
-            onClick={onClick}
-            sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', md: 'row' },
-                justifyContent: { xs: 'flex-start', md: 'space-between' },
-                alignItems: { xs: 'flex-start', md: 'center' },
-                gap: { xs: 0.5, md: 0 },
-                py: 1.5,
-                borderTop: `1px solid ${ATLAS_PALETTE.slate06}`,
-                '&:first-of-type': { borderTop: 0, pt: 0 },
-                cursor: clickable ? 'pointer' : 'default',
-                transition: 'background 120ms ease',
-                '&:hover': clickable
-                    ? {
-                          background: ATLAS_PALETTE.cloud,
-                          borderRadius: '6px',
-                          mx: -1,
-                          px: 1,
-                      }
-                    : undefined,
-            }}
-        >
+    const hoverSx = {
+        background: ATLAS_PALETTE.cloud,
+        borderRadius: '6px',
+        mx: -1,
+        px: 1,
+    };
+    const rowSx = {
+        display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
+        justifyContent: { xs: 'flex-start', md: 'space-between' },
+        alignItems: { xs: 'flex-start', md: 'center' },
+        gap: { xs: 0.5, md: 0 },
+        py: 1.5,
+        borderTop: `1px solid ${ATLAS_PALETTE.slate06}`,
+        '&:first-of-type': { borderTop: 0, pt: 0 },
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'background 120ms ease',
+        '&:hover': clickable ? hoverSx : undefined,
+    } as const;
+    const content = (
+        <>
             <Typography
                 sx={{
                     fontSize: 12,
@@ -109,6 +107,32 @@ export function InfoRow({ label, children, onClick, clickable = false }: InfoRow
             >
                 {children}
             </Box>
+        </>
+    );
+    // ButtonBase gives a clickable row a role, a tab stop and Enter/Space.
+    if (clickable) {
+        return (
+            <ButtonBase
+                component="div"
+                disableRipple
+                onClick={onClick}
+                sx={{
+                    ...rowSx,
+                    width: '100%',
+                    textAlign: 'inherit',
+                    '&.Mui-focusVisible': {
+                        ...hoverSx,
+                        outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                    },
+                }}
+            >
+                {content}
+            </ButtonBase>
+        );
+    }
+    return (
+        <Box onClick={onClick} sx={rowSx}>
+            {content}
         </Box>
     );
 }

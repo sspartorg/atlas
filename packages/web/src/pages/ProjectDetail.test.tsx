@@ -596,10 +596,84 @@ describe('ProjectDetail page', () => {
         expect(screen.queryByText('Done Sub-task Agent')).not.toBeInTheDocument();
     });
 
-    it('guardrailsActive renders "Guard-rails active" pill when guardrails_md is non-empty', async () => {
-        registerProjectMocks(
-            makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '## Rule one\nBe nice.' })
+    const renderDetail = (tab = '') =>
+        renderWithProviders(
+            <Routes>
+                <Route path="/projects/:id" element={<ProjectDetail />} />
+            </Routes>,
+            { initialEntries: [`/projects/p1${tab}`] }
         );
+
+    it('a 500 on the project says it could not load, with Retry — not "Project not found"', async () => {
+        let calls = 0;
+        server.use(
+            http.get('http://localhost:3000/api/projects/p1', () => {
+                calls++;
+                return calls === 1
+                    ? HttpResponse.json({ error: 'db down', kind: 'internal_error' }, { status: 500 })
+                    : HttpResponse.json(makeProject({ id: 'p1', name: 'Atlas' }));
+            }),
+            ...defaultHandlers
+        );
+        renderDetail();
+        expect(await screen.findByText(/Could not load this project/)).toBeInTheDocument();
+        expect(screen.queryByText('Project not found')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByRole('tab', { name: /overview/i })).toBeInTheDocument();
+    });
+
+    it('a 404 still says "Project not found"', async () => {
+        server.use(
+            http.get('http://localhost:3000/api/projects/p1', () =>
+                HttpResponse.json({ error: 'Project not found', kind: 'not_found' }, { status: 404 })
+            ),
+            ...defaultHandlers
+        );
+        renderDetail();
+        expect(await screen.findByText('Project not found')).toBeInTheDocument();
+    });
+
+    it('Overview shows an error, not an endless skeleton, when counts fail', async () => {
+        registerProjectMocks(
+            makeProject({ id: 'p1', name: 'Atlas' }),
+            http.get('http://localhost:3000/api/counts/project/p1', () =>
+                HttpResponse.json({ error: 'boom', kind: 'internal_error' }, { status: 500 })
+            )
+        );
+        renderDetail();
+        expect(await screen.findByText(/Could not load the overview/)).toBeInTheDocument();
+    });
+
+    it('Tasks shows an error, not an endless skeleton, when the issue tree fails', async () => {
+        registerProjectMocks(
+            makeProject({ id: 'p1', name: 'Atlas' }),
+            http.get('http://localhost:3000/api/issues/tree', () =>
+                HttpResponse.json({ error: 'boom', kind: 'internal_error' }, { status: 500 })
+            )
+        );
+        renderDetail('?tab=tasks');
+        expect(await screen.findByText(/Could not load tasks/)).toBeInTheDocument();
+    });
+
+    const withRule = (enabled: number) =>
+        http.get('http://localhost:3000/api/projects/p1/guardrails', () =>
+            HttpResponse.json([
+                {
+                    id: 'r1',
+                    project_id: 'p1',
+                    title: 'Rule one',
+                    body_md: 'Be nice.',
+                    icon: 'shield',
+                    enabled,
+                    sort_order: 0,
+                    created_at: '2026-05-16T00:00:00.000Z',
+                    updated_at: '2026-05-16T00:00:00.000Z',
+                },
+            ])
+        );
+
+    it('shows the "Guard-rails active" pill and rail titles from the rules, not guardrails_md', async () => {
+        registerProjectMocks(makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '' }), withRule(1));
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
@@ -607,17 +681,22 @@ describe('ProjectDetail page', () => {
             { initialEntries: ['/projects/p1'] }
         );
         expect(await screen.findByText(/Guard-rails active/i)).toBeInTheDocument();
+        expect(screen.getByText('Rule one')).toBeInTheDocument();
+        expect(screen.queryByText('No active rules.')).not.toBeInTheDocument();
     });
 
-    it('guardrailsActive is false (no pill) when guardrails_md is empty/whitespace', async () => {
-        registerProjectMocks(makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '   ' }));
+    it('no pill when every rule is paused, even with legacy guardrails_md set', async () => {
+        registerProjectMocks(
+            makeProject({ id: 'p1', name: 'Atlas', guardrails_md: '## Legacy' }),
+            withRule(0)
+        );
         renderWithProviders(
             <Routes>
                 <Route path="/projects/:id" element={<ProjectDetail />} />
             </Routes>,
             { initialEntries: ['/projects/p1'] }
         );
-        await screen.findByRole('tab', { name: /overview/i });
+        expect(await screen.findByText('No active rules.')).toBeInTheDocument();
         expect(screen.queryByText(/Guard-rails active/i)).not.toBeInTheDocument();
     });
 

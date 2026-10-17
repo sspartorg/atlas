@@ -121,9 +121,8 @@ function CommentRow({
     const deleteComment = useDeleteComment(comment.issue_type, comment.issue_id);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(comment.body);
-    // Agent-authored comments are markdown; show a preview toggle while
-    // editing so the owner can sanity-check formatting before saving. Owner
-    // comments are plain text so the toggle is hidden for them.
+    // Every comment renders as markdown, so editing any of them offers a
+    // preview toggle to check the formatting before saving.
     const [showPreview, setShowPreview] = useState(false);
     // P11 — delete-confirm dialog state. Lives inline because the rest of
     // the card flow (cancelEdit, saveEdit) is also colocated, and a comment
@@ -148,12 +147,21 @@ function CommentRow({
             cancelEdit();
             return;
         }
-        await updateComment.mutateAsync({ id: comment.id, body: next });
+        // A failure is toasted by the hook; the editor / dialog stays open.
+        try {
+            await updateComment.mutateAsync({ id: comment.id, body: next });
+        } catch {
+            return;
+        }
         setEditing(false);
         setShowPreview(false);
     };
     const confirmDelete = async () => {
-        await deleteComment.mutateAsync({ id: comment.id });
+        try {
+            await deleteComment.mutateAsync({ id: comment.id });
+        } catch {
+            return;
+        }
         setConfirmingDelete(false);
     };
 
@@ -163,9 +171,11 @@ function CommentRow({
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 2,
-                // Reveal the inline Edit button on hover only — keeps the
-                // resting state clean on long threads.
-                '&:hover .comment-edit-affordance': { opacity: 1 },
+                // Reveal the inline Edit button on hover — keeps the resting
+                // state clean on long threads — and on keyboard focus.
+                '&:hover .comment-edit-affordance, & .comment-edit-affordance:focus-within': {
+                    opacity: 1,
+                },
             }}
         >
             <Initial name={name} color={color} />
@@ -273,43 +283,41 @@ function CommentRow({
                     </Box>
                 ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                        {isAgent ? (
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                fontSize: 11,
+                                color: ATLAS_PALETTE.slate60,
+                            }}
+                        >
                             <Box
+                                component="span"
                                 sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
+                                    fontWeight: 600,
+                                    letterSpacing: '0.06em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                Markdown
+                            </Box>
+                            <Button
+                                size="small"
+                                onClick={() => setShowPreview((p) => !p)}
+                                sx={{
+                                    textTransform: 'none',
+                                    minWidth: 0,
+                                    px: 1,
+                                    height: 22,
                                     fontSize: 11,
                                     color: ATLAS_PALETTE.slate60,
                                 }}
                             >
-                                <Box
-                                    component="span"
-                                    sx={{
-                                        fontWeight: 600,
-                                        letterSpacing: '0.06em',
-                                        textTransform: 'uppercase',
-                                    }}
-                                >
-                                    Markdown
-                                </Box>
-                                <Button
-                                    size="small"
-                                    onClick={() => setShowPreview((p) => !p)}
-                                    sx={{
-                                        textTransform: 'none',
-                                        minWidth: 0,
-                                        px: 1,
-                                        height: 22,
-                                        fontSize: 11,
-                                        color: ATLAS_PALETTE.slate60,
-                                    }}
-                                >
-                                    {showPreview ? 'Back to editor' : 'Preview'}
-                                </Button>
-                            </Box>
-                        ) : null}
-                        {showPreview && isAgent ? (
+                                {showPreview ? 'Back to editor' : 'Preview'}
+                            </Button>
+                        </Box>
+                        {showPreview ? (
                             <Box
                                 sx={{
                                     fontSize: 13,
@@ -320,7 +328,10 @@ function CommentRow({
                                     background: ATLAS_PALETTE.slate06,
                                 }}
                             >
-                                <MarkdownPreview source={draft} />
+                                <MarkdownPreview
+                                    source={draft}
+                                    emptyText="Nothing to preview yet."
+                                />
                             </Box>
                         ) : (
                             <TextField
@@ -762,12 +773,16 @@ export function ConversationCard({
     const submit = async () => {
         const body = draft.trim();
         if (!body) return;
-        await createComment.mutateAsync({
-            author: 'owner',
-            issue_type: issueType,
-            issue_id: issueId,
-            body,
-        });
+        try {
+            await createComment.mutateAsync({
+                author: 'owner',
+                issue_type: issueType,
+                issue_id: issueId,
+                body,
+            });
+        } catch {
+            return; // toasted by the hook; the draft stays
+        }
         setDraft('');
         await qc.invalidateQueries({ queryKey: ['activity', issueType, issueId] });
     };

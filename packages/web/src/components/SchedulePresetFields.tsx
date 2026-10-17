@@ -98,7 +98,15 @@ export function SchedulePresetFields({ value, onChange, columns = 3 }: Props) {
                         title={p.label}
                         sub={p.sub}
                         selected={value.preset === p.value}
-                        onClick={() => onChange({ preset: p.value })}
+                        // The Weekday select shows Monday while weekday is null;
+                        // save that, or the API 400s "weekly preset requires weekday".
+                        onClick={() =>
+                            onChange(
+                                p.value === 'weekly' && value.weekday === null
+                                    ? { preset: p.value, weekday: 1 }
+                                    : { preset: p.value }
+                            )
+                        }
                     />
                 ))}
             </Box>

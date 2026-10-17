@@ -40,4 +40,17 @@ describe('loadViewMode + saveViewMode', () => {
         window.localStorage.setItem('atlas.viewMode.x', 'garbage');
         expect(loadViewMode('x')).toBe('table');
     });
+
+    it('falls back instead of throwing when storage is blocked', () => {
+        const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new DOMException('denied', 'SecurityError');
+        });
+        const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new DOMException('denied', 'SecurityError');
+        });
+        expect(loadViewMode('tasks', 'kanban')).toBe('kanban');
+        expect(() => saveViewMode('tasks', 'table')).not.toThrow();
+        get.mockRestore();
+        set.mockRestore();
+    });
 });

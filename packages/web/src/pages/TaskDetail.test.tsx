@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
@@ -9,6 +9,14 @@ import { makeAgent, makeSubTask, makeTask } from '../test-utils/factories.js';
 import { TaskDetail } from './TaskDetail.js';
 
 const BASE = 'http://localhost:3000/api';
+
+const show = vi.hoisted(() => vi.fn());
+vi.mock('../hooks/useToast.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    useToast: () => ({ show, toasts: [], dismiss: vi.fn() }),
+}));
+beforeEach(() => show.mockClear());
+const toasted = () => show.mock.calls.map((c) => c[0] as { message: string; detail?: string });
 
 // Shared MSW handlers for every Task detail render. Tests can layer
 // additional `server.use(http.patch(...))` calls on top for mutation flows.
@@ -58,6 +66,52 @@ function renderTask(id: string) {
 }
 
 describe('TaskDetail page', () => {
+    it('a refused description save toasts the reason and keeps the editor open', async () => {
+        stubTaskFull('T30', { task: makeTask({ id: 'T30', description: 'Old text' }) });
+        server.use(
+            http.patch(`${BASE}/tasks/T30`, () =>
+                HttpResponse.json({ error: 'Description too long' }, { status: 400 })
+            )
+        );
+        renderTask('T30');
+        await screen.findByText('Old text');
+        fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+        fireEvent.change(screen.getByDisplayValue('Old text'), { target: { value: 'New text' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+        await waitFor(() =>
+            expect(toasted()).toEqual([{ message: "Couldn't save T30", detail: 'Description too long' }])
+        );
+        expect(screen.getByDisplayValue('New text')).toBeInTheDocument();
+    });
+
+    it('a refused comment toasts the reason and keeps the draft', async () => {
+        stubTaskFull('T31');
+        server.use(
+            http.post(`${BASE}/comments`, () =>
+                HttpResponse.json({ error: 'Comment body too long' }, { status: 400 })
+            )
+        );
+        renderTask('T31');
+        await screen.findByText('Task One');
+        fireEvent.change(screen.getByPlaceholderText(/Comment on this item…/i), {
+            target: { value: 'Hello' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^Post$/i }));
+        await waitFor(() =>
+            expect(toasted()).toEqual([
+                { message: "Couldn't post the comment", detail: 'Comment body too long' },
+            ])
+        );
+        expect(screen.getByDisplayValue('Hello')).toBeInTheDocument();
+    });
+
+    it('keeps the assignee editable on an in-progress Task with no live run', async () => {
+        stubTaskFull('T32', { task: makeTask({ id: 'T32', status: 'in_progress' }) });
+        renderTask('T32');
+        await screen.findByText('Task One');
+        expect(await screen.findByRole('button', { name: /^Assignee/ })).toBeInTheDocument();
+    });
+
     it('lists sub-tasks with their labels and opens one on click', async () => {
         stubTaskFull('T1', {
             sub_tasks: [
@@ -185,7 +239,7 @@ describe('TaskDetail page', () => {
 
         const trigger = screen.getByRole('button', { name: /Add related item/i });
         fireEvent.click(trigger);
-        fireEvent.click(await screen.findByText('Add relates-to'));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Link an item' }));
         const dlg = await screen.findByRole('dialog');
         fireEvent.click(within(dlg).getByTestId('CloseRoundedIcon').closest('button')!);
     });
@@ -197,7 +251,7 @@ describe('TaskDetail page', () => {
 
         const trigger = screen.getByRole('button', { name: /Add related item/i });
         fireEvent.click(trigger);
-        fireEvent.click(await screen.findByText('Add blocked-by'));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'Add dependency' }));
         const dlg = await screen.findByRole('dialog');
         fireEvent.click(within(dlg).getByTestId('CloseRoundedIcon').closest('button')!);
     });
@@ -486,17 +540,6 @@ describe('TaskDetail page', () => {
         );
         renderTask('E19');
         await screen.findByText('Task One');
-        expect(document.body).toBeTruthy();
-    });
-
-    it('shows reassign-locked state when task status is in_progress', async () => {
-        stubTaskFull('E20', {
-            task: makeTask({ id: 'E20', status: 'in_progress' }),
-        });
-        renderTask('E20');
-        await screen.findByText('Task One');
-        // reassignLocked = true when status === 'in_progress'
-        // DetailsRailCard renders the assignee row in locked state — just verify no crash
         expect(document.body).toBeTruthy();
     });
 

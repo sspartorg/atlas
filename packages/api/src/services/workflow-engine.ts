@@ -231,7 +231,7 @@ export async function startWorkflowRun(
     workflowId: string,
     itemId: string | null,
     parent?: ParentStep,
-    opts: { fromSubtasks?: boolean } = {},
+    opts: { fromSubtasks?: boolean; repoIds?: string[] } = {},
 ): Promise<string> {
     const workflow = await loadWorkflow(workflowId);
     if (!workflow) throw new WorkflowStartError('not_found', 'Workflow not found');
@@ -295,6 +295,7 @@ export async function startWorkflowRun(
                 project_id: projectId,
                 graph_snapshot: JSON.stringify(graph),
                 branch,
+                ...(opts.repoIds ? { repo_ids: JSON.stringify(opts.repoIds) } : {}),
                 ...(parent
                     ? {
                           parent_workflow_run_id: parent.run.id,

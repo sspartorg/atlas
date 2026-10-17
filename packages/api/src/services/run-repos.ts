@@ -43,6 +43,18 @@ export async function runRepos(run: {
             ? await db.selectFrom('items').select('repo_ids').where('id', '=', item.parent_id).executeTakeFirst()
             : item;
         repoIds = task?.repo_ids ?? [];
+    } else {
+        // ponytail: keyed by branch so every caller (most pass no run id)
+        // finds it; a project-scope branch is `atlas/wf/<run id prefix>`.
+        const row = await db
+            .selectFrom('workflow_runs')
+            .select('repo_ids')
+            .where('project_id', '=', run.project_id)
+            .where('branch', '=', run.branch)
+            .where('item_id', 'is', null)
+            .orderBy('started_at', 'desc')
+            .executeTakeFirst();
+        repoIds = row?.repo_ids ?? [];
     }
     const repos = await projectReposService.forTask({ project_id: run.project_id, repo_ids: repoIds });
     const [only] = repos;

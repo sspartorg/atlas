@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { IItemExternalLink } from '@atlas/shared';
 import { http, HttpResponse } from 'msw';
+import { QueryClient } from '@tanstack/react-query';
 import { server } from '../test-setup.js';
 import { makeAgent, makeProject, makeProjectRepo } from '../test-utils/factories.js';
 import userEvent from '@testing-library/user-event';
@@ -177,7 +178,9 @@ describe('DetailsRailCard', () => {
                 updatedAt="2026-05-16T00:00:00.000Z"
                 worktreeBranch="atlas/wf/task-1"
                 worktreePath="/tmp/atlas/task-1"
-            />
+            />,
+            // The rail's workflow-runs query would leave a gc timer on unmount.
+            { queryClient: new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } }) }
         );
 
         vi.useFakeTimers();
@@ -399,20 +402,19 @@ describe('DetailsRailCard', () => {
             await waitFor(() => expect(onChange).toHaveBeenCalledWith(['p1', 'r-web']));
         });
 
-        it('explains a 409 from a running workflow in a toast', async () => {
+        it('a refused save closes the dialog and leaves the toast to the mutation hook', async () => {
             const user = userEvent.setup();
             const onChange = vi
                 .fn()
                 .mockRejectedValue(new AtlasApiError('locked', 'conflict', 409));
             renderRepos(['p1'], onChange);
 
-            await user.click(await screen.findByText('Repos'));
+            await user.click(await screen.findByRole('button', { name: /^Repos/ }));
             const dialog = await screen.findByRole('dialog');
             await user.click(within(dialog).getByRole('button', { name: 'Save' }));
 
-            expect(
-                await screen.findByText('Stop the workflow run to change repos')
-            ).toBeInTheDocument();
+            await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+            expect(screen.queryByText('Stop the workflow run to change repos')).not.toBeInTheDocument();
         });
 
         it('lists the repos in order and marks the path as the multi-repo workspace', async () => {
@@ -426,5 +428,31 @@ describe('DetailsRailCard', () => {
                 screen.getByLabelText('Workspace folder — one checkout per repo')
             ).toBeInTheDocument();
         });
+    });
+
+    it('the Status row opens its picker from the keyboard; copy buttons say what they copy', async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+            <DetailsRailCard
+                issueType="sub_task"
+                status="ready"
+                onStatusPick={vi.fn()}
+                assigneeAgentId={null}
+                onAssign={vi.fn()}
+                assignee={null}
+                project={null}
+                ownerName="Bob"
+                ownerAccent="#0A0A0A"
+                createdAt="2026-05-15T00:00:00.000Z"
+                updatedAt="2026-05-16T00:00:00.000Z"
+                worktreeBranch="atlas/wf/task-1"
+                worktreePath="/tmp/atlas/task-1"
+            />
+        );
+        expect(screen.getByRole('button', { name: 'Copy branch' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Copy path' })).toBeInTheDocument();
+        screen.getByRole('button', { name: /^Status/ }).focus();
+        await user.keyboard(' ');
+        expect(await screen.findByRole('menuitem', { name: 'In Progress' })).toBeInTheDocument();
     });
 });

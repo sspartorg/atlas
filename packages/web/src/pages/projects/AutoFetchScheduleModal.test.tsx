@@ -160,6 +160,52 @@ describe('AutoFetchScheduleModal — submit success', () => {
         await waitFor(() => expect(onClose).toHaveBeenCalled());
     });
 
+    it('the switch decides: switched off, "Done" saves enabled=false', async () => {
+        let body: { enabled?: boolean } = {};
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () =>
+                HttpResponse.json(enabledSchedule)
+            ),
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, async ({ request }) => {
+                body = (await request.json()) as typeof body;
+                return HttpResponse.json({ ...enabledSchedule, enabled: false });
+            })
+        );
+        const onClose = vi.fn();
+        renderWithProviders(
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />
+        );
+        await waitFor(() => screen.getByRole('button', { name: /^Done$/ }));
+        const enableSwitch = document.querySelectorAll('input[type="checkbox"]')[0] as HTMLElement;
+        fireEvent.click(enableSwitch);
+        await waitFor(() => expect(screen.getByText('Auto-fetch schedule')).toBeInTheDocument());
+        await userEvent.click(screen.getByRole('button', { name: /^Done$/ }));
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(body.enabled).toBe(false);
+    });
+
+    it('Weekly saves the weekday the select shows (Mon) instead of null', async () => {
+        let body: { preset?: string; weekday?: number | null } = {};
+        server.use(
+            http.get(`${BASE}/projects/p1/repos/r1/schedule`, () =>
+                HttpResponse.json({ ...defaultSchedule, weekday: null })
+            ),
+            http.put(`${BASE}/projects/p1/repos/r1/schedule`, async ({ request }) => {
+                body = (await request.json()) as typeof body;
+                return HttpResponse.json(defaultSchedule);
+            })
+        );
+        const onClose = vi.fn();
+        renderWithProviders(
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={onClose} />
+        );
+        await userEvent.click(await screen.findByText('Weekly'));
+        expect(screen.getByLabelText('Weekday')).toHaveTextContent('Mon');
+        await userEvent.click(screen.getByRole('button', { name: /Save schedule/i }));
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(body).toMatchObject({ preset: 'weekly', weekday: 1 });
+    });
+
     it('calls PUT with enabled=false when Turn off is clicked', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/repos/r1/schedule`, () =>

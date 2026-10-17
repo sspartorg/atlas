@@ -130,7 +130,11 @@ export function ApiErrorAlert({ error, contextLabel, actionSlot, sx }: Props): R
     // sees *something* rather than the alert silently failing closed.
     if (!(error instanceof AtlasApiError)) {
         return (
-            <Alert severity="error" sx={{ '& .MuiAlert-message': { fontSize: 12.5 }, ...sx }}>
+            <Alert
+                severity="error"
+                sx={{ '& .MuiAlert-message': { fontSize: 12.5 }, ...sx }}
+                action={actionSlot}
+            >
                 {contextLabel ? `${contextLabel}: ` : ''}
                 {error === null || error === undefined ? 'Unknown error' : String(error)}
             </Alert>
@@ -149,5 +153,30 @@ export function ApiErrorAlert({ error, contextLabel, actionSlot, sx }: Props): R
             </AlertTitle>
             <Box sx={{ fontSize: 12.5, lineHeight: 1.55 }}>{detail}</Box>
         </Alert>
+    );
+}
+
+/** A failed load, with a Retry button: never let a failed query read as "empty". */
+export function RetryAlert({
+    error,
+    label,
+    onRetry,
+}: {
+    error: unknown;
+    label: string;
+    onRetry?: (() => void) | undefined;
+}) {
+    return (
+        <ApiErrorAlert
+            error={error}
+            contextLabel={label}
+            actionSlot={
+                onRetry ? (
+                    <Button size="small" onClick={onRetry}>
+                        Retry
+                    </Button>
+                ) : undefined
+            }
+        />
     );
 }

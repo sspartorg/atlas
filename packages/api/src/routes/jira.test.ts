@@ -201,6 +201,24 @@ describe('/api/integrations/jira', () => {
         expect(JSON.parse(res.body)).toMatchObject({ kind: 'conflict' });
         expect(JSON.parse(res.body).error).toMatch(/switched off/i);
     });
+
+    it('the per-project sync 404s an unknown project and honours the switch', async () => {
+        const missing = await app.inject({ method: 'POST', url: '/api/projects/nope/jira-sync' });
+        expect(missing.statusCode).toBe(404);
+        await insertProject('p1', 'ATL');
+        await app.inject({
+            method: 'PUT',
+            url: '/api/integrations/jira',
+            payload: {
+                site_url: 'https://acme.atlassian.net',
+                email: 'me@acme.test',
+                api_token: 'tok-123',
+            },
+        });
+        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/jira-sync' });
+        expect(res.statusCode).toBe(409);
+        expect(JSON.parse(res.body)).toMatchObject({ kind: 'conflict' });
+    });
 });
 
 // Migration 010 — a source is a query + workflow + repos combo belonging to a

@@ -111,4 +111,15 @@ describe('EditableTitle', () => {
         });
         expect(onSave).toHaveBeenCalledWith('After');
     });
+
+    it('names the save and cancel icons, and stays in edit mode when the save fails', async () => {
+        const onSave = vi.fn().mockRejectedValue(new Error('nope'));
+        renderWithProviders(<EditableTitle value="Old" onSave={onSave} />);
+        await userEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+        expect(screen.getByRole('button', { name: 'Cancel title edit' })).toBeInTheDocument();
+        await userEvent.type(screen.getByDisplayValue('Old'), '!');
+        await userEvent.click(screen.getByRole('button', { name: 'Save title' }));
+        expect(onSave).toHaveBeenCalledWith('Old!');
+        expect(screen.getByDisplayValue('Old!')).toBeInTheDocument();
+    });
 });

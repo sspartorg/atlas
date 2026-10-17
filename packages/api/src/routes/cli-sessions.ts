@@ -458,7 +458,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         } catch (err) {
             await cleanupWorktreeAfterPush({
                 itemId: null,
-                projectId: project.id,
+                projectId: repo.id,
                 repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,
@@ -493,7 +493,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
         if (!setupResult.ok) {
             await cleanupWorktreeAfterPush({
                 itemId: null,
-                projectId: project.id,
+                projectId: repo.id,
                 repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,
@@ -596,7 +596,7 @@ export async function cliSessionsRoutes(app: FastifyInstance): Promise<void> {
             // the spawn threw, so no additional cleanup needed here.
             await cleanupWorktreeAfterPush({
                 itemId: null,
-                projectId: project.id,
+                projectId: repo.id,
                 repoGitPath: repo.git_path,
                 worktreePath,
                 branch: branchName,

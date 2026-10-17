@@ -1,25 +1,29 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import CircularProgress from '@mui/material/CircularProgress';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import Select from '@mui/material/Select';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogTitle from '@mui/material/DialogTitle';
+import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import SaveRounded from '@mui/icons-material/SaveRounded';
+import ChevronRightRounded from '@mui/icons-material/ChevronRightRounded';
+import CloseRounded from '@mui/icons-material/CloseRounded';
 import TerminalRounded from '@mui/icons-material/TerminalRounded';
+import type { IProjectRepo } from '@atlas/shared';
 import { useProjectRepos, useUpdateProjectRepo } from '../../hooks/useProjectRepos.js';
+import { useIsMobile } from '../../hooks/useIsMobile.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 
-// 2026-06-10 — Setup scripts editor.
-//
-// ADR 0018 — the two free-text editors (`.sh` and `.ps1`) belong to a repo,
-// not the project: pick the repo, edit its scripts. Executed by the agent
-// runner (project-setup-runner) in that repo's checkout before the CLI starts.
+// Setup scripts, one `.sh` and one `.ps1` per repo (ADR 0018). The tab lists
+// the project's repos with what each has; a repo opens its two scripts in a
+// dialog. Executed by the agent runner (project-setup-runner) in that repo's
+// fresh worktree before the CLI starts.
 
 const MONO = '"JetBrains Mono", monospace';
 
@@ -28,55 +32,25 @@ interface Props {
 }
 
 export function SetupTab({ projectId }: Props) {
-    const { data: repos, isLoading } = useProjectRepos(projectId);
-    const update = useUpdateProjectRepo(projectId);
-    const toast = useToast();
+    const { data: repos, isLoading, isError } = useProjectRepos(projectId);
+    const [openId, setOpenId] = useState<string | null>(null);
+    const open = repos?.find((r) => r.id === openId) ?? null;
 
-    const [selectedId, setSelectedId] = useState('');
-    // Falls back to the first repo until the Owner picks one (and again if the
-    // picked one is removed under us).
-    const repo = repos?.find((r) => r.id === selectedId) ?? repos?.[0];
-
-    const [sh, setSh] = useState('');
-    const [ps1, setPs1] = useState('');
-
-    // Sync local state when the repo finishes loading, refetches, or changes.
-    useEffect(() => {
-        if (repo) {
-            setSh(repo.setup_sh_body ?? '');
-            setPs1(repo.setup_ps1_body ?? '');
-        }
-    }, [repo]);
-
-    const dirty = useMemo(
-        () =>
-            repo !== undefined &&
-            (sh !== (repo.setup_sh_body ?? '') || ps1 !== (repo.setup_ps1_body ?? '')),
-        [repo, sh, ps1]
-    );
-
-    async function handleSave(): Promise<void> {
-        if (!repo) return;
-        await update.mutateAsync(
-            {
-                repoId: repo.id,
-                data: { setup_sh_body: sh, setup_ps1_body: ps1 },
-            },
-            {
-                onSuccess: () => toast.show({ message: 'Setup saved' }),
-            }
+    if (isError) {
+        return (
+            <Alert severity="error">
+                Could not load this project&apos;s repos. Refresh to try again.
+            </Alert>
         );
     }
-
     if (isLoading || !repos) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-                <CircularProgress size={20} />
+                <CircularProgress size={20} aria-label="Loading repos" />
             </Box>
         );
     }
-
-    if (!repo) {
+    if (repos.length === 0) {
         return (
             <Alert severity="info">
                 This project has no repos yet. Setup scripts belong to a repo — add one on the Repos
@@ -87,136 +61,381 @@ export function SetupTab({ projectId }: Props) {
 
     return (
         <Box>
-            <Box
+            <Typography
+                component="h2"
                 sx={{
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: ATLAS_PALETTE.slate,
                     display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 2,
-                    mb: 3,
-                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 1,
                 }}
             >
-                <Box sx={{ flex: 1, minWidth: 300 }}>
-                    <Typography
-                        sx={{
-                            fontSize: 16,
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                        }}
+                <TerminalRounded sx={{ fontSize: 20, color: ATLAS_PALETTE.brandBlue }} />
+                Setup scripts
+            </Typography>
+            <Typography
+                sx={{
+                    fontSize: 13,
+                    color: ATLAS_PALETTE.slate60,
+                    mt: 0.5,
+                    mb: 2.5,
+                    lineHeight: 1.5,
+                }}
+            >
+                Each repo has a shell and a PowerShell script that run in its fresh worktree before
+                the agent CLI starts. A failing script ends the run as setup failed.
+            </Typography>
+
+            <Box
+                component="ul"
+                aria-label="Repos"
+                sx={{
+                    listStyle: 'none',
+                    m: 0,
+                    p: 0,
+                    border: `1px solid ${ATLAS_PALETTE.slate12}`,
+                    borderRadius: 1.5,
+                }}
+            >
+                {repos.map((r, i) => (
+                    <Box
+                        component="li"
+                        key={r.id}
+                        sx={{ borderTop: i === 0 ? 'none' : `1px solid ${ATLAS_PALETTE.slate12}` }}
                     >
-                        <TerminalRounded sx={{ fontSize: 20, color: ATLAS_PALETTE.brandBlue }} />
-                        Setup scripts
-                    </Typography>
-                    <Typography
-                        sx={{
-                            fontSize: 13,
-                            color: ATLAS_PALETTE.slate60,
-                            mt: 0.5,
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        Runs in this repo&apos;s fresh worktree before the agent CLI starts —
-                        symlinks, env-file generation, system checks, anything project-specific. The
-                        API host runs the PowerShell body on Windows and the shell body elsewhere;
-                        leave blank if not needed. A failing script ends the run as setup failed and
-                        the CLI never starts.
-                    </Typography>
-                </Box>
-                <Button
-                    variant="contained"
-                    onClick={handleSave}
-                    disabled={!dirty || update.isPending}
-                    startIcon={
-                        update.isPending ? (
-                            <CircularProgress size={14} sx={{ color: ATLAS_PALETTE.white }} />
-                        ) : (
-                            <SaveRounded sx={{ fontSize: 16 }} />
-                        )
-                    }
-                    sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        bgcolor: ATLAS_PALETTE.brandBlue,
-                        '&:hover': { bgcolor: ATLAS_PALETTE.brandBlue, opacity: 0.9 },
-                        '&.Mui-disabled': {
-                            bgcolor: ATLAS_PALETTE.slate12,
-                            color: ATLAS_PALETTE.slate60,
-                        },
-                    }}
-                >
-                    {update.isPending ? 'Saving…' : 'Save'}
-                </Button>
+                        <ButtonBase
+                            onClick={() => setOpenId(r.id)}
+                            aria-label={`Edit setup scripts for ${r.name}`}
+                            sx={{
+                                width: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                px: 2,
+                                py: 1.5,
+                                textAlign: 'left',
+                                '&:hover, &.Mui-focusVisible': { bgcolor: ATLAS_PALETTE.slate06 },
+                            }}
+                        >
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                <Typography
+                                    sx={{
+                                        fontFamily: MONO,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        color: ATLAS_PALETTE.slate,
+                                        overflowWrap: 'anywhere',
+                                    }}
+                                >
+                                    {r.name}
+                                </Typography>
+                                <Box sx={{ display: 'flex', gap: 1, mt: 0.75, flexWrap: 'wrap' }}>
+                                    <ScriptChip ext=".sh" body={r.setup_sh_body} />
+                                    <ScriptChip ext=".ps1" body={r.setup_ps1_body} />
+                                </Box>
+                            </Box>
+                            <ChevronRightRounded sx={{ color: ATLAS_PALETTE.slate40 }} />
+                        </ButtonBase>
+                    </Box>
+                ))}
             </Box>
 
-            <FormControl size="small" sx={{ mb: 3, minWidth: 220 }}>
-                <InputLabel id="setup-repo-label">Repo</InputLabel>
-                <Select
-                    labelId="setup-repo-label"
-                    id="setup-repo"
-                    label="Repo"
-                    value={repo.id}
-                    onChange={(e) => setSelectedId(e.target.value)}
-                    sx={{ fontFamily: MONO, fontSize: 13 }}
-                >
-                    {repos.map((r) => (
-                        <MenuItem key={r.id} value={r.id} sx={{ fontFamily: MONO, fontSize: 13 }}>
-                            {r.name}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-
-            {update.isError && (
-                <Alert severity="error" sx={{ mb: 3 }}>
-                    Failed to save:{' '}
-                    {update.error instanceof Error ? update.error.message : 'Unknown error'}
-                </Alert>
+            {open && (
+                <SetupScriptsDialog
+                    projectId={projectId}
+                    repo={open}
+                    onClose={() => setOpenId(null)}
+                />
             )}
+        </Box>
+    );
+}
 
-            <Box
+/** Line count shown on the list; a blank script is "empty". */
+export function scriptSummary(body: string | null | undefined): string {
+    const text = (body ?? '').trimEnd();
+    if (!text.trim()) return 'empty';
+    const n = text.split('\n').length;
+    return `${n} line${n === 1 ? '' : 's'}`;
+}
+
+function ScriptChip({ ext, body }: { ext: string; body: string | null | undefined }) {
+    const summary = scriptSummary(body);
+    const set = summary !== 'empty';
+    return (
+        <Box
+            component="span"
+            sx={{
+                fontFamily: MONO,
+                fontSize: 11,
+                px: 1,
+                py: 0.25,
+                borderRadius: 1,
+                bgcolor: set ? ATLAS_PALETTE.accentSoft : ATLAS_PALETTE.slate08,
+                color: set ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate60,
+            }}
+        >
+            {ext} · {summary}
+        </Box>
+    );
+}
+
+function SetupScriptsDialog({
+    projectId,
+    repo,
+    onClose,
+}: {
+    projectId: string;
+    repo: IProjectRepo;
+    onClose: () => void;
+}) {
+    const update = useUpdateProjectRepo(projectId);
+    const toast = useToast();
+    const fullScreen = useIsMobile();
+    const [sh, setSh] = useState(repo.setup_sh_body ?? '');
+    const [ps1, setPs1] = useState(repo.setup_ps1_body ?? '');
+    const [confirmDiscard, setConfirmDiscard] = useState(false);
+    const dirty = sh !== (repo.setup_sh_body ?? '') || ps1 !== (repo.setup_ps1_body ?? '');
+
+    // A clean dialog follows the stored scripts if they change underneath it
+    // (another tab saved); a dirty one keeps the Owner's edits.
+    useEffect(() => {
+        if (!dirty) {
+            setSh(repo.setup_sh_body ?? '');
+            setPs1(repo.setup_ps1_body ?? '');
+        }
+    }, [repo.setup_sh_body, repo.setup_ps1_body]);
+
+    const requestClose = () => (dirty && !update.isPending ? setConfirmDiscard(true) : onClose());
+
+    async function save(): Promise<void> {
+        try {
+            await update.mutateAsync({
+                repoId: repo.id,
+                data: { setup_sh_body: sh, setup_ps1_body: ps1 },
+            });
+            toast.show({ message: `Setup scripts saved for ${repo.name}` });
+            onClose();
+        } catch {
+            // Shown in the dialog from update.error; the edits stay.
+        }
+    }
+
+    return (
+        <Dialog
+            open
+            onClose={requestClose}
+            fullScreen={fullScreen}
+            maxWidth="lg"
+            fullWidth
+            aria-labelledby="setup-dialog-title"
+        >
+            <DialogTitle
+                id="setup-dialog-title"
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, pr: 6 }}
+            >
+                <Box component="span" sx={{ fontSize: 16, fontWeight: 600 }}>
+                    Setup scripts ·{' '}
+                    <Box component="span" sx={{ fontFamily: MONO, overflowWrap: 'anywhere' }}>
+                        {repo.name}
+                    </Box>
+                </Box>
+                <IconButton
+                    aria-label="Close"
+                    onClick={requestClose}
+                    sx={{ position: 'absolute', right: 8, top: 8 }}
+                >
+                    <CloseRounded />
+                </IconButton>
+            </DialogTitle>
+            <DialogContent dividers>
+                <Typography
+                    sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60, mb: 2, lineHeight: 1.5 }}
+                >
+                    The API host runs the PowerShell script on Windows and the shell script
+                    elsewhere. Leave a script blank if it isn&apos;t needed.
+                </Typography>
+
+                {update.isError && (
+                    <Alert severity="error" sx={{ mb: 2 }}>
+                        Could not save:{' '}
+                        {update.error instanceof Error ? update.error.message : 'unknown error'}.
+                        Your edits are still here.
+                    </Alert>
+                )}
+
+                <SecretsHelp />
+
+                <Box
+                    sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+                        gap: 3,
+                    }}
+                >
+                    <ScriptEditor
+                        ext=".sh"
+                        label="Bash / POSIX shell"
+                        ariaLabel="Bash setup script"
+                        value={sh}
+                        onChange={setSh}
+                        placeholder={
+                            '#!/usr/bin/env bash\nset -euo pipefail\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n'
+                        }
+                    />
+                    <ScriptEditor
+                        ext=".ps1"
+                        label="Windows PowerShell"
+                        ariaLabel="PowerShell setup script"
+                        value={ps1}
+                        onChange={setPs1}
+                        placeholder={
+                            "$ErrorActionPreference = 'Stop'\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n"
+                        }
+                    />
+                </Box>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 1.5, gap: 1, flexWrap: 'wrap' }}>
+                {confirmDiscard ? (
+                    <>
+                        <Typography
+                            role="alert"
+                            sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, mr: 'auto' }}
+                        >
+                            Discard your unsaved changes?
+                        </Typography>
+                        <Button
+                            onClick={() => setConfirmDiscard(false)}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Keep editing
+                        </Button>
+                        <Button
+                            color="error"
+                            variant="contained"
+                            onClick={onClose}
+                            sx={{ textTransform: 'none' }}
+                        >
+                            Discard
+                        </Button>
+                    </>
+                ) : (
+                    <>
+                        <Button onClick={requestClose} sx={{ textTransform: 'none' }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="contained"
+                            onClick={() => void save()}
+                            disabled={!dirty || update.isPending}
+                            startIcon={
+                                update.isPending ? (
+                                    <CircularProgress size={14} color="inherit" />
+                                ) : null
+                            }
+                            sx={{ textTransform: 'none', fontWeight: 600 }}
+                        >
+                            {update.isPending ? 'Saving…' : 'Save scripts'}
+                        </Button>
+                    </>
+                )}
+            </DialogActions>
+        </Dialog>
+    );
+}
+
+function ScriptEditor(props: {
+    ext: string;
+    label: string;
+    ariaLabel: string;
+    value: string;
+    onChange: (v: string) => void;
+    placeholder: string;
+}) {
+    return (
+        <Box>
+            <Typography
                 sx={{
-                    border: `1px solid ${ATLAS_PALETTE.slate12}`,
-                    bgcolor: ATLAS_PALETTE.slate08,
-                    borderRadius: 1.5,
-                    px: 2,
-                    py: 1.75,
-                    mb: 3,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: ATLAS_PALETTE.slate,
+                    mb: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1,
                 }}
             >
-                <Typography
+                <Box
+                    component="span"
                     sx={{
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        color: ATLAS_PALETTE.slate,
-                        mb: 0.75,
-                    }}
-                >
-                    Using secrets in your scripts
-                </Typography>
-                <Typography
-                    sx={{
-                        fontSize: 12.5,
+                        fontFamily: MONO,
+                        fontSize: 11,
+                        bgcolor: ATLAS_PALETTE.slate08,
                         color: ATLAS_PALETTE.slate60,
-                        lineHeight: 1.6,
+                        px: 1,
+                        py: 0.25,
+                        borderRadius: 1,
                     }}
                 >
-                    Reference any secret with{' '}
-                    <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
+                    {props.ext}
+                </Box>
+                {props.label}
+            </Typography>
+            <TextField
+                fullWidth
+                multiline
+                minRows={14}
+                maxRows={30}
+                value={props.value}
+                onChange={(e) => props.onChange(e.target.value)}
+                placeholder={props.placeholder}
+                slotProps={{
+                    htmlInput: { 'aria-label': props.ariaLabel, spellCheck: false },
+                    input: {
+                        sx: {
+                            fontFamily: MONO,
+                            fontSize: 12.5,
+                            lineHeight: 1.6,
+                            alignItems: 'flex-start',
+                            py: 1.5,
+                        },
+                    },
+                }}
+            />
+        </Box>
+    );
+}
+
+// Collapsed by default: the reference is for when you need it, not on every open.
+function SecretsHelp() {
+    const code = { fontFamily: MONO, color: ATLAS_PALETTE.slate } as const;
+    return (
+        <Box
+            sx={{
+                border: `1px solid ${ATLAS_PALETTE.slate12}`,
+                bgcolor: ATLAS_PALETTE.slate08,
+                borderRadius: 1.5,
+                px: 2,
+                py: 1.25,
+                mb: 2.5,
+                fontSize: 12.5,
+                color: ATLAS_PALETTE.slate60,
+                lineHeight: 1.6,
+                '& summary': { cursor: 'pointer', fontWeight: 600, color: ATLAS_PALETTE.slate },
+            }}
+        >
+            <details>
+                <summary>Using secrets in your scripts</summary>
+                <Box sx={{ mt: 1 }}>
+                    Write{' '}
+                    <Box component="span" sx={code}>
                         ${'{variable.KEY}'}
                     </Box>{' '}
-                    anywhere in the script body. Before the orchestrator runs the script it replaces
-                    each placeholder with the resolved value — the substituted text is what actually
-                    gets executed, so the shell never sees{' '}
-                    <Box component="span" sx={{ fontFamily: MONO }}>
-                        ${'{variable.…}'}
-                    </Box>
-                    .
-                </Typography>
-
+                    anywhere in a script. It is replaced with the secret&apos;s value before the
+                    script runs.
+                </Box>
                 <Box
                     sx={{
                         mt: 1,
@@ -228,174 +447,49 @@ export function SetupTab({ projectId }: Props) {
                         borderRadius: 1,
                         px: 1.25,
                         py: 1,
-                        lineHeight: 1.7,
                         whiteSpace: 'pre',
                         overflowX: 'auto',
                     }}
                 >
                     {`# bash\nexport GITHUB_TOKEN="\${variable.GITHUB_TOKEN}"\n\n# powershell\n$env:GITHUB_TOKEN = "\${variable.GITHUB_TOKEN}"`}
                 </Box>
-
-                <Box
-                    component="ul"
-                    sx={{
-                        m: 0,
-                        mt: 1.25,
-                        pl: 2.5,
-                        fontSize: 12.5,
-                        color: ATLAS_PALETTE.slate60,
-                        lineHeight: 1.7,
-                        '& li + li': { mt: 0.25 },
-                    }}
-                >
+                <Box component="ul" sx={{ m: 0, mt: 1.25, pl: 2.5, '& li + li': { mt: 0.25 } }}>
                     <li>
-                        <Box component="span" sx={{ fontFamily: MONO, color: ATLAS_PALETTE.slate }}>
+                        <Box component="span" sx={code}>
                             KEY
                         </Box>{' '}
-                        must match{' '}
-                        <Box component="span" sx={{ fontFamily: MONO }}>
-                            [A-Za-z_][A-Za-z0-9_]*
-                        </Box>{' '}
-                        — start with a letter or underscore, then letters/digits/underscores.
+                        is the secret&apos;s name in UPPER_SNAKE_CASE, the only form Manage Secrets
+                        and Shared Secrets save.
                     </li>
                     <li>
-                        Values resolve from <strong>Settings &gt; Shared Secrets</strong> first,
-                        then <strong>Project &gt; Manage Secrets</strong> — project entries override
-                        shared ones on key collision.
+                        Values come from <strong>Settings &gt; Shared Secrets</strong> and this
+                        project&apos;s <strong>Manage Secrets</strong>; the project&apos;s value
+                        wins when both have the key.
                     </li>
                     <li>
-                        Native shell expansions like{' '}
-                        <Box component="span" sx={{ fontFamily: MONO }}>
+                        Shell expansions like{' '}
+                        <Box component="span" sx={code}>
                             ${'{HOME}'}
                         </Box>{' '}
                         or{' '}
-                        <Box component="span" sx={{ fontFamily: MONO }}>
+                        <Box component="span" sx={code}>
                             $env:PATH
                         </Box>{' '}
-                        are left untouched — only the{' '}
-                        <Box component="span" sx={{ fontFamily: MONO }}>
+                        are left alone; only{' '}
+                        <Box component="span" sx={code}>
                             variable.
                         </Box>{' '}
-                        namespace is substituted.
+                        is replaced.
                     </li>
                     <li>
-                        If a referenced key isn&apos;t defined, the run aborts with{' '}
-                        <Box component="span" sx={{ fontFamily: MONO }}>
+                        A key that doesn&apos;t exist ends the run as{' '}
+                        <Box component="span" sx={code}>
                             setup_failed
                         </Box>{' '}
-                        before the CLI is spawned — add the secret and re-dispatch.
+                        before the CLI starts. Add the secret, then run again.
                     </li>
                 </Box>
-            </Box>
-
-            <Box
-                sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-                    gap: 3,
-                }}
-            >
-                <Box>
-                    <Typography
-                        sx={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate,
-                            mb: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                        }}
-                    >
-                        <Box
-                            component="span"
-                            sx={{
-                                fontFamily: MONO,
-                                fontSize: 11,
-                                bgcolor: ATLAS_PALETTE.slate08,
-                                color: ATLAS_PALETTE.slate60,
-                                px: 1,
-                                py: 0.25,
-                                borderRadius: 1,
-                            }}
-                        >
-                            .sh
-                        </Box>
-                        Bash / POSIX shell
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={18}
-                        maxRows={36}
-                        value={sh}
-                        onChange={(e) => setSh(e.target.value)}
-                        slotProps={{ htmlInput: { 'aria-label': 'Bash setup script' } }}
-                        placeholder={
-                            '#!/usr/bin/env bash\nset -euo pipefail\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n'
-                        }
-                        InputProps={{
-                            sx: {
-                                fontFamily: MONO,
-                                fontSize: 12.5,
-                                lineHeight: 1.6,
-                                alignItems: 'flex-start',
-                                py: 1.5,
-                            },
-                        }}
-                    />
-                </Box>
-                <Box>
-                    <Typography
-                        sx={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: ATLAS_PALETTE.slate,
-                            mb: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 1,
-                        }}
-                    >
-                        <Box
-                            component="span"
-                            sx={{
-                                fontFamily: MONO,
-                                fontSize: 11,
-                                bgcolor: ATLAS_PALETTE.slate08,
-                                color: ATLAS_PALETTE.slate60,
-                                px: 1,
-                                py: 0.25,
-                                borderRadius: 1,
-                            }}
-                        >
-                            .ps1
-                        </Box>
-                        Windows PowerShell
-                    </Typography>
-                    <TextField
-                        fullWidth
-                        multiline
-                        minRows={18}
-                        maxRows={36}
-                        value={ps1}
-                        onChange={(e) => setPs1(e.target.value)}
-                        slotProps={{ htmlInput: { 'aria-label': 'PowerShell setup script' } }}
-                        placeholder={
-                            "$ErrorActionPreference = 'Stop'\n\n# Symlinks, env scaffolding, tool checks — anything one-shot per worktree.\n"
-                        }
-                        InputProps={{
-                            sx: {
-                                fontFamily: MONO,
-                                fontSize: 12.5,
-                                lineHeight: 1.6,
-                                alignItems: 'flex-start',
-                                py: 1.5,
-                            },
-                        }}
-                    />
-                </Box>
-            </Box>
+            </details>
         </Box>
     );
 }

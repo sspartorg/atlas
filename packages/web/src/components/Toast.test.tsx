@@ -60,4 +60,24 @@ describe('Toast', () => {
         expect(await screen.findByText('Saved')).toBeInTheDocument();
         expect(screen.getByText('extra')).toBeInTheDocument();
     });
+
+    it.each([
+        ["Couldn't save APL-1", 'ErrorOutlineRounded'],
+        ['Could not load tasks', 'ErrorOutlineRounded'],
+        ['Jira sync failed', 'ErrorOutlineRounded'],
+        ['Clipboard blocked', 'ErrorOutlineRounded'],
+        ['Branch copied', 'LinkRounded'],
+        ['Setup scripts saved for web', 'FolderOpenRounded'],
+    ])('"%s" shows the %s icon', async (message, icon) => {
+        render(
+            <ToastProvider>
+                <Trigger message={message} />
+                <Toast />
+            </ToastProvider>
+        );
+        await userEvent.click(screen.getByRole('button', { name: 'fire' }));
+        await screen.findByText(message);
+        expect(document.querySelector(`[data-testid="${icon}Icon"]`)).not.toBeNull();
+    });
 });
+

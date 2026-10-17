@@ -21,18 +21,12 @@ const RUN_STATUSES: Record<RunStatus, true> = {
     setup_failed: true,
 };
 
-// List-mode projection for `output_text`: keep the head (so the
-// `[SIMULATED…]` marker that `isSimulatedRun` looks for survives) plus
-// the tail (the queue drawer renders the last ~160 chars as a live
-// preview). Strings shorter than the head+tail budget pass through
-// unchanged. Cuts the per-row payload from multi-KB CLI transcripts to
-// ~400 chars, dropping the Queue/Agents `/api/run?limit=500` body from
-// ~1.8 MB to ~200 KB.
-const OUTPUT_TEXT_LIST_SQL = sql<string | null>`CASE
-    WHEN r.output_text IS NULL THEN NULL
-    WHEN length(r.output_text) <= 400 THEN r.output_text
-    ELSE left(r.output_text, 100) || E'\n…[elided]…\n' || right(r.output_text, 300)
-END`;
+// List mode sends only the head of `output_text`: the one list reader is
+// `isSimulatedRun`, which needs the `[SIMULATED…]` marker at the start. A
+// prefix is all Postgres has to decompress; the old head+tail shape called
+// `length()`/`right()`, which inflated every TOASTed transcript in full
+// (48 ms → 0.4 ms for 200 rows on a dev DB holding 4.4 MB of output).
+const OUTPUT_TEXT_LIST_SQL = sql<string | null>`left(r.output_text, 100)`;
 
 export async function runRoutes(app: FastifyInstance) {
     // ADR 0014 — an ad-hoc run of one agent against the project (or nothing),
@@ -424,7 +418,17 @@ export async function runRoutes(app: FastifyInstance) {
         // sub-task), so the Project History tab
         // sees the full chronology without the client having to enumerate
         // every child id.
-        if (project_id) q = q.where('i.project_id', '=', project_id);
+        // Runs with no item (a project-scoped freedom-mode run) carry the
+        // project on the run itself — the Overview cost tile counts them, so
+        // History lists them too.
+        if (project_id) {
+            q = q.where((eb) =>
+                eb.or([
+                    eb('i.project_id', '=', project_id),
+                    eb.and([eb('r.item_id', 'is', null), eb('r.project_id', '=', project_id)]),
+                ]),
+            );
+        }
         // "What's working right now" (header mascot, dashboard) asks for just
         // the live runs instead of paging the last 500 runs to find them.
         const statuses = status

@@ -38,7 +38,7 @@ const CREDENTIAL = {
 const ROW_ACTIONS = [
     'Edit',
     'Auto-fetch schedule…',
-    'Re-clone from remote',
+    'Pull from remote…',
     'Open folder',
     'Remove',
 ];
@@ -343,17 +343,32 @@ describe('ProjectReposCard', () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos/r-web/reveal`, () => {
                 revealed = '/ws/web';
-                return HttpResponse.json({ ok: true, path: '/ws/web' });
+                return HttpResponse.json({ ok: true, path: '/ws/web', opened_in: 'Finder' });
             })
         );
         renderCard();
 
         await clickRowAction('web', 'Open folder');
         await waitFor(() => expect(revealed).toBe('/ws/web'));
-        expect(await screen.findByText('Opened in File Explorer')).toBeInTheDocument();
+        // The API names the app it used; the toast does not assume Windows.
+        expect(await screen.findByText('Opened in Finder')).toBeInTheDocument();
     });
 
-    it('re-clones the repo the row menu names', async () => {
+    it('says the folder could not be opened when the API refuses', async () => {
+        mockRepos([API, WEB]);
+        server.use(
+            http.post(`${BASE}/projects/p1/repos/r-web/reveal`, () =>
+                HttpResponse.json({ error: 'Folder not found on disk: /ws/web' }, { status: 409 })
+            )
+        );
+        renderCard();
+
+        await clickRowAction('web', 'Open folder');
+        expect(await screen.findByText('Could not open folder')).toBeInTheDocument();
+        expect(screen.getByText('Folder not found on disk: /ws/web')).toBeInTheDocument();
+    });
+
+    it('pulls the repo the row menu names', async () => {
         mockRepos([API, WEB]);
         server.use(
             http.get(`${BASE}/projects/p1/repos/r-web/status`, () =>
@@ -367,8 +382,8 @@ describe('ProjectReposCard', () => {
         );
         renderCard();
 
-        await clickRowAction('web', 'Re-clone from remote');
-        expect(await screen.findByText('Re-clone from remote?')).toBeInTheDocument();
+        await clickRowAction('web', 'Pull from remote…');
+        expect(await screen.findByText('Pull from remote?')).toBeInTheDocument();
         // The status panel is keyed on the repo, not the project.
         expect(await screen.findByText('abc123')).toBeInTheDocument();
     });
@@ -432,7 +447,7 @@ describe('ProjectReposCard', () => {
         expect(screen.getByTestId('repo-row-web')).toBeInTheDocument();
     });
 
-    it('closes the re-clone dialog without re-cloning', async () => {
+    it('closes the pull dialog without pulling', async () => {
         mockRepos([API, WEB]);
         let recloned = false;
         server.use(
@@ -451,11 +466,11 @@ describe('ProjectReposCard', () => {
         );
         renderCard();
 
-        await clickRowAction('web', 'Re-clone from remote');
-        await screen.findByText('Re-clone from remote?');
+        await clickRowAction('web', 'Pull from remote…');
+        await screen.findByText('Pull from remote?');
         fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-        await waitFor(() => expect(screen.queryByText('Re-clone from remote?')).toBeNull());
+        await waitFor(() => expect(screen.queryByText('Pull from remote?')).toBeNull());
         expect(recloned).toBe(false);
     });
 

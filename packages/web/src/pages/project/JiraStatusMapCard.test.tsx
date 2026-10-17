@@ -34,6 +34,12 @@ describe('JiraStatusMapCard', () => {
         expect(screen.getByRole('button', { name: 'Save mapping' })).toBeDisabled();
     });
 
+    it("doesn't tell the Owner to leave fields empty when Ready is required", () => {
+        mount();
+        expect(screen.queryByText(/Leave it empty/)).toBeNull();
+        expect(screen.getByText(/A mapping needs at least one\s+Ready status/)).toBeInTheDocument();
+    });
+
     it('requires Ready, refuses a Jira status in two groups, then saves trimmed lists', async () => {
         const sent = mount();
         const user = userEvent.setup();

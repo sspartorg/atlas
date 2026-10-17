@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState, type ChangeEvent } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import AddRounded from '@mui/icons-material/AddRounded';
 import { useNavigate } from 'react-router-dom';
 import type { ITaskListItem, IProject } from '@atlas/shared';
@@ -14,6 +15,7 @@ import { useIsMobile } from '../hooks/useIsMobile.js';
 import { MobileTaskList } from './MobileTaskList.js';
 import { relativeTime } from '../utils/time.js';
 import { TestItemTag } from './TestItemTag.js';
+import { SortableHeader } from './filterPrimitives.js';
 import { useShellVirtualizer } from '../hooks/useShellVirtualizer.js';
 import type { AgentSummary } from '../api/types.js';
 
@@ -53,60 +55,6 @@ const GRID_TEMPLATE = '24px 80px 1fr 80px 110px 110px 100px 100px';
 const ROW_HEIGHT_PX = 64;
 const VIRTUALIZE_THRESHOLD = 60;
 
-function SortableHeader({
-    label,
-    sortKey,
-    current,
-    dir,
-    onChange,
-    align,
-}: {
-    label: string;
-    sortKey: SortKey;
-    current: SortKey;
-    dir: SortDir;
-    onChange: (k: SortKey) => void;
-    align?: 'left' | 'right';
-}) {
-    const active = current === sortKey;
-    // v8 ignore reason (lines below): SortableHeader is a local, non-exported
-    // helper called only 3 times in this file (id/title/updated headers),
-    // always with a concrete literal key. The `SortKey | null` signature
-    // exists to match the exported `SortKey` type; the null-safety branches
-    // it enables are unreachable with the current call sites.
-    return (
-        <Box
-            /* v8 ignore next */
-            onClick={() => sortKey && onChange(sortKey)}
-            sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                /* v8 ignore next */
-                cursor: sortKey ? 'pointer' : 'default',
-                userSelect: 'none',
-                justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
-            }}
-        >
-            <Typography sx={HEADER_SX}>{label}</Typography>
-            {/* v8 ignore next -- sortKey is always truthy at this component's 3 call sites, see reason above SortableHeader's return */}
-            {sortKey && (
-                <Box
-                    component="span"
-                    className="material-symbols-rounded"
-                    aria-hidden="true"
-                    sx={{
-                        fontSize: 14,
-                        color: active ? ATLAS_PALETTE.slate60 : ATLAS_PALETTE.slate30,
-                    }}
-                >
-                    {active && dir === 'asc' ? 'arrow_drop_up' : 'arrow_drop_down'}
-                </Box>
-            )}
-        </Box>
-    );
-}
-
 interface TaskRowProps {
     row: ITaskListItem;
     project: IProject | undefined;
@@ -132,8 +80,11 @@ const TaskRow = memo(function TaskRow({
     onOpen,
     offsetY,
 }: TaskRowProps) {
+    // ButtonBase: the row opens from the keyboard (Tab, Enter/Space) too.
     return (
-        <Box
+        <ButtonBase
+            component="div"
+            disableRipple
             onClick={() => onOpen(row.id)}
             style={
                 offsetY === undefined
@@ -154,9 +105,11 @@ const TaskRow = memo(function TaskRow({
                 px: 5,
                 height: ROW_HEIGHT_PX,
                 borderBottom: isLast ? 'none' : `1px solid ${ATLAS_PALETTE.slate06}`,
+                width: '100%',
+                textAlign: 'left',
                 cursor: 'pointer',
                 transition: 'background 120ms ease',
-                '&:hover': { background: ATLAS_PALETTE.cloud },
+                '&:hover, &.Mui-focusVisible': { background: ATLAS_PALETTE.cloud },
             }}
         >
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -244,7 +197,7 @@ const TaskRow = memo(function TaskRow({
             >
                 {relativeTime(row.updated_at)}
             </Typography>
-        </Box>
+        </ButtonBase>
     );
 });
 
@@ -375,7 +328,7 @@ export function TaskTable({
     if (isMobile) {
         return (
             <MobileTaskList
-                rows={rows}
+                rows={sorted}
                 projects={projects}
                 agents={agents}
                 ownerName={ownerName}
@@ -473,7 +426,7 @@ export function TaskTable({
                                     onClick={onCreate}
                                     sx={{ textTransform: 'none', fontWeight: 600 }}
                                 >
-                                    New Task
+                                    New task
                                 </Button>
                             )}
                         </Box>
@@ -612,6 +565,7 @@ function PaginationFooter({
                     sx={navBtnSx}
                     disabled={page <= 1}
                     onClick={() => onPageChange(1)}
+                    aria-label="First page"
                 >
                     «
                 </Button>
@@ -621,6 +575,7 @@ function PaginationFooter({
                     sx={navBtnSx}
                     disabled={page <= 1}
                     onClick={() => onPageChange(page - 1)}
+                    aria-label="Previous page"
                 >
                     ‹
                 </Button>
@@ -630,6 +585,7 @@ function PaginationFooter({
                     sx={navBtnSx}
                     disabled={page >= pageCount}
                     onClick={() => onPageChange(page + 1)}
+                    aria-label="Next page"
                 >
                     ›
                 </Button>
@@ -639,6 +595,7 @@ function PaginationFooter({
                     sx={navBtnSx}
                     disabled={page >= pageCount}
                     onClick={() => onPageChange(pageCount)}
+                    aria-label="Last page"
                 >
                     »
                 </Button>

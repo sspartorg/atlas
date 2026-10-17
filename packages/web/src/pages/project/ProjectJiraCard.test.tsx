@@ -138,6 +138,52 @@ describe('ProjectJiraCard', () => {
         expect(await screen.findByText('No Jira sources yet')).toBeInTheDocument();
     });
 
+    it("Sync now syncs only this project's sources, not every project", async () => {
+        mockSources([SOURCE]);
+        let projectSync = 0;
+        let globalSync = 0;
+        server.use(
+            http.post(`${BASE}/projects/p1/jira-sync`, () => {
+                projectSync++;
+                return HttpResponse.json({
+                    imported: 2,
+                    queued: 0,
+                    needs_workflow: 0,
+                    updated: 0,
+                    comments_imported: 0,
+                    comments_posted: 1,
+                });
+            }),
+            http.post(`${BASE}/integrations/jira/sync`, () => {
+                globalSync++;
+                return HttpResponse.json({});
+            })
+        );
+        renderCard();
+        const btn = await screen.findByRole('button', { name: /Sync now/i });
+        await waitFor(() => expect(btn).toBeEnabled());
+        await userEvent.click(btn);
+        expect(
+            await screen.findByText('Jira sync for Acme: 2 imported, 1 comment(s) posted')
+        ).toBeInTheDocument();
+        expect(projectSync).toBe(1);
+        expect(globalSync).toBe(0);
+    });
+
+    it('explains a disabled Sync now on hover', async () => {
+        mockSources([]);
+        server.use(
+            http.get(`${BASE}/integrations/jira`, () =>
+                HttpResponse.json({ api_token_set: true, enabled: false })
+            )
+        );
+        renderCard();
+        const btn = await screen.findByRole('button', { name: /Sync now/i });
+        await waitFor(() => expect(btn).toBeDisabled());
+        await userEvent.hover(btn.parentElement as HTMLElement);
+        expect(await screen.findByRole('tooltip')).toHaveTextContent(/Turn on Import/);
+    });
+
     it('points at Settings when no Jira site is connected', async () => {
         mockSources([]);
         server.use(

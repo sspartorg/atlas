@@ -28,4 +28,10 @@ describe('CloneStatusChip', () => {
 
         expect(ready).not.toBe(cloning);
     });
+
+    // ATLAS_PALETTE.success on the pale green fill measured 2.6:1 (axe, e2e/a11y/projects-tasks.spec.ts).
+    it('writes ready in the dark success tone, which passes AA on its fill', () => {
+        renderWithProviders(<CloneStatusChip status="ready" />);
+        expect(getComputedStyle(screen.getByLabelText('Ready')).color).toMatch(/^var\(--atlas-successfg\)$/i);
+    });
 });

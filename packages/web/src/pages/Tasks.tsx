@@ -18,22 +18,26 @@ import {
     type ViewMode,
     type KanbanItem,
 } from '../components/index.js';
-import { useTasks, useTaskStats, useTransitionTask } from '../hooks/useTasks.js';
+import { useTasks, useTransitionTask } from '../hooks/useTasks.js';
 import { useProjects } from '../hooks/useProjects.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
-import type { IssueStatus } from '@atlas/shared';
+import type { IssueStatus, ITaskListItem } from '@atlas/shared';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
-import { useToast } from '../hooks/useToast.js';
 import { PageHeader } from '../components/PageHeader.js';
+
+// Search matches the id too, so "ETM-1" finds the Task (as the link picker does).
+function matchesSearch(t: ITaskListItem, q: string): boolean {
+    const needle = q.toLowerCase();
+    return [t.id, t.title, t.description].some((v) => v.toLowerCase().includes(needle));
+}
 
 export function Tasks() {
     useSetPageTitle('Tasks');
     const navigate = useNavigate();
     const isMobile = useIsMobile();
-    const toast = useToast();
     const qc = useQueryClient();
     const [params, setParams] = useSearchParams();
     const [viewMode, setViewMode] = useState<ViewMode>(() => loadViewMode('tasks'));
@@ -53,12 +57,13 @@ export function Tasks() {
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
 
-    const projectByName = useMemo(() => new Map(projects.map((p) => [p.name, p])), [projects]);
-    const projectByIdMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
-    const projectId = projectSlug ? projectByName.get(projectSlug)?.id : undefined;
+    // `?project=` holds the name (links from Project Detail); an id works too.
+    const project = projectSlug
+        ? projects.find((p) => p.name === projectSlug || p.id === projectSlug)
+        : undefined;
+    const projectId = project?.id;
 
     const { data: scopedTasks = [], isLoading } = useTasks(projectId, showArchived);
-    const { data: stats } = useTaskStats();
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
@@ -68,15 +73,7 @@ export function Tasks() {
             if (filterKey === 'mine' && e.assignee_agent_id !== null) return false;
             if (filterKey === 'ai' && e.assignee_agent_id === null) return false;
             if (statusFilter && e.status !== statusFilter) return false;
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                if (
-                    !e.title.toLowerCase().includes(q) &&
-                    !e.description.toLowerCase().includes(q)
-                ) {
-                    return false;
-                }
-            }
+            if (searchQuery && !matchesSearch(e, searchQuery)) return false;
             return true;
         });
     }, [scopedTasks, filterKey, statusFilter, searchQuery]);
@@ -84,15 +81,7 @@ export function Tasks() {
     const counts = useMemo<Record<TaskFilterKey, number>>(() => {
         const base = scopedTasks.filter((e) => {
             if (statusFilter && e.status !== statusFilter) return false;
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                if (
-                    !e.title.toLowerCase().includes(q) &&
-                    !e.description.toLowerCase().includes(q)
-                ) {
-                    return false;
-                }
-            }
+            if (searchQuery && !matchesSearch(e, searchQuery)) return false;
             return true;
         });
         return {
@@ -109,9 +98,9 @@ export function Tasks() {
         setParams(next, { replace: true });
     }
 
-    const project = projectId ? projectByIdMap.get(projectId) : undefined;
-    const totalTasks = stats?.total ?? scopedTasks.length;
-    const awaitingPickup = stats?.awaiting_pickup ?? 0;
+    // Counts the rows on screen, so it follows every filter and hides
+    // archived Tasks unless they are shown.
+    const readyCount = filtered.filter((t) => t.status === 'ready').length;
 
     return (
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
@@ -120,13 +109,11 @@ export function Tasks() {
                 title="Tasks"
                 subtitle={
                     <>
-                        {project ? scopedTasks.length : totalTasks}{' '}
-                        {(project ? scopedTasks.length : totalTasks) === 1 ? 'task' : 'tasks'}
+                        {filtered.length} {filtered.length === 1 ? 'task' : 'tasks'}
                         {project ? ` · ${project.name}` : ''}
-                        {awaitingPickup > 0 ? ` · ${awaitingPickup} awaiting pickup` : ''}
+                        {readyCount > 0 ? ` · ${readyCount} ready` : ''}
                     </>
                 }
-                hideActionsOnMobile
                 actions={
                     <>
                         <FormControlLabel
@@ -148,24 +135,27 @@ export function Tasks() {
                                 </Typography>
                             }
                         />
-                        <ViewModeToggle value={viewMode} onChange={setViewMode} />
-                        <Button
-                            variant="contained"
-                            startIcon={
-                                <Box
-                                    component="span"
-                                    className="material-symbols-rounded"
-                                    aria-hidden="true"
-                                    sx={{ fontSize: 18 }}
-                                >
-                                    add
-                                </Box>
-                            }
-                            onClick={() => navigate('/tasks/new')}
-                            disabled={projects.length === 0}
-                        >
-                            New Task
-                        </Button>
+                        {/* Phones: no Kanban, and the FAB creates. */}
+                        {!isMobile && <ViewModeToggle value={viewMode} onChange={setViewMode} />}
+                        {!isMobile && (
+                            <Button
+                                variant="contained"
+                                startIcon={
+                                    <Box
+                                        component="span"
+                                        className="material-symbols-rounded"
+                                        aria-hidden="true"
+                                        sx={{ fontSize: 18 }}
+                                    >
+                                        add
+                                    </Box>
+                                }
+                                onClick={() => navigate('/tasks/new')}
+                                disabled={projects.length === 0}
+                            >
+                                New task
+                            </Button>
+                        )}
                     </>
                 }
             />
@@ -175,7 +165,7 @@ export function Tasks() {
                 onFilterChange={(k) => setParam('filter', k === 'all' ? null : k)}
                 counts={counts}
                 projects={projects}
-                projectFilter={projectSlug}
+                projectFilter={projectId ?? null}
                 onProjectChange={(pid) => {
                     if (!pid) return setParam('project', null);
                     const p = projects.find((pr) => pr.id === pid);
@@ -255,17 +245,9 @@ export function Tasks() {
                                 status: nextStatus,
                                 override,
                             });
-                        } catch (err) {
-                            // Was an empty catch claiming "invalid moves are
-                            // filtered upstream" — they weren't, and this also
-                            // swallowed genuine refusals. Closing an task with
-                            // open children returns 422 with the blocking
-                            // children named; that message never reached the
-                            // Owner, so the card just snapped back in silence.
-                            toast.show({
-                                message: `Couldn't move ${item.shortId}`,
-                                detail: err instanceof Error ? err.message : String(err),
-                            });
+                        } catch {
+                            // useTransitionTask toasts the refusal (one toast,
+                            // with the API's reason); the card snaps back below.
                         }
                         await qc.invalidateQueries({ queryKey: ['tasks'] });
                     }}
@@ -281,7 +263,7 @@ export function Tasks() {
                     onCreate={() => navigate('/tasks/new')}
                 />
             )}
-            <PageFab onClick={() => navigate('/tasks/new')} label="New Task" />
+            <PageFab onClick={() => navigate('/tasks/new')} label="New task" />
         </Box>
     );
 }

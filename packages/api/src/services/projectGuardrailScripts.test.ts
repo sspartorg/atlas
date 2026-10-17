@@ -12,8 +12,8 @@ import { insertProject as insertProjectFixture } from '../../tests/_items.js';
 // supplied slug contract as the org-wide service; conflict raises
 // `ProjectGuardrailScriptIdConflictError` so the route can return 409.
 
-async function insertProject(id: string): Promise<string> {
-    return insertProjectFixture(id, 'TST', {
+async function insertProject(id: string, prefix = 'TST'): Promise<string> {
+    return insertProjectFixture(id, prefix, {
         name: id,
         git_url: 'https://example.com/repo.git',
     });
@@ -68,7 +68,7 @@ describe('projectGuardrailScriptsService', () => {
             body_sh: 'exit 0',
             body_ps1: 'exit 0',
         });
-        const result = await projectGuardrailScriptsService.update('check-empty-pg', {});
+        const result = await projectGuardrailScriptsService.update(projectId, 'check-empty-pg', {});
         expect(result?.id).toBe('check-empty-pg');
         expect(result?.name).toBe('Stable');
     });
@@ -81,7 +81,7 @@ describe('projectGuardrailScriptsService', () => {
             body_sh: 'exit 0',
             body_ps1: 'exit 0',
         });
-        const result = await projectGuardrailScriptsService.update('check-patch-pg', {
+        const result = await projectGuardrailScriptsService.update(projectId, 'check-patch-pg', {
             name: 'Renamed',
             body_sh: 'exit 1',
         });
@@ -98,7 +98,7 @@ describe('projectGuardrailScriptsService', () => {
             body_sh: 'exit 0',
             body_ps1: 'exit 0',
         });
-        const result = await projectGuardrailScriptsService.update('check-mixed-pg', {
+        const result = await projectGuardrailScriptsService.update(projectId, 'check-mixed-pg', {
             name: 'Renamed',
             description: undefined,
         });
@@ -107,19 +107,32 @@ describe('projectGuardrailScriptsService', () => {
     });
 
     it('update() on a missing id with an empty patch returns null (the `?? null` fallback on get())', async () => {
-        const result = await projectGuardrailScriptsService.update('does-not-exist-pg', {});
+        const result = await projectGuardrailScriptsService.update('no-project', 'does-not-exist-pg', {});
         expect(result).toBeNull();
     });
 
     it('update() on a missing id with a non-empty patch returns null (executeTakeFirst finds no row)', async () => {
-        const result = await projectGuardrailScriptsService.update('does-not-exist-pg-2', {
+        const result = await projectGuardrailScriptsService.update('no-project', 'does-not-exist-pg-2', {
             name: 'New Name',
         });
         expect(result).toBeNull();
     });
 
+    it('the same slug can exist in two projects; each is reached only through its own project', async () => {
+        const a = await insertProject('p-scripts-a');
+        const b = await insertProject('p-scripts-b', 'TSB');
+        const body = { id: 'lint', name: 'Lint', body_sh: 'exit 0', body_ps1: 'exit 0' };
+        await projectGuardrailScriptsService.create(a, body);
+        await projectGuardrailScriptsService.create(b, { ...body, name: 'Lint B' });
+        expect((await projectGuardrailScriptsService.update(b, 'lint', { name: 'B2' }))?.name).toBe('B2');
+        expect((await projectGuardrailScriptsService.get(a, 'lint'))?.name).toBe('Lint');
+        await projectGuardrailScriptsService.remove(a, 'lint');
+        expect(await projectGuardrailScriptsService.get(a, 'lint')).toBeUndefined();
+        expect(await projectGuardrailScriptsService.get(b, 'lint')).toBeDefined();
+    });
+
     it('get() returns undefined for a missing id', async () => {
-        expect(await projectGuardrailScriptsService.get('nope-pg')).toBeUndefined();
+        expect(await projectGuardrailScriptsService.get('no-project', 'nope-pg')).toBeUndefined();
     });
 
     it('remove() deletes the row', async () => {
@@ -130,8 +143,8 @@ describe('projectGuardrailScriptsService', () => {
             body_sh: 'exit 0',
             body_ps1: 'exit 0',
         });
-        await projectGuardrailScriptsService.remove('check-remove-pg');
-        expect(await projectGuardrailScriptsService.get('check-remove-pg')).toBeUndefined();
+        await projectGuardrailScriptsService.remove(projectId, 'check-remove-pg');
+        expect(await projectGuardrailScriptsService.get(projectId, 'check-remove-pg')).toBeUndefined();
     });
 
     it('create() rethrows non-23505 errors unchanged', async () => {

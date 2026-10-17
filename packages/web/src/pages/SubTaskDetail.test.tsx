@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
 import { http, HttpResponse } from 'msw';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -9,6 +9,14 @@ import { makeAgent, makeProject, makeSubTask, makeTask } from '../test-utils/fac
 import { SubTaskDetail } from './SubTaskDetail.js';
 
 const BASE = 'http://localhost:3000/api';
+
+const show = vi.hoisted(() => vi.fn());
+vi.mock('../hooks/useToast.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    useToast: () => ({ show, toasts: [], dismiss: vi.fn() }),
+}));
+beforeEach(() => show.mockClear());
+const toasted = () => show.mock.calls.map((c) => c[0] as { message: string; detail?: string });
 
 // Standard fetchers SubTaskDetail's child cards trigger on mount. Centralised
 // so each it() block can reuse the same default chassis and add targeted
@@ -68,6 +76,8 @@ describe('SubTaskDetail page', () => {
                     task_id: 'ATL-1',
                     title: 'Source',
                     labels: ['qa'],
+                    priority: 'urgent',
+                    assignee_agent_id: 'agent-coder',
                 }),
                 task: makeTask({ id: 'ATL-1' }),
                 project: null,
@@ -79,7 +89,7 @@ describe('SubTaskDetail page', () => {
             http.post(`${BASE}/tasks/ATL-1/sub-tasks`, async ({ request }) => {
                 created = await request.json();
                 return HttpResponse.json(
-                    makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' })
+                    makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'Copy of Source' })
                 );
             }),
             http.post(`${BASE}/issues/sub_task/T72/links`, async ({ request }) => {
@@ -88,7 +98,7 @@ describe('SubTaskDetail page', () => {
             }),
             http.get(`${BASE}/sub-tasks/T72/full`, () =>
                 HttpResponse.json({
-                    sub_task: makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'CLONE Source' }),
+                    sub_task: makeSubTask({ id: 'T72', task_id: 'ATL-1', title: 'Copy of Source' }),
                     task: makeTask({ id: 'ATL-1' }),
                     project: null,
                     related_links: [],
@@ -102,11 +112,13 @@ describe('SubTaskDetail page', () => {
         await screen.findByText('Source');
         fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
         fireEvent.click(await screen.findByRole('menuitem', { name: /Clone item/i }));
-        expect(await screen.findByText('CLONE Source')).toBeInTheDocument();
+        expect(await screen.findByText('Copy of Source')).toBeInTheDocument();
         expect(created).toEqual({
-            title: 'CLONE Source',
+            title: 'Copy of Source',
             description: '',
             acceptance_criteria: '',
+            priority: 'urgent',
+            assignee_agent_id: 'agent-coder',
             labels: ['qa'],
             task_id: 'ATL-1',
         });
@@ -115,6 +127,146 @@ describe('SubTaskDetail page', () => {
             to_id: 'T71',
             relation_type: 'relates_to',
         });
+    });
+
+    it('a failed clone says so and stays on the source', async () => {
+        server.use(
+            ...mountHandlers('T73', {
+                sub_task: makeSubTask({ id: 'T73', task_id: 'ATL-1', title: 'Source' }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+            http.post(`${BASE}/tasks/ATL-1/sub-tasks`, () =>
+                HttpResponse.json({ error: 'Task not found' }, { status: 404 })
+            )
+        );
+        renderPage('T73');
+        await screen.findByText('Source');
+        fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Clone item/i }));
+        await waitFor(() =>
+            expect(toasted()).toEqual([{ message: "Couldn't clone T73", detail: 'Task not found' }])
+        );
+        expect(screen.getByText('Source')).toBeInTheDocument();
+    });
+
+    it('a clone whose link-back fails still opens, and says the link is missing', async () => {
+        server.use(
+            ...mountHandlers('T74', {
+                sub_task: makeSubTask({ id: 'T74', task_id: 'ATL-1', title: 'Source' }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+            http.post(`${BASE}/tasks/ATL-1/sub-tasks`, () =>
+                HttpResponse.json(makeSubTask({ id: 'T75', task_id: 'ATL-1', title: 'Copy of Source' }))
+            ),
+            http.post(`${BASE}/issues/sub_task/T75/links`, () =>
+                HttpResponse.json({ error: 'link refused' }, { status: 400 })
+            ),
+            http.get(`${BASE}/sub-tasks/T75/full`, () =>
+                HttpResponse.json({
+                    sub_task: makeSubTask({ id: 'T75', task_id: 'ATL-1', title: 'Copy of Source' }),
+                    task: makeTask({ id: 'ATL-1' }),
+                    project: null,
+                    related_links: [],
+                    external_links: [],
+                    activity: [],
+                    agents: [],
+                })
+            )
+        );
+        renderPage('T74');
+        await screen.findByText('Source');
+        fireEvent.click(screen.getByRole('button', { name: 'Sub-task actions' }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Clone item/i }));
+        expect(await screen.findByText('Copy of Source')).toBeInTheDocument();
+        expect(toasted()).toEqual([
+            { message: "Cloned as T75, but couldn't link it to T74", detail: 'link refused' },
+        ]);
+    });
+
+    it('toasts the API reason when a status, priority or title change is refused', async () => {
+        const lock =
+            'A workflow run is working on this item and owns its status and assignee. Stop the run to change them by hand.';
+        server.use(
+            ...mountHandlers('T76', {
+                sub_task: makeSubTask({ id: 'T76', task_id: 'ATL-1', title: 'Locked one', status: 'ready' }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+            http.patch(`${BASE}/sub-tasks/T76/status`, () => HttpResponse.json({ error: lock }, { status: 409 })),
+            http.patch(`${BASE}/sub-tasks/T76`, () => HttpResponse.json({ error: 'Title too long' }, { status: 400 }))
+        );
+        renderPage('T76');
+        await screen.findByText('Locked one');
+        fireEvent.click(screen.getByRole('button', { name: /^Status/ }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: 'In Progress' }));
+        await waitFor(() => expect(toasted()).toContainEqual({ message: "Couldn't move T76", detail: lock }));
+
+        fireEvent.click(screen.getByRole('button', { name: /^Priority/ }));
+        fireEvent.click(await screen.findByRole('menuitem', { name: /High/ }));
+        await waitFor(() => expect(toasted()).toContainEqual({ message: "Couldn't save T76", detail: 'Title too long' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Edit title' }));
+        fireEvent.change(screen.getByDisplayValue('Locked one'), { target: { value: 'Renamed' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Save title' }));
+        await waitFor(() => expect(show).toHaveBeenCalledTimes(3));
+        // The editor stays open with the draft.
+        expect(screen.getByDisplayValue('Renamed')).toBeInTheDocument();
+    });
+
+    it('locks status and assignee while a workflow run is running on the sub-task, not merely in progress', async () => {
+        server.use(
+            http.get(`${BASE}/items/T77/workflow-runs`, () =>
+                HttpResponse.json([{ id: 'wr-1', status: 'running', item_id: 'T77' }])
+            ),
+            http.get(`${BASE}/items/T78/workflow-runs`, () => HttpResponse.json([])),
+            ...mountHandlers('T77', {
+                sub_task: makeSubTask({ id: 'T77', task_id: 'ATL-1', title: 'Held', status: 'ready' }),
+                task: makeTask({ id: 'ATL-1' }),
+                project: null,
+                related_links: [],
+                external_links: [],
+                activity: [],
+                agents: [],
+            }),
+            http.get(`${BASE}/sub-tasks/T78/full`, () =>
+                HttpResponse.json({
+                    sub_task: makeSubTask({ id: 'T78', task_id: 'ATL-1', title: 'Free', status: 'in_progress' }),
+                    task: makeTask({ id: 'ATL-1' }),
+                    project: null,
+                    related_links: [],
+                    external_links: [],
+                    activity: [],
+                    agents: [],
+                })
+            )
+        );
+        const held = renderPage('T77');
+        await screen.findByText('Held');
+        await waitFor(() =>
+            expect(screen.getAllByRole('img', { name: 'Locked while a workflow run works this item' })).toHaveLength(2)
+        );
+        expect(screen.queryByRole('button', { name: /^Status/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /^Assignee/ })).not.toBeInTheDocument();
+        held.unmount();
+
+        renderPage('T78');
+        await screen.findByText('Free');
+        expect(await screen.findByRole('button', { name: /^Assignee/ })).toBeInTheDocument();
+        expect(screen.queryByRole('img', { name: /Locked while/ })).not.toBeInTheDocument();
     });
 
     it('renders without crashing', () => {
@@ -267,8 +419,8 @@ describe('SubTaskDetail page', () => {
         await screen.findByText('Description');
         // Opens the AddRelatedMenu (Jira-style "+" trigger).
         fireEvent.click(screen.getByRole('button', { name: 'Add related item' }));
-        // Click "Add relates-to" — opens the LinkPickerDialog with mode=relates_to.
-        fireEvent.click(await screen.findByRole('menuitem', { name: /Add relates-to/i }));
+        // Click "Link an item" — opens the LinkPickerDialog with mode=relates_to.
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Link an item/i }));
         // LinkPickerDialog is now mounted (role=dialog).
         const dialog = await screen.findByRole('dialog');
         expect(dialog).toBeInTheDocument();
@@ -432,7 +584,7 @@ describe('SubTaskDetail page', () => {
             screen.queryByRole('button', { name: /add related/i });
         if (addRelatedBtn) {
             fireEvent.click(addRelatedBtn);
-            const relatesToItem = screen.queryByText(/Add relates-to/i);
+            const relatesToItem = screen.queryByText(/Link an item/i);
             if (relatesToItem) fireEvent.click(relatesToItem);
         }
         expect(document.body).toBeTruthy();
@@ -615,7 +767,7 @@ describe('SubTaskDetail page', () => {
         expect(screen.queryByText(/\$[\d.]+/)).not.toBeInTheDocument();
     }, 15000);
 
-    it('opens Add blocked-by menu item — exercises depends_on pickerMode branch', async () => {
+    it('opens Add dependency menu item — exercises depends_on pickerMode branch', async () => {
         server.use(
             ...mountHandlers('T20', {
                 sub_task: makeSubTask({ id: 'T20' }),
@@ -631,8 +783,8 @@ describe('SubTaskDetail page', () => {
         await screen.findByText('Description');
         // Open the AddRelatedMenu.
         fireEvent.click(screen.getByRole('button', { name: 'Add related item' }));
-        // Click "Add blocked-by" — sets pickerMode to 'depends_on'.
-        fireEvent.click(await screen.findByRole('menuitem', { name: /Add blocked-by/i }));
+        // Click "Add dependency" — sets pickerMode to 'depends_on'.
+        fireEvent.click(await screen.findByRole('menuitem', { name: /Add dependency/i }));
         // LinkPickerDialog opens with depends_on mode.
         const dialog = await screen.findByRole('dialog');
         expect(dialog).toBeInTheDocument();

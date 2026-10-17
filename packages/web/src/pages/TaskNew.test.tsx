@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
@@ -9,6 +9,12 @@ import { makeAgent, makeProject, makeProjectRepo, makeTask } from '../test-utils
 import { makeWorkflow } from '../test-utils/workflowFixtures.js';
 
 const BASE = 'http://localhost:3000/api';
+
+const show = vi.hoisted(() => vi.fn());
+vi.mock('../hooks/useToast.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    useToast: () => ({ show, toasts: [], dismiss: vi.fn() }),
+}));
 
 function baseHandlers() {
     return [
@@ -879,4 +885,39 @@ describe('TaskNew — workflow select (migration 022)', () => {
         await waitFor(() => expect(body).not.toBeNull());
         expect(body).not.toHaveProperty('workflow_id');
     });
+});
+
+it('Submit with no workflow: sends the form\'s Low default (by design), and a failed Ready says why in one toast', async () => {
+    show.mockClear();
+    let body: Record<string, unknown> | null = null;
+    server.use(
+        ...baseHandlers(),
+        http.post(`${BASE}/tasks`, async ({ request }) => {
+            body = (await request.json()) as Record<string, unknown>;
+            return HttpResponse.json(makeTask({ id: 'ATL-44', title: 'Queue me' }));
+        }),
+        http.patch(`${BASE}/tasks/ATL-44/status`, () =>
+            HttpResponse.json({ error: 'Invalid transition: draft → ready' }, { status: 400 })
+        )
+    );
+    renderWithProviders(<TaskNew />, { initialEntries: ['/tasks/new?project=p1'] });
+    expect(
+        screen.getByText(/anything the work needs to know/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/PO Writer needs/)).not.toBeInTheDocument();
+    fireEvent.change(await screen.findByPlaceholderText(/Refund automation/i), {
+        target: { value: 'Queue me' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/Refunds today are manual/i), {
+        target: { value: 'desc' },
+    });
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Project' })).toHaveTextContent('Atlas'));
+    const submit = screen.getAllByRole('button', { name: /^Submit$/ })[0]!;
+    await waitFor(() => expect(submit).toBeEnabled());
+    fireEvent.click(submit);
+    await waitFor(() => expect(show).toHaveBeenCalled());
+    expect(body).toMatchObject({ priority: 'low' });
+    expect(show.mock.calls.map((c) => c[0])).toEqual([
+        { message: "Couldn't move ATL-44", detail: 'Invalid transition: draft → ready' },
+    ]);
 });

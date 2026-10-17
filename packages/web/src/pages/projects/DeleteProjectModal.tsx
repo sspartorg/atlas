@@ -17,9 +17,11 @@ import RadioButtonUnchecked from '@mui/icons-material/RadioButtonUnchecked';
 import FolderOutlined from '@mui/icons-material/FolderOutlined';
 import WarningAmberRounded from '@mui/icons-material/WarningAmberRounded';
 import { useQueryClient } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { IProject } from '@atlas/shared';
 import { api } from '../../api/api.js';
 import { useDeleteJob } from '../../hooks/useDeleteJob.js';
+import { newJobId } from '../../hooks/sse-hub.js';
 import { useProjectRepos } from '../../hooks/useProjectRepos.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
 import { FormHeading } from '../../components/FormHeading.js';
@@ -41,26 +43,21 @@ interface ChecklistStep {
     label: string;
 }
 
-const STEPS: ChecklistStep[] = [
-    { key: 'agents', label: 'Stop attached agents' },
-    { key: 'lease', label: 'Revoke credential lease' },
-    { key: 'unregister', label: 'Unregister from Atlas' },
-    { key: 'remove', label: 'Remove workspace folder' },
-    { key: 'finalize', label: 'Finalize' },
-];
+// What delete-runner.ts does, in order. Purge removes the repo folders
+// first, then the DB delete (CASCADE) unregisters the project.
+const UNREGISTER_STEP: ChecklistStep = { key: 'unregister', label: 'Unregister from Atlas' };
+const STEPS_BY_MODE: Record<Mode, ChecklistStep[]> = {
+    unregister: [UNREGISTER_STEP],
+    purge: [{ key: 'remove', label: 'Remove repo folders' }, UNREGISTER_STEP],
+};
 
+/** Index of the step in progress (steps.length once all are done). */
 function deriveStepIndex(lines: string[], mode: Mode): number {
+    const steps = STEPS_BY_MODE[mode];
     let idx = 0;
     for (const line of lines) {
-        if (/Stopping attached agents/i.test(line)) idx = Math.max(idx, 1);
-        if (/Revoking credential lease/i.test(line)) idx = Math.max(idx, 2);
-        if (/Unregistering project/i.test(line)) idx = Math.max(idx, 3);
-        if (
-            /Removing workspace folder|Workspace folder kept|Workspace folder not found/i.test(line)
-        ) {
-            idx = Math.max(idx, mode === 'purge' ? 4 : 5);
-        }
-        if (/Finalize/i.test(line)) idx = Math.max(idx, 5);
+        if (/Unregistering project/i.test(line)) idx = Math.max(idx, steps.indexOf(UNREGISTER_STEP));
+        if (/Unregistering project.*\.\.\. ok/i.test(line)) idx = steps.length;
     }
     return idx;
 }
@@ -158,6 +155,8 @@ function ProjectChip({ project, displayId }: { project: IProject; displayId: str
 
 export function DeleteProjectModal({ open, project, displayId, onClose }: Props) {
     const qc = useQueryClient();
+    const navigate = useNavigate();
+    const { pathname } = useLocation();
     const [view, setView] = useState<View>('confirm');
     const [mode, setMode] = useState<Mode>('unregister');
     const [confirmInput, setConfirmInput] = useState('');
@@ -168,6 +167,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
     const terminalRef = useRef<HTMLDivElement | null>(null);
 
     const job = useDeleteJob(deleteId);
+    const projectId = project?.id;
 
     useEffect(() => {
         if (!open) {
@@ -187,12 +187,15 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
             // Covers both the unpaged list (sidenav / onboarding) and the
             // paged list the Projects page renders — useProjectsPaged nests
             // its key under ['projects'] so one invalidation reaches both.
+            // Drop the detail cache first: a refetch would 404 and React Query
+            // would keep showing the deleted project's last data.
+            if (projectId) qc.removeQueries({ queryKey: ['projects', projectId] });
             void qc.invalidateQueries({ queryKey: ['projects'] });
             void qc.invalidateQueries({ queryKey: ['sidenav-counts'] });
         } else if (job.status === 'error') {
             setView('error');
         }
-    }, [job.status, qc]);
+    }, [job.status, qc, projectId]);
 
     useEffect(() => {
         if (view !== 'deleting' || !startedAt) return;
@@ -206,46 +209,47 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
         }
     }, [job.lines.length]);
 
+    const steps = STEPS_BY_MODE[mode];
     const stepIndex = useMemo(() => deriveStepIndex(job.lines, mode), [job.lines, mode]);
 
     function handleClose() {
         if (view === 'deleting') return;
         onClose();
+        // The deleted project's own page has nothing left to show.
+        if (view === 'success' && pathname !== '/projects') navigate('/projects');
     }
 
     async function startDeleteJob() {
         if (!project) return;
         setSubmitError(null);
+        // Subscribe (via useDeleteJob) before the POST — see newJobId.
+        const id = newJobId();
+        setDeleteId(id);
+        setStartedAt(Date.now());
+        setElapsedMs(0);
+        setView('deleting');
         try {
-            const payload: { mode: Mode; confirm_name?: string } = { mode };
+            const payload: { mode: Mode; confirm_name?: string; delete_id: string } = {
+                mode,
+                delete_id: id,
+            };
             if (mode === 'purge') payload.confirm_name = confirmInput;
-            const res = await api.projects.deleteJob(project.id, payload);
-            setDeleteId(res.delete_id);
-            setStartedAt(Date.now());
-            setElapsedMs(0);
-            setView('deleting');
+            await api.projects.deleteJob(project.id, payload);
         } catch (e) {
+            setDeleteId(null);
+            setView('confirm');
             setSubmitError(e instanceof Error ? e.message : 'Could not start delete');
         }
+    }
+
+    function backToProjects() {
+        onClose();
+        navigate('/projects');
     }
 
     const canSubmit =
         Boolean(project) &&
         (mode === 'unregister' || (mode === 'purge' && confirmInput === project?.name));
-
-    const purgeStats = useMemo(() => {
-        let files = 0;
-        let bytes = '';
-        for (const line of job.lines) {
-            const m = line.match(/(\d+(?:\.\d+)?\s*(?:KiB|MiB|GiB))/);
-            if (m) bytes = m[1] ?? '';
-            if (/Removed/i.test(line)) {
-                const fm = line.match(/(\d+)\s+files/);
-                if (fm) files = Number(fm[1]);
-            }
-        }
-        return { files, bytes };
-    }, [job.lines]);
 
     if (!project) return null;
 
@@ -304,12 +308,12 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                     </FormHeading>
                     <Typography sx={{ fontSize: 12, color: ATLAS_PALETTE.slate60, mt: 0.5 }}>
                         {view === 'confirm' && 'Choose what to remove. This cannot be undone.'}
-                        {view === 'deleting' && 'Running delete-project.ps1 in the background.'}
+                        {view === 'deleting' && 'Deleting in the background.'}
                         {view === 'success' &&
                             (job.mode === 'purge'
                                 ? 'Workspace folder removed, registry cleaned.'
                                 : 'Unregistered from Atlas. Workspace folder kept on disk.')}
-                        {view === 'error' && 'The PowerShell script returned a non-zero exit code.'}
+                        {view === 'error' && 'A delete step failed.'}
                     </Typography>
                 </Box>
                 {view !== 'deleting' && (
@@ -394,7 +398,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                         lineHeight: 1.5,
                                     }}
                                 >
-                                    Unregister the project from Atlas and detach agents. The
+                                    Unregister the project from Atlas. The
                                     workspace folder on disk is kept untouched, so you can still
                                     open it in your editor — but the project's DB content (all
                                     issues, runs, comments, notifications) is wiped and cannot be
@@ -405,7 +409,6 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                         'folder kept',
                                         'all issues wiped',
                                         'runs + history wiped',
-                                        'lease revoked',
                                     ]}
                                 />
                             </Box>
@@ -468,7 +471,6 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                         'folder wiped',
                                         'all issues wiped',
                                         'runs + history wiped',
-                                        'lease revoked',
                                     ]}
                                 />
                                 {mode === 'purge' && (
@@ -576,12 +578,8 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                         color: ATLAS_PALETTE.slate60,
                                     }}
                                 >
-                                    Step {Math.max(1, stepIndex)} of {STEPS.length} ·{' '}
-                                    {
-                                        STEPS[
-                                            Math.min(Math.max(0, stepIndex - 1), STEPS.length - 1)
-                                        ]?.label
-                                    }
+                                    Step {Math.min(stepIndex + 1, steps.length)} of {steps.length}{' '}
+                                    · {steps[Math.min(stepIndex, steps.length - 1)]?.label}
                                 </Typography>
                                 <Typography
                                     sx={{
@@ -595,7 +593,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                             </Box>
                             <LinearProgress
                                 variant="determinate"
-                                value={(stepIndex / STEPS.length) * 100}
+                                value={(stepIndex / steps.length) * 100}
                                 sx={{
                                     height: 6,
                                     borderRadius: 3,
@@ -606,7 +604,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                         </Box>
 
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
-                            {STEPS.map((s, i) => {
+                            {steps.map((s, i) => {
                                 const done = i < stepIndex;
                                 const active = i === stepIndex;
                                 return (
@@ -663,7 +661,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                 mb: 1,
                             }}
                         >
-                            delete-project.ps1 · live output
+                            Live output
                         </Typography>
                         <Box
                             ref={terminalRef}
@@ -723,8 +721,6 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                 <>
                                     <strong>
                                         Removed in {Math.max(1, Math.round(elapsedMs / 1000))}s
-                                        {purgeStats.files > 0 && ` · ${purgeStats.files} files`}
-                                        {purgeStats.bytes && ` · ${purgeStats.bytes} freed`}
                                     </strong>
                                     <Box
                                         sx={{
@@ -733,9 +729,9 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                             mt: 0.5,
                                         }}
                                     >
-                                        Agents detached, credential lease revoked, project
-                                        unregistered, folder deleted. All issues, runs, comments,
-                                        and notifications wiped from Atlas.
+                                        Repo folders inside the workspace deleted, project
+                                        unregistered. All issues, runs, comments, and notifications
+                                        wiped from Atlas.
                                     </Box>
                                 </>
                             ) : (
@@ -770,7 +766,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                 mb: 1,
                             }}
                         >
-                            delete-project.ps1 · transcript
+                            Transcript
                         </Typography>
                         <Box
                             sx={{
@@ -788,12 +784,12 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                             }}
                         >
                             {job.lines.slice(-30).join('\n')}
-                            {`\n\nCompleted in ${Math.max(1, Math.round(elapsedMs / 1000))}s · exit 0`}
+                            {`\n\nCompleted in ${Math.max(1, Math.round(elapsedMs / 1000))}s`}
                         </Box>
 
                         <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                             <Button
-                                onClick={onClose}
+                                onClick={handleClose}
                                 sx={{ textTransform: 'none', color: ATLAS_PALETTE.slate60 }}
                             >
                                 Close
@@ -801,7 +797,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                             <Button
                                 variant="contained"
                                 color="success"
-                                onClick={onClose}
+                                onClick={backToProjects}
                                 sx={{ textTransform: 'none', fontWeight: 600 }}
                             >
                                 Back to projects →
@@ -824,7 +820,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                         >
                             <strong>Delete failed</strong>
                             <Box sx={{ fontSize: 12, color: ATLAS_PALETTE.slate70, mt: 0.5 }}>
-                                The script returned a non-zero exit code. See the output below.
+                                See the output below.
                             </Box>
                         </Alert>
 
@@ -839,7 +835,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                 mb: 1,
                             }}
                         >
-                            delete-project.ps1 · stderr
+                            Error output
                         </Typography>
                         <Box
                             sx={{
@@ -881,11 +877,11 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                     ? [
                                           'Close any editor or terminal that has the workspace folder open',
                                           'Check the workspace path still exists on disk',
-                                          'Inspect the server log for the exact PowerShell error',
+                                          'Inspect the server log for the exact error',
                                       ]
                                     : [
                                           'Check the server logs',
-                                          'Make sure the API process can write to the SQLite DB',
+                                          'Make sure the API can reach its Postgres database',
                                       ]
                                 ).map((t) => (
                                     <Box

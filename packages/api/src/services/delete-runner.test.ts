@@ -36,6 +36,10 @@ vi.mock('../routes/events.js', () => ({
     broadcastSSE: vi.fn(),
 }));
 
+vi.mock('./notifications.js', () => ({
+    notificationsService: { create: vi.fn().mockResolvedValue({ id: 1 }) },
+}));
+
 // ---------------------------------------------------------------------------
 // Imports after mocks.
 // ---------------------------------------------------------------------------
@@ -44,6 +48,7 @@ import { rm, access } from 'node:fs/promises';
 import { projectsService } from './projects.js';
 import { projectReposService } from './project-repos.js';
 import { broadcastSSE } from '../routes/events.js';
+import { notificationsService } from './notifications.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -134,6 +139,37 @@ describe('startDelete', () => {
 
         // delete_completed must NOT have been broadcast.
         expect(calls.find((c) => c.type === 'delete_completed')).toBeUndefined();
+        expect(notificationsService.create).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event_type: 'project_delete_failed',
+                project_id: BASE_INPUT.projectId,
+                message: expect.stringContaining('DB error on delete'),
+            }),
+        );
+    });
+
+    it('emits only steps that do work: no fake agent-stop or lease-revoke lines', async () => {
+        vi.mocked(projectsService.delete).mockResolvedValue(undefined as never);
+
+        startDelete({ ...BASE_INPUT, mode: 'unregister' });
+        await new Promise((r) => setTimeout(r, 20));
+
+        const lines = sseCalls()
+            .filter((c) => c.type === 'delete_output')
+            .map((c) => c.output as string);
+        expect(lines.join('\n')).not.toMatch(/Stopping attached agents|Revoking credential lease/);
+        // "Unregistering … ok" only once the DB delete has succeeded.
+        expect(lines.at(-1)).toBe('Unregistering project from Atlas... ok');
+    });
+
+    it('uses the caller-chosen deleteId on every event', async () => {
+        vi.mocked(projectsService.delete).mockResolvedValue(undefined as never);
+
+        const id = startDelete({ ...BASE_INPUT, mode: 'unregister', deleteId: 'client-id-1234' });
+        await new Promise((r) => setTimeout(r, 20));
+
+        expect(id).toBe('client-id-1234');
+        expect([...new Set(sseCalls().map((c) => c.deleteId))]).toEqual(['client-id-1234']);
     });
 
     // -----------------------------------------------------------------------

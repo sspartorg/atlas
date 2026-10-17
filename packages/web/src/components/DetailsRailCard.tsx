@@ -3,7 +3,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import Link from '@mui/material/Link';
 import LockOutlined from '@mui/icons-material/LockOutlined';
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded';
 import CheckRounded from '@mui/icons-material/CheckRounded';
@@ -27,6 +28,7 @@ import { LabelsRailRow } from './LabelsRailRow.js';
 import { TaskReposRow } from './TaskReposRow.js';
 import { ConfirmActionModal } from './ConfirmActionModal.js';
 import { useRefreshIssueExternalLinks } from '../hooks/useIssueExternalLinks.js';
+import { useItemWorkflowRuns } from '../hooks/useWorkflows.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { formatDate, relativeTime } from '../utils/time.js';
 import { formatCostUsd } from '../utils/formatCost.js';
@@ -47,12 +49,10 @@ interface Props {
     externalLinks?: IItemExternalLink[] | undefined;
     status: IssueStatus;
     onStatusPick: (status: IssueStatus, override: boolean) => void;
-    statusLocked?: boolean | undefined;
 
     assigneeAgentId: string | null;
     onAssign: (agentId: string | null) => void;
     assignee: IAgent | null;
-    reassignLocked?: boolean | undefined;
 
     project: IProject | null;
     parents?: ParentLink[] | undefined;
@@ -99,7 +99,7 @@ interface Props {
 
 const COPIED_RESET_MS = 1500;
 
-function CopyValueButton({ value }: { value: string }) {
+function CopyValueButton({ value, label }: { value: string; label: string }) {
     const [copied, setCopied] = useState(false);
     // The handle for the pending "Copied" reset. A copy made just before the
     // rail unmounts (navigating away, or a test ending) used to leave this
@@ -135,6 +135,7 @@ function CopyValueButton({ value }: { value: string }) {
             <IconButton
                 size="small"
                 onClick={handleClick}
+                aria-label={copied ? 'Copied' : `Copy ${label}`}
                 sx={{
                     p: 0.25,
                     color: copied ? ATLAS_PALETTE.brandBlue : ATLAS_PALETTE.slate40,
@@ -160,11 +161,9 @@ export function DetailsRailCard({
     externalLinks,
     status,
     onStatusPick,
-    statusLocked,
     assigneeAgentId,
     onAssign,
     assignee,
-    reassignLocked,
     project,
     parents,
     reporter,
@@ -184,7 +183,11 @@ export function DetailsRailCard({
     onRepoIdsChange,
 }: Props) {
     const showWorktree = worktreeBranch !== undefined || worktreePath !== undefined;
-    const navigate = useNavigate();
+    // The API's lock (workflow-lock.ts): while a run is `running` on this
+    // item it owns status and assignee, and PATCHes 409. Same query and key
+    // as the Task rail's ItemWorkflowPanel, so it costs no extra request there.
+    const { data: itemRuns } = useItemWorkflowRuns(issueId ?? '');
+    const runLocked = (itemRuns ?? []).some((r) => r.status === 'running');
     const [assigneeAnchor, setAssigneeAnchor] = useState<HTMLElement | null>(null);
     const [statusAnchor, setStatusAnchor] = useState<HTMLElement | null>(null);
     const [priorityAnchor, setPriorityAnchor] = useState<HTMLElement | null>(null);
@@ -216,19 +219,19 @@ export function DetailsRailCard({
         <InfoPanel label="Details">
             <InfoRow label="Project">
                 {project ? (
-                    <Typography
-                        onClick={() => navigate(`/projects/${project.id}`)}
+                    <Link
+                        component={RouterLink}
+                        to={`/projects/${project.id}`}
+                        underline="hover"
                         sx={{
                             fontSize: 12.5,
                             fontWeight: 500,
                             color: ATLAS_PALETTE.brandBlue,
                             fontFamily: MONO,
-                            cursor: 'pointer',
-                            '&:hover': { textDecoration: 'underline' },
                         }}
                     >
                         {project.name}
-                    </Typography>
+                    </Link>
                 ) : (
                     <Typography sx={{ fontSize: 12.5, color: ATLAS_PALETTE.slate40 }}>—</Typography>
                 )}
@@ -240,33 +243,36 @@ export function DetailsRailCard({
 
             {parents?.map((p) => (
                 <InfoRow key={`${p.label}-${p.href}`} label={p.label}>
-                    <Typography
-                        onClick={() => navigate(p.href)}
+                    <Link
+                        component={RouterLink}
+                        to={p.href}
+                        underline="hover"
                         sx={{
                             fontSize: 12.5,
                             fontWeight: 500,
                             color: ATLAS_PALETTE.brandBlue,
                             fontFamily: MONO,
-                            cursor: 'pointer',
-                            '&:hover': { textDecoration: 'underline' },
                         }}
                     >
                         {p.text}
-                    </Typography>
+                    </Link>
                 </InfoRow>
             ))}
 
             <InfoRow
                 label="Status"
-                clickable={!statusLocked}
+                clickable={!runLocked}
                 onClick={
-                    !statusLocked
-                        ? (e) => setStatusAnchor(e.currentTarget as HTMLElement)
-                        : undefined
+                    !runLocked ? (e) => setStatusAnchor(e.currentTarget as HTMLElement) : undefined
                 }
             >
                 <StatusChip status={status} size="sm" />
-                {!statusLocked && (
+                {runLocked ? (
+                    <LockOutlined
+                        titleAccess="Locked while a workflow run works this item"
+                        sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }}
+                    />
+                ) : (
                     <Box
                         component="span"
                         className="material-symbols-rounded"
@@ -280,9 +286,9 @@ export function DetailsRailCard({
 
             <InfoRow
                 label="Assignee"
-                clickable={!reassignLocked}
+                clickable={!runLocked}
                 onClick={
-                    !reassignLocked
+                    !runLocked
                         ? (e) => setAssigneeAnchor(e.currentTarget as HTMLElement)
                         : undefined
                 }
@@ -296,8 +302,11 @@ export function DetailsRailCard({
                         layout="stacked"
                     />
                 )}
-                {reassignLocked ? (
-                    <LockOutlined sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }} />
+                {runLocked ? (
+                    <LockOutlined
+                        titleAccess="Locked while a workflow run works this item"
+                        sx={{ fontSize: 13, color: ATLAS_PALETTE.slate40 }}
+                    />
                 ) : (
                     <Box
                         component="span"
@@ -403,7 +412,7 @@ export function DetailsRailCard({
                             >
                                 {worktreeBranch}
                             </Typography>
-                            <CopyValueButton value={worktreeBranch} />
+                            <CopyValueButton value={worktreeBranch} label="branch" />
                         </>
                     ) : (
                         <Typography
@@ -446,7 +455,7 @@ export function DetailsRailCard({
                                     />
                                 </Tooltip>
                             )}
-                            <CopyValueButton value={worktreePath} />
+                            <CopyValueButton value={worktreePath} label="path" />
                         </>
                     ) : (
                         <Typography

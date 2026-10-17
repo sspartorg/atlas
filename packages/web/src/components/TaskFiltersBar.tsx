@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import TextField from '@mui/material/TextField';
 import Menu from '@mui/material/Menu';
@@ -26,7 +27,7 @@ interface Props {
 }
 
 const STATUS_OPTIONS: Array<{ value: string | null; label: string }> = [
-    { value: null, label: 'any' },
+    { value: null, label: 'Any' },
     { value: 'draft', label: 'Draft' },
     { value: 'ready', label: 'Ready' },
     { value: 'in_progress', label: 'In Progress' },
@@ -61,13 +62,9 @@ function DropdownChip({
     const current = options.find((o) => o.value === value) ?? options[0];
     return (
         <>
-            <Box
-                role="button"
-                tabIndex={0}
+            <ButtonBase
+                aria-haspopup="menu"
                 onClick={(e) => setAnchor(e.currentTarget)}
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter') setAnchor(e.currentTarget as HTMLElement);
-                }}
                 sx={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -82,7 +79,7 @@ function DropdownChip({
                     bgcolor: ATLAS_PALETTE.white,
                     color: ATLAS_PALETTE.slate,
                     border: `1px solid ${ATLAS_PALETTE.slate10}`,
-                    '&:hover': { bgcolor: ATLAS_PALETTE.cloud },
+                    '&:hover, &.Mui-focusVisible': { bgcolor: ATLAS_PALETTE.cloud },
                 }}
             >
                 <Typography component="span" sx={{ fontSize: 13, color: ATLAS_PALETTE.slate60 }}>
@@ -92,7 +89,7 @@ function DropdownChip({
                     component="span"
                     sx={{ fontSize: 13, color: ATLAS_PALETTE.slate, fontWeight: 500 }}
                 >
-                    {current?.label ?? 'any'}
+                    {current?.label ?? 'Any'}
                 </Typography>
                 <Box
                     component="span"
@@ -102,7 +99,7 @@ function DropdownChip({
                 >
                     arrow_drop_down
                 </Box>
-            </Box>
+            </ButtonBase>
             <Menu
                 anchorEl={anchor}
                 open={Boolean(anchor)}
@@ -174,7 +171,7 @@ export function TaskFiltersBar(props: Props) {
     }, []);
 
     const projectOptions: Array<{ value: string | null; label: string }> = [
-        { value: null, label: 'any' },
+        { value: null, label: 'Any' },
         ...projects.map((p) => ({ value: p.id, label: p.name })),
     ];
 

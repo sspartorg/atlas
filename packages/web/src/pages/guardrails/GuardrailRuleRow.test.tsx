@@ -25,6 +25,16 @@ describe('GuardrailRuleRow', () => {
         expect(onEdit).toHaveBeenCalled();
     });
 
+    it('is a native button a keyboard user can open with Enter', async () => {
+        const onEdit = vi.fn();
+        renderWithProviders(<GuardrailRuleRow rule={baseRule} onEdit={onEdit} />);
+        const row = screen.getByRole('button', { name: /Never log secrets/ });
+        expect(row.tagName).toBe('BUTTON');
+        row.focus();
+        await userEvent.keyboard('{Enter}');
+        expect(onEdit).toHaveBeenCalled();
+    });
+
     it('renders detail text when rule.detail is set (detail truthy branch)', () => {
         renderWithProviders(
             <GuardrailRuleRow

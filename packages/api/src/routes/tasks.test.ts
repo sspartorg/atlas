@@ -238,6 +238,16 @@ describe('closing a Task with its sub-tasks, and sub-task order', () => {
         expect(await statusOf('ATL-2')).toBe('done'); // reviewed ones still closed
     });
 
+    it('close_sub_tasks leaves the sub-tasks open when the Task move is refused', async () => {
+        await testDb.updateTable('items').set({ status: 'ready' }).where('id', '=', 'ATL-1').execute();
+        await sub('ATL-2', 'in_review');
+        const res = await app.inject({ method: 'PATCH', url: '/api/tasks/ATL-1/status', payload: { status: 'done', close_sub_tasks: true } });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toBe('Invalid transition: ready → done');
+        expect(await statusOf('ATL-1')).toBe('ready');
+        expect(await statusOf('ATL-2')).toBe('in_review');
+    });
+
     it('PUT /sub-tasks/order sets the run order the lists use', async () => {
         await sub('ATL-2', 'draft');
         await sub('ATL-3', 'draft');

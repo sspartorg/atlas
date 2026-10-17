@@ -170,7 +170,7 @@ branch, auto-fetch schedule and setup scripts. A Task then picks which repos it 
 and one Task can span several.
 
 The row menu on each repo offers **Edit** (default branch and **credential** — swap a repo's credential
-without re-adding it), **Auto-fetch schedule…**, **Re-clone from remote** (stashing local work), **Open
+without re-adding it), **Auto-fetch schedule…**, **Pull from remote…** (stashes local work, then fetches and fast-forwards), **Open
 folder**, and **Remove**. Removing a repo leaves its folder on disk and strips it from every Task that
 referenced it; it is refused with a 409 while a workflow run is using it.
 

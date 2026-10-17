@@ -1,11 +1,15 @@
 import Box from '@mui/material/Box';
 import Skeleton from '@mui/material/Skeleton';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import type { ProjectCounts } from '../../api/types.js';
 import { useDeferredMount } from '../../hooks/useDeferredMount.js';
 import { OverviewTabContent } from './OverviewTabContent.js';
 
 interface Props {
     counts: ProjectCounts | undefined;
+    /** The counts query failed — shown instead of an endless skeleton. */
+    error?: unknown;
+    onRetry?: () => void;
     projectId: string;
     onJumpToHistory: () => void;
 }
@@ -38,8 +42,9 @@ function OverviewTabSkeleton() {
     );
 }
 
-export function OverviewTab({ counts, projectId, onJumpToHistory }: Props) {
+export function OverviewTab({ counts, error, onRetry, projectId, onJumpToHistory }: Props) {
     const ready = useDeferredMount();
+    if (counts === undefined && error) return <RetryAlert error={error} label="Could not load the overview" onRetry={onRetry} />;
     if (!ready || counts === undefined) return <OverviewTabSkeleton />;
     return (
         <OverviewTabContent

@@ -4,6 +4,11 @@ import { cleanup, configure } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import React from 'react';
 import { _resetSseHubForTest } from './hooks/sse-hub.js';
+import { markdownReady } from './components/MarkdownPreview.js';
+
+// The markdown renderer loads on its own chunk; have it in place before any
+// test renders so markdown asserts stay synchronous.
+await markdownReady;
 
 // v8 coverage instrumentation triples async-wait time. Default waitFor
 // timeout of 1s is enough under `pnpm test` but flakes under

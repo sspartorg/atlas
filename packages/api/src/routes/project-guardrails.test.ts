@@ -172,3 +172,21 @@ describe('DELETE /api/projects/:projectId/guardrails/:id', () => {
         expect(res.statusCode).toBe(404);
     });
 });
+
+describe('a rule is reachable only through its own project', () => {
+    it('PATCH, toggle and DELETE under another project id return 404 and leave the rule alone', async () => {
+        await insertProject('p2', 'OTH');
+        const created = await app.inject({ method: 'POST', url: '/api/projects/p1/guardrails', payload: VALID_RULE });
+        const { id } = JSON.parse(created.body) as { id: string };
+
+        const calls = [
+            { method: 'PATCH' as const, url: `/api/projects/p2/guardrails/${id}`, payload: { title: 'hijack' } },
+            { method: 'PATCH' as const, url: `/api/projects/p2/guardrails/${id}/toggle`, payload: { enabled: 0 } },
+            { method: 'DELETE' as const, url: `/api/projects/p2/guardrails/${id}` },
+        ];
+        for (const c of calls) expect((await app.inject(c)).statusCode).toBe(404);
+
+        const list = JSON.parse((await app.inject({ method: 'GET', url: '/api/projects/p1/guardrails' })).body);
+        expect(list).toMatchObject([{ id, title: VALID_RULE.title, enabled: 1 }]);
+    });
+});

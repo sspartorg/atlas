@@ -54,14 +54,22 @@ export function ViewModeToggle({ value, onChange }: Props) {
 
 const STORAGE_KEY = (page: string) => `atlas.viewMode.${page}`;
 
+// Storage can throw (blocked site data, some private windows); the view mode
+// is a convenience, so fall back instead of breaking the page's render.
 export function loadViewMode(page: string, fallback: ViewMode = 'table'): ViewMode {
-    if (typeof window === 'undefined') return fallback;
-    const raw = window.localStorage.getItem(STORAGE_KEY(page));
-    if (raw === 'kanban' || raw === 'table') return raw;
+    try {
+        const raw = window.localStorage.getItem(STORAGE_KEY(page));
+        if (raw === 'kanban' || raw === 'table') return raw;
+    } catch {
+        // fall through
+    }
     return fallback;
 }
 
 export function saveViewMode(page: string, mode: ViewMode): void {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(STORAGE_KEY(page), mode);
+    try {
+        window.localStorage.setItem(STORAGE_KEY(page), mode);
+    } catch {
+        // not remembered this time
+    }
 }

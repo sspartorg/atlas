@@ -10,7 +10,7 @@ test.describe('LinkPickerDialog', () => {
         await goto(page, '/sub-tasks/ETM-2');
         await expect(page.getByText('ETM-2').first()).toBeVisible();
         await page.getByRole('button', { name: 'Add related item' }).click();
-        await page.getByRole('menuitem', { name: /Add relates-to/ }).click();
+        await page.getByRole('menuitem', { name: /Link an item/ }).click();
         const dialog = page.getByRole('dialog');
         await expect(dialog).toBeVisible();
         return dialog;

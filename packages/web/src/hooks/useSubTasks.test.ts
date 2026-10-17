@@ -70,4 +70,24 @@ describe('useDeleteSubTask', () => {
         await result.current.mutateAsync('ST-1');
         await waitFor(() => expect(result.current.isSuccess).toBe(true));
     });
+
+    it('does not refetch the deleted sub-task while its page is still mounted', async () => {
+        let fullGets = 0;
+        server.use(
+            http.get('http://localhost:3000/api/sub-tasks/ST-1/full', () => {
+                fullGets += 1;
+                return fullGets > 1
+                    ? HttpResponse.json({ error: 'Sub-task not found' }, { status: 404 })
+                    : HttpResponse.json({ sub_task: { id: 'ST-1' } });
+            }),
+            http.delete('http://localhost:3000/api/sub-tasks/ST-1', () => new HttpResponse(null, { status: 204 })),
+        );
+        const { result } = renderHook(() => ({ full: useSubTaskFull('ST-1'), del: useDeleteSubTask() }), {
+            wrapper: makeWrapper(),
+        });
+        await waitFor(() => expect(result.current.full.isSuccess).toBe(true));
+        await result.current.del.mutateAsync('ST-1');
+        await new Promise((r) => setTimeout(r, 50));
+        expect(fullGets).toBe(1);
+    });
 });

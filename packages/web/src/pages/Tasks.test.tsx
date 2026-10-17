@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
@@ -8,6 +8,31 @@ import { Tasks } from './Tasks.js';
 import { makeProject, makeTaskListItem, makeAgent } from '../test-utils/factories.js';
 
 const BASE = 'http://localhost:3000/api';
+
+const show = vi.hoisted(() => vi.fn());
+vi.mock('../hooks/useToast.js', async (orig) => ({
+    ...(await orig<Record<string, unknown>>()),
+    useToast: () => ({ show, toasts: [], dismiss: vi.fn() }),
+}));
+beforeEach(() => show.mockClear());
+
+// Drag the card titled `title` onto the column headed `column`.
+function dragCard(title: string, column: string) {
+    const store: Record<string, string> = {};
+    const dataTransfer = {
+        effectAllowed: '',
+        dropEffect: '',
+        setData: (k: string, v: string) => {
+            store[k] = v;
+        },
+        getData: (k: string) => store[k] ?? '',
+    };
+    const card = screen.getByText(title).closest('[draggable]') as HTMLElement;
+    fireEvent.dragStart(card, { dataTransfer });
+    const col = screen.getByText(column).parentElement?.parentElement as HTMLElement;
+    fireEvent.dragOver(col, { dataTransfer });
+    fireEvent.drop(col, { dataTransfer });
+}
 
 // Shared setup: stable handler set with one project, one task, one agent so
 // the page paints filter chips + a row we can click. Tests register this via
@@ -303,18 +328,37 @@ describe('Tasks page', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises awaitingPickup > 0 subtitle branch — shows awaiting pickup count', async () => {
-        server.use(...baseHandlers());
-        // baseHandlers already returns stats = { total: 2, awaiting_pickup: 1 }
-        // so awaitingPickup > 0 is true — covers line 149 branch
-        renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
-        await screen.findByText('Refunds automation');
-        await waitFor(
-            () => {
-                expect(screen.queryByText(/awaiting pickup/)).toBeTruthy();
-            },
-            { timeout: 3000 }
+    it('the subtitle counts the listed rows and the ready ones among them', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () => HttpResponse.json([makeProject()])),
+            http.get(`${BASE}/tasks`, () =>
+                HttpResponse.json([
+                    makeTaskListItem({ id: 'ATL-1', title: 'Queued one', status: 'ready' }),
+                    makeTaskListItem({ id: 'ATL-2', title: 'Drafted one', status: 'draft' }),
+                    makeTaskListItem({ id: 'ATL-3', title: 'Queued two', status: 'ready' }),
+                ])
+            ),
+            // The global stats no longer drive the subtitle.
+            http.get(`${BASE}/tasks/stats`, () => HttpResponse.json({ total: 9, awaiting_pickup: 7 })),
+            ...defaultHandlers
         );
+        renderWithProviders(<Tasks />, { initialEntries: ['/tasks?project=Atlas&q=Queued'] });
+        expect(await screen.findByText('2 tasks · Atlas · 2 ready')).toBeInTheDocument();
+        expect(screen.queryByText(/awaiting pickup/)).not.toBeInTheDocument();
+    });
+
+    it('the By project chip shows the project picked from the URL name', async () => {
+        server.use(...baseHandlers());
+        renderWithProviders(<Tasks />, { initialEntries: ['/tasks?project=Atlas'] });
+        const chip = await screen.findByRole('button', { name: /By project:/ });
+        await waitFor(() => expect(chip).toHaveTextContent('By project:Atlas'));
+    });
+
+    it('search matches a Task id', async () => {
+        server.use(...baseHandlers());
+        renderWithProviders(<Tasks />, { initialEntries: ['/tasks?q=atl-2'] });
+        expect(await screen.findByText('Auth hardening')).toBeInTheDocument();
+        expect(screen.queryByText('Refunds automation')).not.toBeInTheDocument();
     });
 
     it('exercises onProjectChange with a non-null project id — calls setParam("project", p.name)', async () => {
@@ -403,45 +447,55 @@ describe('Tasks page', () => {
         expect(document.body).toBeTruthy();
     });
 
-    it('exercises onTransition catch block — kanban transition error is silently swallowed', async () => {
+    it('a refused Kanban move shows one toast with the API reason', async () => {
         server.use(
+            http.get(`${BASE}/tasks`, () =>
+                HttpResponse.json([makeTaskListItem({ id: 'ATL-1', title: 'Refunds automation', status: 'in_review' })])
+            ),
             ...baseHandlers(),
-            // Return an error for the transition to exercise the catch block (line 277)
             http.patch(`${BASE}/tasks/:id/status`, () =>
-                HttpResponse.json({ error: 'invalid transition' }, { status: 422 })
+                HttpResponse.json(
+                    {
+                        error: 'Cannot close ATL-1: 1 open child(ren): ATL-9',
+                        kind: 'conflict',
+                        details: { parent_id: 'ATL-1', open_children: [{ id: 'ATL-9', status: 'in_progress' }] },
+                    },
+                    { status: 422 }
+                )
             )
         );
         localStorage.setItem('atlas.viewMode.tasks', 'kanban');
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
         await screen.findByText('Refunds automation');
-
-        const dataTransferStore: Record<string, string> = {};
-        const dataTransfer = {
-            effectAllowed: '',
-            dropEffect: '',
-            setData: (k: string, v: string) => {
-                dataTransferStore[k] = v;
-            },
-            getData: (k: string) => dataTransferStore[k] ?? '',
-        };
-        const card = screen
-            .queryByText('Refunds automation')
-            ?.closest('[draggable]') as HTMLElement | null;
-        if (card) {
-            fireEvent.dragStart(card, { dataTransfer });
-            const inProgressLabel =
-                screen.queryByText('In Progress') ?? screen.queryByText('in_progress');
-            if (inProgressLabel) {
-                const column = inProgressLabel.parentElement?.parentElement as HTMLElement;
-                if (column) {
-                    fireEvent.dragOver(column, { dataTransfer });
-                    fireEvent.drop(column, { dataTransfer });
-                    await waitFor(() => true, { timeout: 2000 }).catch(() => {});
-                }
-            }
-        }
         localStorage.removeItem('atlas.viewMode.tasks');
-        // No toast error should appear (catch block swallows the error)
-        expect(document.body).toBeTruthy();
+        dragCard('Refunds automation', 'Done');
+        await waitFor(() => expect(show).toHaveBeenCalled());
+        await new Promise((r) => setTimeout(r, 50));
+        expect(show.mock.calls.map((c) => (c[0] as { message: string }).message)).toEqual([
+            'Cannot close — open children',
+        ]);
+    });
+
+    it('a phone still reaches Show archived (the FAB creates, no Kanban toggle)', async () => {
+        const origMatchMedia = window.matchMedia;
+        window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+            matches: query.includes('(max-width'),
+            media: query,
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+        }));
+        try {
+            server.use(...baseHandlers());
+            renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
+            await screen.findByText('Refunds automation');
+            expect(screen.getByText('Show archived')).toBeVisible();
+            expect(screen.queryByRole('button', { name: /Kanban/ })).not.toBeInTheDocument();
+        } finally {
+            window.matchMedia = origMatchMedia;
+        }
     });
 });

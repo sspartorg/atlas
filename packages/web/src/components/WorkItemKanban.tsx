@@ -2,6 +2,7 @@ import { useMemo, useState, type DragEvent } from 'react';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
 import {
     ISSUE_STATUSES,
     STATUS_LABELS,
@@ -31,10 +32,9 @@ interface Props {
     agents: AgentSummary[];
     ownerName: string;
     ownerAccent: string;
-    /** Called when a card is dropped on a column. `override` is true when the
-     *  drop target is not a valid forward transition — the API call bypasses
-     *  the state machine (matches the detail-page "Override" picker, which
-     *  also lets the Owner move an item to any status). */
+    /** Called when a card is dropped on a legal column. `override` is always
+     *  false: an illegal drop is refused here, and the Override picker on the
+     *  item's page is the only way to force a status. */
     onTransition: (item: KanbanItem, nextStatus: IssueStatus, override: boolean) => void;
     onOpen: (item: KanbanItem) => void;
 }
@@ -118,12 +118,21 @@ function Card({
     draggable: boolean;
 }) {
     const assignee = item.assignee_agent_id ? agentsById.get(item.assignee_agent_id) : null;
+    // ButtonBase: a card opens from the keyboard (Tab, Enter/Space) too.
     return (
-        <Box
+        <ButtonBase
+            component="div"
+            disableRipple
             draggable={draggable}
-            onDragStart={draggable ? (e) => onDragStart(e, item) : undefined}
+            onDragStart={
+                draggable ? (e: DragEvent<HTMLDivElement>) => onDragStart(e, item) : undefined
+            }
             onClick={onClick}
             sx={{
+                display: 'block',
+                width: '100%',
+                textAlign: 'left',
+                '&.Mui-focusVisible': { outline: `2px solid ${ATLAS_PALETTE.brandBlue}` },
                 background: ATLAS_PALETTE.white,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
                 borderRadius: '10px',
@@ -194,7 +203,7 @@ function Card({
                     <AgentChip agent={{ name: ownerName, accent_color: ownerAccent }} size="sm" />
                 )}
             </Box>
-        </Box>
+        </ButtonBase>
     );
 }
 

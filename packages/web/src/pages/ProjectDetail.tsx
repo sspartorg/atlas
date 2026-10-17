@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useState } from 'react';
+import { Suspense, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { lazyNamed } from '../utils/lazyNamed.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient, useIsFetching } from '@tanstack/react-query';
@@ -14,9 +14,12 @@ import { useProjectRepos } from '../hooks/useProjectRepos.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useProjectCounts } from '../hooks/useProjectCounts.js';
+import { useProjectGuardrails } from '../hooks/useProjectGuardrails.js';
 import { flattenIssueTree, useIssues } from '../hooks/useIssues.js';
 import { ATLAS_PALETTE } from '../theme/tokens.js';
 import { RefreshButton } from '../components/index.js';
+import { ApiErrorAlert } from '../components/ApiErrorAlert.js';
+import { AtlasApiError } from '../api/api.js';
 import { ProjectHeader } from './project/ProjectHeader.js';
 import { ProjectRightRail } from './project/ProjectRightRail.js';
 import { OverviewTab } from './project/OverviewTab.js';
@@ -42,7 +45,7 @@ import { GenerateAiScaffoldDialog } from './projects/GenerateAiScaffoldDialog.js
 import { useSetPageTitle } from '../components/shell/index.js';
 
 import { relativeTime } from '../utils/time.js';
-import type { IProjectRepo } from '@atlas/shared';
+import type { IProject, IProjectRepo } from '@atlas/shared';
 
 type TabKey = 'overview' | 'tasks' | 'guardrails' | 'repos' | 'jira' | 'setup' | 'history';
 const TAB_KEYS = ['overview', 'tasks', 'guardrails', 'repos', 'jira', 'setup', 'history'] as const;
@@ -55,7 +58,10 @@ export function ProjectDetail() {
     const { id = '' } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [currentTab, setTab] = useTabParam<TabKey>(TAB_KEYS, 'overview');
-    const [deleteOpen, setDeleteOpen] = useState(false);
+    // The project being deleted, held apart from the query: a finished delete
+    // drops ['projects', id], so this page falls to its loading / not-found
+    // branch — and the modal's success view must survive that.
+    const [deleting, setDeleting] = useState<IProject | null>(null);
     const [secretsOpen, setSecretsOpen] = useState(false);
     const [renameOpen, setRenameOpen] = useState(false);
     // Theme 09b — AI-Readiness Agent trigger dialog
@@ -68,21 +74,34 @@ export function ProjectDetail() {
     const handleEditGuardrails = useCallback(() => setTab('guardrails'), [setTab]);
     const handleViewRepos = useCallback(() => setTab('repos'), [setTab]);
     const handleManageSecrets = useCallback(() => setSecretsOpen(true), []);
-    const handleDelete = useCallback(() => setDeleteOpen(true), []);
     const handleJumpToHistory = useCallback(() => setTab('history'), [setTab]);
     const handleGenerateAiScaffold = useCallback(() => setAiScaffoldOpen(true), []);
 
     // Single-record fetch — the list endpoint scaled O(n) with project count
     // and shipped the whole catalog just to render one row's metadata.
-    const { data: project = null, isLoading: projectsLoading } = useProject(id);
+    const {
+        data: project = null,
+        isLoading: projectsLoading,
+        error: projectError,
+        refetch: refetchProject,
+    } = useProject(id);
+    const handleDelete = useCallback(() => setDeleting(project), [project]);
     const { data: repos = NO_REPOS } = useProjectRepos(id);
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
     // Lifted from per-tab containers so tab swaps are pure-render. The fetches
     // happen once on page mount, the tab containers gate on `data === undefined`
     // and otherwise pass the data straight through.
-    const { data: counts } = useProjectCounts(id);
-    const { data: issueTree } = useIssues({ projectId: id });
+    const {
+        data: counts,
+        error: countsError,
+        refetch: refetchCounts,
+    } = useProjectCounts(id);
+    const {
+        data: issueTree,
+        error: issueTreeError,
+        refetch: refetchIssueTree,
+    } = useIssues({ projectId: id });
     const subTasks = useMemo(
         () =>
             issueTree ? flattenIssueTree(issueTree.tree).filter((n) => n.kind === 'sub_task') : [],
@@ -139,32 +158,73 @@ export function ProjectDetail() {
         return agents.filter((w) => ids.has(w.id));
     }, [tasks, subTasks, agents]);
 
-    const guardrailsActive = project ? project.guardrails_md.trim().length > 0 : false;
+    const { data: guardrailRules } = useProjectGuardrails(id);
+    const activeRuleTitles = useMemo(
+        () => (guardrailRules ?? []).filter((r) => r.enabled === 1).map((r) => r.title),
+        [guardrailRules]
+    );
+    const guardrailsActive = activeRuleTitles.length > 0;
+
+    const deleteModal = deleting && (
+        <Suspense fallback={null}>
+            <DeleteProjectModal
+                open
+                project={deleting}
+                displayId={deleting.issue_key_prefix}
+                onClose={() => setDeleting(null)}
+            />
+        </Suspense>
+    );
+    // One fragment shape on every branch, so React keeps the dialog's state.
+    const withDelete = (body: ReactNode) => (
+        <>
+            {body}
+            {deleteModal}
+        </>
+    );
 
     if (projectsLoading) {
-        return (
+        return withDelete(
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
                 <Skeleton variant="text" width={200} height={20} sx={{ mb: 3 }} />
                 <Skeleton variant="rectangular" height={80} sx={{ borderRadius: '12px', mb: 5 }} />
                 <Skeleton variant="rectangular" height={400} sx={{ borderRadius: '12px' }} />
-            </Box>
+            </Box>,
+        );
+    }
+
+    // Only a 404 means the project is gone; a 500 or a dropped connection is a
+    // failure to load, and says so.
+    if (!project && projectError && !(projectError instanceof AtlasApiError && projectError.status === 404)) {
+        return withDelete(
+            <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
+                <ApiErrorAlert
+                    error={projectError}
+                    contextLabel="Could not load this project"
+                    actionSlot={
+                        <Button size="small" onClick={() => void refetchProject()}>
+                            Retry
+                        </Button>
+                    }
+                />
+            </Box>,
         );
     }
 
     if (!project) {
-        return (
+        return withDelete(
             <Box sx={{ px: { xs: 3, md: 8 }, py: 4, textAlign: 'center' }}>
                 <Typography sx={{ color: ATLAS_PALETTE.slate40, mb: 3 }}>
                     Project not found
                 </Typography>
                 <Button onClick={() => navigate('/projects')}>Back to Projects</Button>
-            </Box>
+            </Box>,
         );
     }
 
     const showRail = currentTab !== 'guardrails';
 
-    return (
+    return withDelete(
         <Box sx={{ px: { xs: 3, md: 8 }, py: 4 }}>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: -3 }}>
                 <RefreshButton
@@ -330,6 +390,8 @@ export function ProjectDetail() {
                     {currentTab === 'overview' && (
                         <OverviewTab
                             counts={counts}
+                            error={counts === undefined ? countsError : null}
+                            onRetry={() => void refetchCounts()}
                             projectId={id}
                             onJumpToHistory={handleJumpToHistory}
                         />
@@ -338,6 +400,8 @@ export function ProjectDetail() {
                         <TasksTab
                             projectId={id}
                             tasks={issueTree ? tasks : undefined}
+                            error={issueTree ? null : issueTreeError}
+                            onRetry={() => void refetchIssueTree()}
                             projects={project ? [project] : []}
                             agents={agents}
                             ownerName={ownerName}
@@ -367,22 +431,12 @@ export function ProjectDetail() {
                     <ProjectRightRail
                         projectId={id}
                         activeAgents={activeAgents}
-                        guardrailsMd={project.guardrails_md}
+                        activeRuleTitles={activeRuleTitles}
                         onEditGuardrails={handleEditGuardrails}
                     />
                 )}
             </Box>
 
-            {deleteOpen && (
-                <Suspense fallback={null}>
-                    <DeleteProjectModal
-                        open
-                        project={project}
-                        displayId={displayId}
-                        onClose={() => setDeleteOpen(false)}
-                    />
-                </Suspense>
-            )}
 
             {secretsOpen && (
                 <Suspense fallback={null}>
@@ -407,6 +461,6 @@ export function ProjectDetail() {
                 open={aiScaffoldOpen}
                 onClose={() => setAiScaffoldOpen(false)}
             />
-        </Box>
+        </Box>,
     );
 }

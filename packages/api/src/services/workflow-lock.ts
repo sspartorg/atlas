@@ -6,7 +6,8 @@ import { db } from '../db/kysely-client.js';
 // themselves through MCP `update_item` assign / change_status; letting that
 // continue would fight the engine (and a manual UI change would strand the
 // run). Stopping the run is the way to take the item back. A parked run
-// (`waiting_for_owner`) does not lock the item.
+// (`waiting_for_owner`) does not lock the item. The message is shown to the
+// Owner; agents are told about the lock in the MCP `update_item` description.
 const ITEM_ROUTING_URL = /^\/api\/(?:tasks|sub-tasks)\/([^/?]+)\/(?:status|assign)(?:\?|$)/;
 
 async function runningWorkflowRunOnItem(itemId: string): Promise<string | null> {
@@ -27,7 +28,7 @@ export function registerWorkflowItemLock(app: FastifyInstance): void {
         const runId = await runningWorkflowRunOnItem(decodeURIComponent(match[1]));
         if (!runId) return;
         return reply.status(409).send({
-            error: 'A workflow run is working on this item and owns its status and assignee. Report the result with the atlas-outcome block, or stop the workflow run to change it by hand.',
+            error: 'A workflow run is working on this item and owns its status and assignee. Stop the run to change them by hand.',
             kind: 'conflict',
             workflow_run_id: runId,
         });

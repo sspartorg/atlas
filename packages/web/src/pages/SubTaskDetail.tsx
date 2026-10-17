@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -20,27 +19,38 @@ import {
     type ParentLink,
 } from '../components/index.js';
 import { TestItemTag } from '../components/TestItemTag.js';
-import { useSubTaskFull, useDeleteSubTask } from '../hooks/useSubTasks.js';
+import {
+    useSubTaskFull,
+    useDeleteSubTask,
+    useCreateSubTask,
+    useUpdateSubTask,
+    useTransitionSubTask,
+    useAssignSubTask,
+} from '../hooks/useSubTasks.js';
+import { useToast } from '../hooks/useToast.js';
 import { IssueDeleteAction } from '../components/ConfirmDeleteModal.js';
 import { useProjectLabels } from '../hooks/useProjectLabels.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useItemAgentRuns } from '../hooks/useAgents.js';
 import { api } from '../api/api.js';
-import type { ISubTask, IssueStatus } from '@atlas/shared';
+import type { ISubTask } from '@atlas/shared';
 import { useSetPageTitle } from '../components/shell/index.js';
 
 export function SubTaskDetail() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const qc = useQueryClient();
+    const toast = useToast();
     const subTaskId = id ?? '';
     useSetPageTitle(subTaskId, 'Sub-task');
 
     const { data: full, isLoading } = useSubTaskFull(subTaskId);
     const { data: settings } = useSettings();
     const deleteSubTask = useDeleteSubTask();
+    const createSubTask = useCreateSubTask();
+    const updateSubTask = useUpdateSubTask();
+    const transitionSubTask = useTransitionSubTask();
+    const assignSubTask = useAssignSubTask();
 
-    const [saving, setSaving] = useState(false);
     const [pickerMode, setPickerMode] = useState<'relates_to' | 'depends_on' | 'tested_by' | null>(
         null
     );
@@ -80,40 +90,14 @@ export function SubTaskDetail() {
         return hasAny ? sum : null;
     }, [itemRuns]);
 
-    async function patchSubTask(data: Partial<ISubTask>) {
-        if (!subTask) return;
-        setSaving(true);
-        try {
-            await api.subTasks.update(subTask.id, data);
-            // ['sub-tasks'] prefix covers ['sub-tasks', subTaskId, 'full'];
-            // ['tasks'] covers the parent task's sub-task list.
-            await qc.invalidateQueries({ queryKey: ['tasks'] });
-            await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-            await qc.invalidateQueries({ queryKey: ['issues'] });
-            await qc.invalidateQueries({ queryKey: ['labels'] });
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    async function handleStatusPick(next: IssueStatus, override: boolean) {
-        if (!subTask) return;
-        await api.subTasks.transition(subTask.id, next, override);
-        await qc.invalidateQueries({ queryKey: ['tasks'] });
-        await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-        await qc.invalidateQueries({ queryKey: ['issues'] });
-    }
-
-    async function handleAssign(agentId: string | null) {
-        if (!subTask) return;
-        await api.subTasks.assign(subTask.id, agentId);
-        await qc.invalidateQueries({ queryKey: ['tasks'] });
-        await qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-        await qc.invalidateQueries({ queryKey: ['issues'] });
+    // The hooks toast a failure; awaiting callers (title, markdown, labels)
+    // see the rejection and stay in edit mode.
+    function patchSubTask(data: Partial<ISubTask>) {
+        return updateSubTask.mutateAsync({ id: subTaskId, data });
     }
 
     if (isLoading) {
-        return <IssueDetailLoading />;
+        return <IssueDetailLoading withBreadcrumb />;
     }
     if (!subTask) {
         return (
@@ -134,30 +118,53 @@ export function SubTaskDetail() {
         : [];
 
     // Clone lands next to the source under the same task and links back to
-    // it; the Owner edits the copy on its own page.
+    // it; the Owner edits the copy on its own page. Priority and assignee
+    // carry over: the assignee is informational (ADR 0014), nothing starts
+    // from it.
     async function handleClone() {
         if (!subTask) return;
-        const created = await api.subTasks.create(subTask.task_id, {
-            title: `CLONE ${subTask.title}`,
-            description: subTask.description,
-            acceptance_criteria: subTask.acceptance_criteria,
-            labels: subTask.labels,
-        });
-        await api.issueLinks
-            .create('sub_task', created.id, 'sub_task', subTask.id, 'relates_to')
-            .catch(() => undefined);
-        await qc.invalidateQueries({ queryKey: ['tasks'] });
+        let created: ISubTask;
+        try {
+            created = await createSubTask.mutateAsync({
+                taskId: subTask.task_id,
+                data: {
+                    title: `Copy of ${subTask.title}`.slice(0, 500),
+                    description: subTask.description,
+                    acceptance_criteria: subTask.acceptance_criteria,
+                    priority: subTask.priority,
+                    assignee_agent_id: subTask.assignee_agent_id,
+                    labels: subTask.labels,
+                },
+            });
+        } catch (err) {
+            toast.show({ message: `Couldn't clone ${subTask.id}`, detail: (err as Error).message });
+            return;
+        }
+        try {
+            await api.issueLinks.create(
+                'sub_task',
+                created.id,
+                'sub_task',
+                subTask.id,
+                'relates_to'
+            );
+        } catch (err) {
+            toast.show({
+                message: `Cloned as ${created.id}, but couldn't link it to ${subTask.id}`,
+                detail: (err as Error).message,
+            });
+        }
         navigate(`/sub-tasks/${created.id}`);
     }
 
     const addOptions: AddRelatedMenuOption[] = [
         {
-            label: 'Add relates-to',
+            label: 'Link an item',
             icon: <LinkRounded sx={{ fontSize: 16 }} />,
             onClick: () => setPickerMode('relates_to'),
         },
         {
-            label: 'Add blocked-by',
+            label: 'Add dependency',
             icon: <BlockRounded sx={{ fontSize: 16 }} />,
             onClick: () => setPickerMode('depends_on'),
         },
@@ -177,7 +184,7 @@ export function SubTaskDetail() {
                 ]}
                 title={subTask.title}
                 onTitleSave={(next) => patchSubTask({ title: next })}
-                titleSaving={saving}
+                titleSaving={updateSubTask.isPending}
                 issueType="sub_task"
                 headerExtras={
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -203,18 +210,23 @@ export function SubTaskDetail() {
                             issueId={subTask.id}
                             externalLinks={full?.external_links}
                             status={subTask.status}
-                            onStatusPick={(next, override) => void handleStatusPick(next, override)}
+                            onStatusPick={(next, override) =>
+                                transitionSubTask.mutate({ id: subTask.id, status: next, override })
+                            }
                             assigneeAgentId={subTask.assignee_agent_id}
-                            onAssign={(agentId) => void handleAssign(agentId)}
+                            onAssign={(agentId) =>
+                                assignSubTask.mutate({ id: subTask.id, agentId })
+                            }
                             assignee={assignee}
-                            reassignLocked={subTask.status === 'in_progress'}
                             project={project}
                             parents={parents}
                             reporter={reporter}
                             ownerName={ownerName}
                             ownerAccent={ownerAccent}
                             priority={subTask.priority}
-                            onPriorityPick={(next) => void patchSubTask({ priority: next })}
+                            onPriorityPick={(next) =>
+                                updateSubTask.mutate({ id: subTask.id, data: { priority: next } })
+                            }
                             labels={subTask.labels ?? []}
                             labelSuggestions={projectLabels?.labels ?? []}
                             onLabelsChange={(next) => patchSubTask({ labels: next })}
@@ -236,7 +248,7 @@ export function SubTaskDetail() {
                     value={subTask.description}
                     placeholder="Describe what this sub-task does…"
                     emptyHint="Click to add a description…"
-                    saving={saving}
+                    saving={updateSubTask.isPending}
                     onSave={(next) => patchSubTask({ description: next })}
                 />
 
@@ -245,7 +257,7 @@ export function SubTaskDetail() {
                     value={subTask.acceptance_criteria}
                     placeholder={'- User can…\n- System ensures…'}
                     emptyHint="Click to add acceptance criteria, one per line…"
-                    saving={saving}
+                    saving={updateSubTask.isPending}
                     onSave={(next) => patchSubTask({ acceptance_criteria: next })}
                 />
 

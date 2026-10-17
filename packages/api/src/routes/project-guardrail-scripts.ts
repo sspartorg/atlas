@@ -55,11 +55,11 @@ export async function projectGuardrailScriptsRoutes(app: FastifyInstance) {
         '/api/projects/:projectId/guardrail-scripts/:id',
         { preHandler: requireMcpToken },
         async (req, reply) => {
-            const { id } = req.params as { projectId: string; id: string };
-            if (!(await projectGuardrailScriptsService.get(id)))
+            const { projectId, id } = req.params as { projectId: string; id: string };
+            if (!(await projectGuardrailScriptsService.get(projectId, id)))
                 return reply.status(404).send({ error: 'Script not found' });
             const body = UpdateProjectGuardrailScriptSchema.parse(req.body);
-            return reply.send(await projectGuardrailScriptsService.update(id, body));
+            return reply.send(await projectGuardrailScriptsService.update(projectId, id, body));
         },
     );
 
@@ -67,10 +67,10 @@ export async function projectGuardrailScriptsRoutes(app: FastifyInstance) {
         '/api/projects/:projectId/guardrail-scripts/:id',
         { preHandler: requireMcpToken },
         async (req, reply) => {
-            const { id } = req.params as { projectId: string; id: string };
-            if (!(await projectGuardrailScriptsService.get(id)))
+            const { projectId, id } = req.params as { projectId: string; id: string };
+            if (!(await projectGuardrailScriptsService.get(projectId, id)))
                 return reply.status(404).send({ error: 'Script not found' });
-            await projectGuardrailScriptsService.remove(id);
+            await projectGuardrailScriptsService.remove(projectId, id);
             return reply.status(204).send();
         },
     );

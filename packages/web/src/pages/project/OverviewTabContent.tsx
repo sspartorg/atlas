@@ -18,6 +18,7 @@ import { KindIcon } from '../../components/KindIcon.js';
 import { relativeTime } from '../../utils/time.js';
 import type { IAgentRun, RunStatus } from '@atlas/shared';
 import { itemPath } from '../../utils/itemPath.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 
 interface Props {
     counts: ProjectCounts;
@@ -186,7 +187,12 @@ interface Kpi {
 }
 
 export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props) {
-    const { data: runs, isPending: runsPending } = useProjectAgentRuns(projectId);
+    const {
+        data: runs,
+        isPending: runsPending,
+        error: runsError,
+        refetch: refetchRuns,
+    } = useProjectAgentRuns(projectId);
     const { data: agents = [] } = useAgents();
     const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a] as const)), [agents]);
     const recentRuns = useMemo(() => (runs ?? []).slice(0, RECENT_LIMIT), [runs]);
@@ -195,19 +201,20 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
     const tasksInFlight = counts.tasks_in_flight;
     const tasksWaitingInfo = counts.tasks_waiting_info;
 
-    // Combined (agent + terminal) cost + token totals so the AI Cost
-    // KPI tile reflects the same blended spend the Analytics page
-    // reports — projects funded only via manual terminal sessions
-    // would otherwise read $0 here.
+    // Combined (agent + terminal) cost + token totals. Like Analytics → Spend,
+    // only completed runs and closed sessions count; tokens are every kind the
+    // run reports (input, output, cache read and cache write).
     const agentTokens = counts.costSummary
         ? (counts.costSummary.input_tokens ?? 0) +
           (counts.costSummary.output_tokens ?? 0) +
-          (counts.costSummary.cache_read_tokens ?? 0)
+          (counts.costSummary.cache_read_tokens ?? 0) +
+          (counts.costSummary.cache_creation_tokens ?? 0)
         : 0;
     const terminalTokens = counts.terminalCostSummary
         ? (counts.terminalCostSummary.input_tokens ?? 0) +
           (counts.terminalCostSummary.output_tokens ?? 0) +
-          (counts.terminalCostSummary.cache_read_tokens ?? 0)
+          (counts.terminalCostSummary.cache_read_tokens ?? 0) +
+          (counts.terminalCostSummary.cache_creation_tokens ?? 0)
         : 0;
     const costTotalTokens = agentTokens + terminalTokens;
     const combinedCost =
@@ -215,7 +222,6 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
         (counts.terminalCostSummary?.total_cost_usd ?? 0);
     const runCount = counts.costSummary?.run_count ?? 0;
     const sessionCount = counts.terminalCostSummary?.session_count ?? 0;
-    const hasAnyCost = Boolean(counts.costSummary) || Boolean(counts.terminalCostSummary);
     const hasAnyActivity = runCount > 0 || sessionCount > 0;
 
     const taskCaption = tasksReady > 0 ? `${tasksReady} awaiting pickup` : 'all picked up';
@@ -250,7 +256,7 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
         },
         {
             label: `AI Cost (${new Date().toLocaleString('default', { month: 'long' })})`,
-            value: hasAnyCost ? formatCostUsd(combinedCost) : '—',
+            value: formatCostUsd(combinedCost),
             caption: hasAnyActivity ? (
                 <>
                     <BoldKpi>{runCount}</BoldKpi> run{runCount === 1 ? '' : 's'}
@@ -262,6 +268,7 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
             ) : (
                 'No activity this month'
             ),
+            captionTitle: `Completed agent runs and closed terminal sessions this month: ${runCount} run${runCount === 1 ? '' : 's'} · ${sessionCount} session${sessionCount === 1 ? '' : 's'} · ${formatTokenCount(costTotalTokens)} tokens (input, output, cache read and write)`,
             dotColor: costColor.border,
         },
     ];
@@ -320,20 +327,36 @@ export function OverviewTabContent({ counts, projectId, onJumpToHistory }: Props
                         </Typography>
                     </Box>
                     <Box
+                        component="button"
+                        type="button"
                         onClick={onJumpToHistory}
                         sx={{
                             fontSize: 12.5,
                             color: ATLAS_PALETTE.brandBlue,
                             cursor: 'pointer',
                             fontWeight: 600,
+                            fontFamily: 'inherit',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
                             '&:hover': { textDecoration: 'underline' },
+                            '&:focus-visible': {
+                                outline: `2px solid ${ATLAS_PALETTE.brandBlue}`,
+                                outlineOffset: 2,
+                            },
                         }}
                     >
                         Full history →
                     </Box>
                 </Box>
 
-                {runsPending ? (
+                {runs === undefined && runsError ? (
+                    <RetryAlert
+                        error={runsError}
+                        label="Could not load recent activity"
+                        onRetry={() => void refetchRuns()}
+                    />
+                ) : runsPending ? (
                     <Skeleton variant="rectangular" height={180} sx={{ borderRadius: '10px' }} />
                 ) : recentRuns.length === 0 ? (
                     <Box

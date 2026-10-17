@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { api } from '../api/api.js';
 import type { IssueType } from '@atlas/shared';
+import { useToast } from './useToast.js';
 
 // P11 — TanStack mutation around DELETE /api/comments/:id. Mirrors the
 // cache-invalidation contract used by `useCreateComment` /
@@ -21,10 +22,13 @@ function invalidateCommentCaches(qc: QueryClient, issueType: IssueType, issueId:
 
 export function useDeleteComment(issueType: IssueType, issueId: string) {
     const qc = useQueryClient();
+    const toast = useToast();
     return useMutation({
         mutationFn: ({ id }: { id: number }) => api.comments.delete(id),
         onSuccess: () => {
             invalidateCommentCaches(qc, issueType, issueId);
         },
+        onError: (err) =>
+            toast.show({ message: "Couldn't delete the comment", detail: err.message }),
     });
 }

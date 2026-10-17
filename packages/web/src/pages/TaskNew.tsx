@@ -80,6 +80,7 @@ export function TaskNew() {
     // null = untouched: the `?project=` project, once projects have loaded.
     const [projectChoice, setProjectId] = useState<string | null>(null);
     const projectId = projectChoice ?? defaultProjectId;
+    // Low by design (AGENTS.md, .agents/pages/06-task-new.md), unlike the API's normal.
     const [priority, setPriority] = useState<IssuePriority>('low');
     const { data: repos = [] } = useProjectRepos(projectId);
     // ADR 0018 — null = untouched: the project's first repo, preselected.
@@ -159,7 +160,7 @@ export function TaskNew() {
                     await transitionTask.mutateAsync({ id: created.id, status: 'ready' });
                     toast.show({ message: `Submitted — ${created.title}` });
                 } catch {
-                    toast.show({ message: `Saved — ${created.title}` });
+                    // useTransitionTask toasts why; the Task stays a draft.
                 }
             } else {
                 toast.show({ message: `Saved as draft — ${created.title}` });
@@ -277,8 +278,8 @@ export function TaskNew() {
                             component="span"
                             sx={{ color: ATLAS_PALETTE.slate40, fontWeight: 400 }}
                         >
-                            — what you're trying to do, why it matters, anything PO Writer needs to
-                            know
+                            — what you're trying to do, why it matters, anything the work needs
+                            to know
                         </Box>
                     </Typography>
                     <TextField

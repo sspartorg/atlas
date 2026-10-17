@@ -1,17 +1,17 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
 import { makeProjectRepo } from '../../test-utils/factories.js';
-import { SetupTab } from './SetupTab.js';
+import { SetupTab, scriptSummary } from './SetupTab.js';
+import { Toast } from '../../components/Toast.js';
 
 const BASE = '/api';
 const PROJECT_ID = 'p1';
-const REPO_ID = 'p1';
 
 // ADR 0018 — setup scripts hang off a repo, so every fixture is a repo row.
-const repo = (overrides = {}) => makeProjectRepo({ id: REPO_ID, name: 'atlas', ...overrides });
+const repo = (overrides = {}) => makeProjectRepo({ id: 'r1', name: 'atlas', ...overrides });
 
 function mockRepos(rows: ReturnType<typeof makeProjectRepo>[]) {
     return http.get(`${BASE}/projects/${PROJECT_ID}/repos`, () => HttpResponse.json(rows));
@@ -23,7 +23,22 @@ beforeAll(() => server.listen({ onUnhandledRequest: 'bypass' }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-describe('SetupTab', () => {
+async function openRepo(name: string) {
+    fireEvent.click(await screen.findByRole('button', { name: `Edit setup scripts for ${name}` }));
+    return screen.findByRole('dialog');
+}
+
+describe('scriptSummary', () => {
+    it('counts lines and calls a blank script empty', () => {
+        expect(scriptSummary('')).toBe('empty');
+        expect(scriptSummary(null)).toBe('empty');
+        expect(scriptSummary('  \n\n')).toBe('empty');
+        expect(scriptSummary('echo hi')).toBe('1 line');
+        expect(scriptSummary('a\nb\n')).toBe('2 lines');
+    });
+});
+
+describe('SetupTab — list', () => {
     it('shows a loading spinner before the repos are fetched', () => {
         server.use(
             http.get(`${BASE}/projects/${PROJECT_ID}/repos`, async () => {
@@ -35,18 +50,10 @@ describe('SetupTab', () => {
         expect(screen.getByRole('progressbar')).toBeInTheDocument();
     });
 
-    it('renders the bash + powershell editors with the repo body values', async () => {
-        server.use(
-            mockRepos([
-                repo({ setup_sh_body: '#!/bin/bash\necho hi', setup_ps1_body: 'Write-Host hi' }),
-            ])
-        );
+    it('says so when the repos fail to load, instead of spinning', async () => {
+        server.use(http.get(`${BASE}/projects/${PROJECT_ID}/repos`, () => HttpResponse.json({ error: 'x' }, { status: 500 })));
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        await waitFor(() => expect(screen.getByText(/Setup scripts/i)).toBeInTheDocument());
-        expect(screen.getByText(/Bash \/ POSIX shell/i)).toBeInTheDocument();
-        expect(screen.getByText(/Windows PowerShell/i)).toBeInTheDocument();
-        expect(screen.getByDisplayValue(/echo hi/)).toBeInTheDocument();
-        expect(screen.getByDisplayValue(/Write-Host hi/)).toBeInTheDocument();
+        expect(await screen.findByText(/Could not load this project's repos/)).toBeInTheDocument();
     });
 
     it('tells the Owner when the project has no repos to hold scripts', async () => {
@@ -55,226 +62,110 @@ describe('SetupTab', () => {
         expect(await screen.findByText(/no repos yet/i)).toBeInTheDocument();
     });
 
-    it('copy says the script runs before the agent CLI (agent-runner setup_failed path), not "lands in a follow-up"', async () => {
-        server.use(mockRepos([repo()]));
-        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        await screen.findByText(/Setup scripts/i);
-        expect(screen.queryByText(/lands in a follow-up/i)).not.toBeInTheDocument();
-        expect(screen.getByText(/before the agent CLI starts/i)).toBeInTheDocument();
-    });
-
-    it('disables Save until a field is edited, enables it after edit', async () => {
-        server.use(mockRepos([repo()]));
-        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        const saveBtn = await screen.findByRole('button', { name: /Save/i });
-        expect(saveBtn).toBeDisabled();
-        // Edit the .sh editor to dirty the form
-        const editors = screen.getAllByRole('textbox');
-        fireEvent.change(editors[0]!, { target: { value: 'echo new' } });
-        expect(saveBtn).not.toBeDisabled();
-    });
-
-    it('PATCHes the repo on Save and shows a toast', async () => {
-        const patched = vi.fn();
-        server.use(
-            mockRepos([repo()]),
-            http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, async ({ request }) => {
-                const body = (await request.json()) as Record<string, unknown>;
-                patched(body);
-                return HttpResponse.json(
-                    repo({
-                        setup_sh_body: String(body['setup_sh_body'] ?? ''),
-                        setup_ps1_body: String(body['setup_ps1_body'] ?? ''),
-                    })
-                );
-            })
-        );
-        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        fireEvent.change(await screen.findByLabelText('Bash setup script'), {
-            target: { value: 'echo saved' },
-        });
-        const saveBtn = screen.getByRole('button', { name: /Save/i });
-        fireEvent.click(saveBtn);
-        await waitFor(() => expect(patched).toHaveBeenCalled());
-        expect(patched).toHaveBeenCalledWith({
-            setup_sh_body: 'echo saved',
-            setup_ps1_body: '',
-        });
-    });
-
-    it('edits and saves the SELECTED repo’s scripts', async () => {
-        const api = makeProjectRepo({ id: 'r-api', name: 'api', setup_sh_body: 'echo api' });
-        const web = makeProjectRepo({ id: 'r-web', name: 'web', setup_sh_body: 'echo web' });
-        let patchedUrl: string | null = null;
-        let patchedBody: Record<string, unknown> | null = null;
-        server.use(
-            mockRepos([api, web]),
-            http.patch(`${BASE}/projects/${PROJECT_ID}/repos/:repoId`, async ({ request }) => {
-                patchedUrl = new URL(request.url).pathname;
-                patchedBody = (await request.json()) as Record<string, unknown>;
-                return HttpResponse.json(web);
-            })
-        );
-        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-
-        // Defaults to the first repo.
-        expect(await screen.findByDisplayValue('echo api')).toBeInTheDocument();
-
-        // Pick the second repo — its scripts replace the first's.
-        fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Repo' }));
-        fireEvent.click(await screen.findByRole('option', { name: 'web' }));
-        expect(await screen.findByDisplayValue('echo web')).toBeInTheDocument();
-
-        fireEvent.change(screen.getByLabelText('Bash setup script'), {
-            target: { value: 'echo web edited' },
-        });
-        fireEvent.click(screen.getByRole('button', { name: /Save/i }));
-
-        await waitFor(() => expect(patchedUrl).toBe(`/api/projects/${PROJECT_ID}/repos/r-web`));
-        expect(patchedBody).toEqual({
-            setup_sh_body: 'echo web edited',
-            setup_ps1_body: '',
-        });
-    });
-
-    it('shows error Alert when PATCH fails (update.isError branch)', async () => {
-        // handleSave calls mutateAsync which rejects on 500 and becomes an
-        // unhandled promise rejection (React doesn't await onClick handlers).
-        // Suppress the rejection at the process level so vitest doesn't fail.
-        const suppressRejection = (reason: unknown, promise: Promise<unknown>) => {
-            void promise;
-            void reason; // silently swallow
-        };
-        process.on('unhandledRejection', suppressRejection);
-
-        try {
-            server.use(
-                mockRepos([repo()]),
-                http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, () =>
-                    HttpResponse.json({ error: 'Server error' }, { status: 500 })
-                )
-            );
-            renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-            const editors = await screen.findAllByRole('textbox');
-            fireEvent.change(editors[0]!, { target: { value: 'echo fail' } });
-            const saveBtn = screen.getByRole('button', { name: /Save/i });
-            fireEvent.click(saveBtn);
-            // When PATCH fails, react-query mutation sets isError=true
-            // and the Alert "Failed to save:" should appear
-            await waitFor(
-                () => {
-                    expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
-                },
-                { timeout: 5000 }
-            );
-        } finally {
-            process.off('unhandledRejection', suppressRejection);
-        }
-    });
-
-    it('shows CircularProgress in Save button while PATCH is in flight', async () => {
-        // Delay the PATCH response so we can observe the isPending state
-        let resolvePatch!: () => void;
-        const patchPromise = new Promise<void>((res) => {
-            resolvePatch = res;
-        });
-        server.use(
-            mockRepos([repo()]),
-            http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, async () => {
-                await patchPromise;
-                return HttpResponse.json(repo());
-            })
-        );
-        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        const editors = await screen.findAllByRole('textbox');
-        fireEvent.change(editors[0]!, { target: { value: 'echo pending' } });
-        const saveBtn = screen.getByRole('button', { name: /Save/i });
-        fireEvent.click(saveBtn);
-        // While the PATCH is in flight, button label changes to "Saving…"
-        await waitFor(
-            () => {
-                expect(screen.getByText(/Saving…/i)).toBeInTheDocument();
-            },
-            { timeout: 3000 }
-        );
-        // Also a CircularProgress (progressbar role) appears in the button
-        expect(screen.getAllByRole('progressbar').length).toBeGreaterThan(0);
-        // Resolve the PATCH to clean up
-        resolvePatch();
-    });
-
-    it('useEffect: syncs state to a null-body repo (setup_sh_body ?? "" + setup_ps1_body ?? "" branches)', async () => {
-        // Repo has null setup bodies → useEffect fires with repo truthy,
-        // fields default to '' via the ?? '' fallback in useEffect body
+    it('lists every repo with what each of its two scripts holds, and no editors', async () => {
         server.use(
             mockRepos([
-                repo({
-                    setup_sh_body: null as unknown as string,
-                    setup_ps1_body: null as unknown as string,
-                }),
+                repo({ id: 'r1', name: 'web', setup_sh_body: 'a\nb\nc', setup_ps1_body: '' }),
+                repo({ id: 'r2', name: 'api', setup_sh_body: '', setup_ps1_body: 'Write-Host hi' }),
             ])
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        await waitFor(() => expect(screen.getByText(/Setup scripts/i)).toBeInTheDocument());
-        // Both textareas should be empty strings (null ?? '' = '')
-        const editors = screen.getAllByRole('textbox');
-        expect(editors[0]!.textContent ?? '').toBe('');
-        expect(editors[1]!.textContent ?? '').toBe('');
+        const web = await screen.findByRole('button', { name: 'Edit setup scripts for web' });
+        expect(web).toHaveTextContent('.sh · 3 lines');
+        expect(web).toHaveTextContent('.ps1 · empty');
+        const api = screen.getByRole('button', { name: 'Edit setup scripts for api' });
+        expect(api).toHaveTextContent('.sh · empty');
+        expect(api).toHaveTextContent('.ps1 · 1 line');
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+        expect(screen.getByText(/before the agent CLI starts/i)).toBeInTheDocument();
     });
+});
 
-    it('dirty stays false when both sh and ps1 match the repo values (dirty false branch)', async () => {
-        // With matching values dirty=false → Save button stays disabled
+describe('SetupTab — dialog', () => {
+    it('opens the clicked repo with its two scripts and the secrets help collapsed', async () => {
         server.use(
-            mockRepos([repo({ setup_sh_body: 'echo hello', setup_ps1_body: 'Write-Host hello' })])
+            mockRepos([
+                repo({ id: 'r1', name: 'web', setup_sh_body: 'echo web' }),
+                repo({ id: 'r2', name: 'api', setup_sh_body: 'echo api', setup_ps1_body: 'Write-Host api' }),
+            ])
         );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        const saveBtn = await screen.findByRole('button', { name: /Save/i });
-        // Right after load both fields match → dirty=false → disabled
-        await waitFor(() => expect(saveBtn).toBeDisabled());
+        const dialog = await openRepo('api');
+        expect(within(dialog).getByText('api')).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('Bash setup script')).toHaveValue('echo api');
+        expect(within(dialog).getByLabelText('PowerShell setup script')).toHaveValue('Write-Host api');
+        const help = within(dialog).getByText('Using secrets in your scripts').closest('details')!;
+        expect(help.open).toBe(false);
+        expect(help).toHaveTextContent('UPPER_SNAKE_CASE');
+        expect(help).not.toHaveTextContent('[A-Za-z_]');
+        expect(within(dialog).getByRole('button', { name: 'Save scripts' })).toBeDisabled();
     });
 
-    it('editing only ps1 makes form dirty (ps1 !== repo.setup_ps1_body ?? "" branch)', async () => {
-        // Exercises the second operand of the || in `dirty` — only ps1 changes
-        server.use(mockRepos([repo({ setup_sh_body: '', setup_ps1_body: '' })]));
+    it('saves both scripts of that repo, toasts, closes, and the list updates', async () => {
+        let body: unknown;
+        let stored = repo({ id: 'r2', name: 'api', setup_sh_body: '', setup_ps1_body: '' });
+        server.use(
+            http.get(`${BASE}/projects/${PROJECT_ID}/repos`, () => HttpResponse.json([stored])),
+            http.patch(`${BASE}/projects/${PROJECT_ID}/repos/r2`, async ({ request }) => {
+                body = await request.json();
+                stored = { ...stored, ...(body as object) };
+                return HttpResponse.json(stored);
+            })
+        );
+        renderWithProviders(
+            <>
+                <SetupTab projectId={PROJECT_ID} />
+                <Toast />
+            </>
+        );
+        const dialog = await openRepo('api');
+        fireEvent.change(within(dialog).getByLabelText('Bash setup script'), { target: { value: 'npm ci\nnpm run build' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save scripts' }));
+        expect(await screen.findByText('Setup scripts saved for api')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+        expect(body).toEqual({ setup_sh_body: 'npm ci\nnpm run build', setup_ps1_body: '' });
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: 'Edit setup scripts for api' })).toHaveTextContent('.sh · 2 lines')
+        );
+    });
+
+    it('a failed save keeps the dialog and the edits, and says why', async () => {
+        server.use(
+            mockRepos([repo()]),
+            http.patch(`${BASE}/projects/${PROJECT_ID}/repos/r1`, () => HttpResponse.json({ error: 'disk full' }, { status: 500 }))
+        );
         renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-        const saveBtn = await screen.findByRole('button', { name: /Save/i });
-        expect(saveBtn).toBeDisabled();
-        // Edit ps1 (second textarea)
-        const editors = await screen.findAllByRole('textbox');
-        fireEvent.change(editors[1]!, { target: { value: 'Write-Host changed' } });
-        expect(saveBtn).not.toBeDisabled();
+        const dialog = await openRepo('atlas');
+        fireEvent.change(within(dialog).getByLabelText('PowerShell setup script'), { target: { value: 'exit 1' } });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Save scripts' }));
+        expect(await within(dialog).findByText(/Could not save: .*disk full/)).toBeInTheDocument();
+        expect(within(dialog).getByLabelText('PowerShell setup script')).toHaveValue('exit 1');
     });
 
-    it('update.isError with non-Error: renders "Unknown error" in Alert (false branch)', async () => {
-        // Simulate a thrown error that is NOT an instance of Error (plain string rejection)
-        // We cannot easily force this via MSW, but we can simulate by checking the branch
-        // fires when the mutation rejects with a non-Error — use an AbortError via AbortController
-        const suppressRejection = (reason: unknown, promise: Promise<unknown>) => {
-            void promise;
-            void reason;
-        };
-        process.on('unhandledRejection', suppressRejection);
-        try {
-            server.use(
-                mockRepos([repo()]),
-                http.patch(`${BASE}/projects/${PROJECT_ID}/repos/${REPO_ID}`, () =>
-                    HttpResponse.json({ error: 'Server error' }, { status: 500 })
-                )
-            );
-            renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
-            const editors = await screen.findAllByRole('textbox');
-            fireEvent.change(editors[0]!, { target: { value: 'echo error test' } });
-            const saveBtn = screen.getByRole('button', { name: /Save/i });
-            fireEvent.click(saveBtn);
-            // After mutation error, "Failed to save:" alert should appear
-            await waitFor(
-                () => {
-                    expect(screen.queryByText(/Failed to save/i)).toBeInTheDocument();
-                },
-                { timeout: 5000 }
-            );
-        } finally {
-            process.off('unhandledRejection', suppressRejection);
-        }
+    it('closing with unsaved edits asks first; Keep editing keeps them, Discard drops them', async () => {
+        server.use(mockRepos([repo({ setup_sh_body: 'orig' })]));
+        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
+        let dialog = await openRepo('atlas');
+        fireEvent.change(within(dialog).getByLabelText('Bash setup script'), { target: { value: 'changed' } });
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+        expect(within(dialog).getByText('Discard your unsaved changes?')).toBeInTheDocument();
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
+        expect(within(dialog).getByLabelText('Bash setup script')).toHaveValue('changed');
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Discard' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+        dialog = await openRepo('atlas');
+        expect(within(dialog).getByLabelText('Bash setup script')).toHaveValue('orig');
+    });
+
+    it('closing a clean dialog does not ask', async () => {
+        server.use(mockRepos([repo()]));
+        renderWithProviders(<SetupTab projectId={PROJECT_ID} />);
+        const dialog = await openRepo('atlas');
+        fireEvent.keyDown(dialog, { key: 'Escape' });
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     });
 });

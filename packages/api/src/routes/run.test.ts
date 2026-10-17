@@ -425,6 +425,21 @@ describe('GET /api/run — list endpoint', () => {
         expect(body.every((r: { issue_id: string }) => r.issue_id === 'ATL-2')).toBe(true);
     });
 
+    it('project_id lists item runs and itemless runs of that project only', async () => {
+        await insertProject('p-other', 'OTR');
+        await seedRun({ id: 'run-item', item_id: 'ATL-2', status: 'completed' });
+        await testDb
+            .insertInto('agent_runs')
+            .values([
+                { id: 'run-free', agent_id: 'agent-coder', item_id: null, project_id: 'p1', status: 'completed' },
+                { id: 'run-free-other', agent_id: 'agent-coder', item_id: null, project_id: 'p-other', status: 'completed' },
+            ])
+            .execute();
+        const res = await app.inject({ method: 'GET', url: '/api/run?project_id=p1' });
+        const ids = (res.json() as Array<{ id: string }>).map((r) => r.id).sort();
+        expect(ids).toEqual(['run-free', 'run-item']);
+    });
+
     it('returns filtered results when project_id is provided', async () => {
         await seedRun({ id: 'run-proj-1', item_id: 'ATL-2', status: 'completed' });
         const res = await app.inject({
@@ -675,6 +690,17 @@ describe('POST /api/run — background spawn failure marks row as error', () => 
 
 // GET /api/run — limit query clamping (line 435: Math.min(Number(limit ?? 50), 500)).
 // Tests the explicit limit param code path.
+describe('GET /api/run — list output_text', () => {
+    it('sends only the first 100 chars, so the simulated marker survives', async () => {
+        await seedRun({ id: 'run-long', item_id: 'ATL-2', status: 'completed' });
+        const long = '[SIMULATED run]' + 'x'.repeat(50_000);
+        await testDb.updateTable('agent_runs').set({ output_text: long }).where('id', '=', 'run-long').execute();
+        const res = await app.inject({ method: 'GET', url: '/api/run?issue_id=ATL-2' });
+        const row = (res.json() as Array<{ id: string; output_text: string | null }>).find((r) => r.id === 'run-long');
+        expect(row?.output_text).toBe(long.slice(0, 100));
+    });
+});
+
 describe('GET /api/run — limit query parameter', () => {
     it('respects an explicit limit param less than 500', async () => {
         for (let i = 0; i < 3; i++) {

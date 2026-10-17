@@ -42,6 +42,8 @@ const EVENT_META: Record<string, IconMeta> = {
     autofetch_failed: { icon: 'cloud_off', label: 'Auto-fetch Failed', ...bad },
     autofetch_conflict: { icon: 'merge_type', label: 'Auto-fetch Conflict', ...warn },
     autofetch_disabled: { icon: 'block', label: 'Auto-fetch Disabled', ...bad },
+    reclone_failed: { icon: 'cloud_off', label: 'Pull Failed', ...bad },
+    project_delete_failed: { icon: 'delete', label: 'Project Delete Failed', ...bad },
 };
 
 export function getEventMeta(eventType: string): IconMeta {

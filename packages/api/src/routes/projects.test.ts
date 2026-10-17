@@ -1,6 +1,26 @@
+import type * as ChildProcess from 'node:child_process';
 import { describe, expect, it, beforeEach, afterAll, vi } from 'vitest';
 import type * as WorkflowEngineModule from '../services/workflow-engine.js';
 import type { FastifyInstance } from 'fastify';
+import { EventEmitter } from 'node:events';
+
+// The reveal route spawns Finder / File Explorer; never launch one from a test.
+const revealSpawn = vi.hoisted(() => ({ fail: null as Error | null }));
+vi.mock('node:child_process', async (importOriginal) => {
+    const actual = await importOriginal<typeof ChildProcess>();
+    return {
+        ...actual,
+        spawn: vi.fn((bin: string, ...rest: unknown[]) => {
+            if (!['open', 'explorer.exe', 'xdg-open'].includes(bin)) {
+                return (actual.spawn as (...a: unknown[]) => unknown)(bin, ...rest);
+            }
+            const child = Object.assign(new EventEmitter(), { unref: vi.fn() });
+            const fail = revealSpawn.fail;
+            setImmediate(() => (fail ? child.emit('error', fail) : child.emit('spawn')));
+            return child;
+        }),
+    };
+});
 
 vi.mock('../routes/events.js', () => ({
     eventsRoutes: async () => {
@@ -355,6 +375,19 @@ describe('POST /api/projects/:id/repos/:repoId/reclone', () => {
         expect(res.statusCode).toBe(404);
     });
 
+    it('passes the client-chosen reclone_id to the runner', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/some/path' });
+        const { startReclone } = await import('../services/reclone-runner.js');
+        vi.mocked(startReclone).mockResolvedValueOnce('client-id-1234');
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/repos/p1/reclone',
+            payload: { reclone_id: 'client-id-1234' },
+        });
+        expect(res.statusCode).toBe(202);
+        expect(startReclone).toHaveBeenLastCalledWith(expect.objectContaining({ recloneId: 'client-id-1234' }));
+    });
+
     it('returns 202 for existing project', async () => {
         await insertProject('p1', 'ATL', { git_path: '/some/path' });
         const res = await app.inject({
@@ -375,6 +408,22 @@ describe('POST /api/projects/:id/delete (soft delete operation)', () => {
             payload: { mode: 'unregister' },
         });
         expect(res.statusCode).toBe(404);
+    });
+
+    it('passes the client-chosen delete_id to the runner', async () => {
+        await insertProject('p1', 'ATL');
+        const { startDelete } = await import('../services/delete-runner.js');
+        const res = await app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/delete',
+            payload: { mode: 'unregister', delete_id: 'client-id-1234' },
+        });
+        expect(res.statusCode).toBe(202);
+        expect(startDelete).toHaveBeenLastCalledWith({
+            projectId: 'p1',
+            mode: 'unregister',
+            deleteId: 'client-id-1234',
+        });
     });
 
     it('returns 202 for unregister mode on existing project', async () => {
@@ -476,13 +525,34 @@ describe('GET /api/projects/folder-origin', () => {
 });
 
 describe('POST /api/projects/:id/repos/:repoId/reveal', () => {
-    it('returns 200 on win32/darwin/linux (spawns file browser)', async () => {
+    it('says which file browser opened the folder', async () => {
         await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
         const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
-        // On win32 (test environment) or other platforms — route either succeeds
-        // or returns 400/500 depending on platform; we just assert it reaches
-        // the project-lookup success path (not 404)
-        expect(res.statusCode).not.toBe(404);
+        expect(res.statusCode).toBe(200);
+        const expected =
+            process.platform === 'darwin' ? 'Finder' : process.platform === 'win32' ? 'File Explorer' : 'file manager';
+        expect(JSON.parse(res.body)).toEqual({ ok: true, path: '/tmp/test-project', opened_in: expected });
+    });
+
+    it('409s when the folder is gone from disk instead of claiming it opened', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/tmp/gone' });
+        const { folderExists } = await import('../services/git-verify.js');
+        vi.mocked(folderExists).mockReturnValueOnce(false);
+        const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
+        expect(res.statusCode).toBe(409);
+        expect(JSON.parse(res.body).error).toBe('Folder not found on disk: /tmp/gone');
+    });
+
+    it('500s when the file browser cannot be launched', async () => {
+        await insertProject('p1', 'ATL', { git_path: '/tmp/test-project' });
+        revealSpawn.fail = new Error('spawn open ENOENT');
+        try {
+            const res = await app.inject({ method: 'POST', url: '/api/projects/p1/repos/p1/reveal' });
+            expect(res.statusCode).toBe(500);
+            expect(JSON.parse(res.body).error).toBe('spawn open ENOENT');
+        } finally {
+            revealSpawn.fail = null;
+        }
     });
 
     it('returns 404 for a missing project', async () => {
@@ -501,7 +571,30 @@ describe('PUT /api/projects/:id/env — non-string key/value', () => {
             payload: { vars: [{ key: 'MY_VAR', value: 123 }] },
         });
         expect(res.statusCode).toBe(400);
-        expect(JSON.parse(res.body).error).toMatch(/string key and value/);
+        expect(JSON.parse(res.body).error).toMatch(/string key and exactly one of value or keep/);
+    });
+});
+
+describe('PUT /api/projects/:id/env — keep rows', () => {
+    const put = (vars: unknown[]) => app.inject({ method: 'PUT', url: '/api/projects/p1/env', payload: { vars } });
+
+    it('keeps a stored value without sending it, including under a new key', async () => {
+        await insertProject('p1', 'ATL');
+        await put([{ key: 'A', value: 'a' }, { key: 'B', value: 'b' }]);
+        const res = await put([{ key: 'A', keep: 'A' }, { key: 'B2', keep: 'B' }]);
+        expect(res.statusCode).toBe(200);
+        expect((JSON.parse(res.body) as { vars: Array<{ key: string }> }).vars.map((v) => v.key)).toEqual(['A', 'B2']);
+        const reveal = await app.inject({ method: 'GET', url: '/api/projects/p1/env/B2/value' });
+        expect(JSON.parse(reveal.body)).toEqual({ key: 'B2', value: 'b' });
+    });
+
+    it('400s on a keep of an unknown key, or a row with both value and keep', async () => {
+        await insertProject('p1', 'ATL');
+        await put([{ key: 'A', value: 'a' }]);
+        expect((await put([{ key: 'A', keep: 'NOPE' }])).statusCode).toBe(400);
+        expect((await put([{ key: 'A', keep: 'A', value: 'x' }])).statusCode).toBe(400);
+        const reveal = await app.inject({ method: 'GET', url: '/api/projects/p1/env/A/value' });
+        expect(JSON.parse(reveal.body).value).toBe('a');
     });
 });
 
@@ -676,6 +769,11 @@ describe('POST /api/projects/:id/generate-ai-scaffold — success + error', () =
         });
         expect(res.statusCode).toBe(202);
         expect(JSON.parse(res.body)).toEqual({ run_id: 'wf-run-1', workflow_id: 'wf-ai' });
+        // The repo the dialog names is the repo the run works.
+        const { startWorkflowRun } = await import('../services/workflow-engine.js');
+        expect(startWorkflowRun).toHaveBeenLastCalledWith('wf-ai', null, undefined, {
+            repoIds: ['p-scaffold'],
+        });
     });
 
     it('returns 500 when the AI Readiness workflow cannot start', async () => {
@@ -1240,6 +1338,32 @@ describe('project repos (ADR 0018)', () => {
         // The last repo can go too; the project stays, with no repos.
         expect((await app.inject({ method: 'DELETE', url: '/api/projects/p1/repos/p1' })).statusCode).toBe(204);
         expect(JSON.parse((await app.inject({ method: 'GET', url: '/api/projects/p1/repos' })).body)).toEqual([]);
+    });
+
+    it("removing a repo stops its auto-fetch cron and drops its schedule", async () => {
+        await insertProject('p1', 'ATL', { git_path: '/ws/core' });
+        const { nextRun } = await import('../services/schedule-registry.js');
+        const saved = await app.inject({
+            method: 'PUT',
+            url: '/api/projects/p1/repos/p1/schedule',
+            payload: {
+                enabled: true,
+                preset: 'daily',
+                time_of_day: '06:00',
+                weekday: null,
+                cron_expression: '0 6 * * *',
+                skip_if_dirty: true,
+                pause_while_agents_active: false,
+                conflict_policy: 'skip',
+            },
+        });
+        expect(saved.statusCode).toBe(200);
+        expect(nextRun('p1')).not.toBeNull();
+
+        expect((await app.inject({ method: 'DELETE', url: '/api/projects/p1/repos/p1' })).statusCode).toBe(204);
+
+        expect(nextRun('p1')).toBeNull();
+        expect(JSON.parse((await app.inject({ method: 'GET', url: '/api/schedules' })).body)).toEqual([]);
     });
 
     it("keeps a Task's repos inside its project and frozen while a run holds it", async () => {

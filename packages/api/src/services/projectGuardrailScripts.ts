@@ -48,10 +48,11 @@ export const projectGuardrailScriptsService = {
         return rows as unknown as IProjectGuardrailScript[];
     },
 
-    async get(id: string): Promise<IProjectGuardrailScript | undefined> {
+    async get(projectId: string, id: string): Promise<IProjectGuardrailScript | undefined> {
         const row = await db
             .selectFrom('project_guardrail_scripts')
             .selectAll()
+            .where('project_id', '=', projectId)
             .where('id', '=', id)
             .executeTakeFirst();
         return row as unknown as IProjectGuardrailScript | undefined;
@@ -82,25 +83,30 @@ export const projectGuardrailScriptsService = {
         }
     },
 
-    async update(id: string, patch: UpdateInput): Promise<IProjectGuardrailScript | null> {
+    async update(projectId: string, id: string, patch: UpdateInput): Promise<IProjectGuardrailScript | null> {
         const clean: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(patch)) {
             if (v !== undefined) clean[k] = v;
         }
         if (Object.keys(clean).length === 0) {
-            return (await this.get(id)) ?? null;
+            return (await this.get(projectId, id)) ?? null;
         }
         clean['updated_at'] = new Date().toISOString();
         const row = await db
             .updateTable('project_guardrail_scripts')
             .set(clean as never)
+            .where('project_id', '=', projectId)
             .where('id', '=', id)
             .returningAll()
             .executeTakeFirst();
         return (row as unknown as IProjectGuardrailScript) ?? null;
     },
 
-    async remove(id: string): Promise<void> {
-        await db.deleteFrom('project_guardrail_scripts').where('id', '=', id).execute();
+    async remove(projectId: string, id: string): Promise<void> {
+        await db
+            .deleteFrom('project_guardrail_scripts')
+            .where('project_id', '=', projectId)
+            .where('id', '=', id)
+            .execute();
     },
 };

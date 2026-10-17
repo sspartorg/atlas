@@ -834,6 +834,8 @@ export interface WorkflowRunsTable {
     pr_url: StrN;
     /** Every PR the run opened, in order; `pr_url` is its first entry. */
     pr_urls: Generated<string[]>;
+    /** Migration 019 — a project-scope run's repos (a Task's run reads its Task's). */
+    repo_ids: ColumnType<string[], string | undefined, string>;
     started_at: CreatedAt;
     updated_at: UpdatedAt;
     finished_at: TSn;

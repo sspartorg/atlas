@@ -80,8 +80,8 @@ Wave letters match the sweep order (entity graph first, readers after).
 | `/onboarding` | Owner name + accent + workspace folder survive `POST /settings/onboard` and a reload. Route guard: post-onboarding hit redirects to `/`; pre-onboarding hit on any other route redirects here. | *(2026-09-20: the accent only survives since campaign F-001 was fixed — before that the swatch wrote nowhere. It rides on a follow-up `PATCH /settings/profile`, not the onboard payload.)*
 | `/` (Dashboard) | KPI numbers equal the same figures on Projects / Tasks / Queue. "In motion" rows resolve agent names (`InMotionRow` reads `agent_name` denormalized by `counts.ts` — check it is populated, not falling back to "Unassigned"). AI-cost figures come from real `agent_runs` sums. |
 | `/projects` | Create → appears without reload (SSE `counts_changed`) and after one. Delete → gone from Projects, Dashboard, sidenav badge, and the NewProjectModal credential picker. Clone/reclone stream SSE and land in a terminal state, not a spinner. Auto-fetch schedule round-trips its cron. |
-| `/projects/:id` (5 tabs + Setup) | **Manage Secrets**: write → reload → per-row Reveal returns the stored value (X1); Copy copies the real value; Reveal-all fans out one call per row; Save with an untouched row preserves it instead of blanking it. Guard-rails tab writes reach `/projects/:id/guardrails`. Setup scripts round-trip both bodies. Tab state survives `?tab=` deep links. |
-| `/projects/:id/guard-rails` | Redirects to `?tab=guardrails`. Add / toggle persists; toggle is not local-only. |
+| `/projects/:id` (7 tabs: Overview, Tasks, Guard-rails, Repos, Jira, Setup, History) | **Manage Secrets**: write → reload → per-row Reveal returns the stored value (X1); Copy copies the real value; Reveal-all fans out one call per row; Save with an untouched row preserves it (`keep`) instead of blanking it; Save stays disabled until the stored set loads. Guard-rails tab writes reach `/projects/:id/guardrails`; the header pill and rail follow the rules. Setup: each repo's dialog round-trips both bodies. Jira **Sync now** touches only this project. A 500 on the project shows an error + Retry, not "Project not found". Tab state survives `?tab=` deep links. |
+| `/projects/:id/guard-rails` | Redirects to `?tab=guardrails`. Add / edit / toggle / delete persist; toggle is not local-only; delete asks first. |
 
 ### Wave B — items
 
@@ -161,8 +161,8 @@ which share the same machine): **150** (from, to) pairs — all 30 for each of t
 in use — probed against the live API agree with
 the machine once those two rules are accounted for; `done → ready` is refused
 (`400`), a leaf `in_review → done` is allowed (`200`), and the override path
-permits `draft → done` (`200`). In the UI, `StatusTransitionBar`,
-`StatusPickerPopover` and `WorkItemKanban` all derive from
+permits `draft → done` (`200`). In the UI,
+`StatusPickerPopover` and `WorkItemKanban` both derive from
 `getValidNextStatuses()` — no hardcoded status lists in any component. The
 picker was checked live on a story at a mid-state (`in_review` → MOVE TO holds
 exactly done / in_progress / waiting_for_info) and at the terminal state (`done`

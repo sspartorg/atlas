@@ -1366,6 +1366,8 @@ export interface SSEEvent {
     repoId?: string;
     mode?: 'unregister' | 'purge';
     stashPath?: string | null;
+    /** Set on `reclone_completed`: commits the fast-forward brought in (null when HEAD was unreadable). */
+    commitsPulled?: number | null;
     result?: ScheduleRunStatus;
     detail?: string | null;
     project?: IProject;

@@ -1,5 +1,6 @@
 import { memo, useCallback, type ReactNode } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
 import type { IssueStatus, IssueType, SubTaskStatus } from '@atlas/shared';
@@ -125,9 +126,11 @@ const WorkItemRow = memo(function WorkItemRow({
 }: WorkItemRowProps) {
     const isLive = row.status === 'in_progress';
     const isChild = row.isChild === true;
+    // ButtonBase: the row opens from the keyboard (Tab, Enter/Space) too.
     return (
-        <Box
-            role="button"
+        <ButtonBase
+            component="div"
+            disableRipple
             onClick={() => onClick(row)}
             style={
                 offsetY === undefined
@@ -151,7 +154,9 @@ const WorkItemRow = memo(function WorkItemRow({
                 cursor: 'pointer',
                 background: isChild ? 'rgba(46,46,46,.015)' : ATLAS_PALETTE.white,
                 transition: 'background 120ms ease',
-                '&:hover': { background: ATLAS_PALETTE.cloud },
+                width: '100%',
+                textAlign: 'left',
+                '&:hover, &.Mui-focusVisible': { background: ATLAS_PALETTE.cloud },
             }}
         >
             {showLiveDot ? (
@@ -255,7 +260,7 @@ const WorkItemRow = memo(function WorkItemRow({
                     {rowAction(row)}
                 </Box>
             ) : null}
-        </Box>
+        </ButtonBase>
     );
 });
 

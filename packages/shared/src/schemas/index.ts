@@ -569,12 +569,22 @@ const GithubRepoUrlSchema = z
         message: 'Only https://github.com URLs are supported',
     });
 
+// The client picks the job id and subscribes to SSE before it POSTs: the
+// runner starts broadcasting before the 202 reaches the client, and the SSE
+// hub has no replay, so a server-made id would miss the first (or every) event.
+const JobIdSchema = z.string().regex(/^[A-Za-z0-9-]{8,64}$/);
+
 export const DeleteProjectSchema = z.object({
     mode: z.enum(['unregister', 'purge']),
     confirm_name: z.string().optional(),
+    delete_id: JobIdSchema.optional(),
 });
 
-export const RecloneProjectSchema = z.object({}).strict().optional().default({});
+export const RecloneProjectSchema = z
+    .object({ reclone_id: JobIdSchema.optional() })
+    .strict()
+    .optional()
+    .default({});
 
 // ADR 0018 — the AI-readiness scaffold reads a checkout, so it names a repo.
 // Omitted means the project's first repo.

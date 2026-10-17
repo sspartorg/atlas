@@ -9,6 +9,7 @@ import {
     AssignSchema,
     assertChildrenDone,
     ChildrenNotDoneError,
+    isValidTransition,
 } from '@atlas/shared';
 import type { IssueStatus } from '@atlas/shared';
 import { db } from '../db/kysely-client.js';
@@ -67,9 +68,14 @@ export async function tasksRoutes(app: FastifyInstance) {
         // Accept both legacy `?override=1` (used by existing UI) and the
         // P16-spec `?override=true` so the MCP path can use either form.
         const override = q.override === '1' || q.override === 'true';
-        if (!(await tasksService.get(id))) return reply.status(404).send({ error: 'Task not found' });
+        const task = await tasksService.get(id);
+        if (!task) return reply.status(404).send({ error: 'Task not found' });
         // Closing a verified Task closes the sub-tasks it was reviewed with.
+        // The Task's own move is checked first so a refused one leaves them open.
         if (status === 'done' && close_sub_tasks) {
+            if (!override && !isValidTransition('task', task.status, 'done')) {
+                return reply.status(400).send({ error: `Invalid transition: ${task.status} → done` });
+            }
             await tasksService.closeReviewedSubtasks(id, 'closed_with_task', requested_by_agent_id ?? null);
         }
         // P16 — block parent → done when any child item isn't done.

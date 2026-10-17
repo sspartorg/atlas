@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box';
 import Alert from '@mui/material/Alert';
-import { useNavigate } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import FolderOpenRounded from '@mui/icons-material/FolderOpenRounded';
 import AddRounded from '@mui/icons-material/AddRounded';
 import InfoOutlined from '@mui/icons-material/InfoOutlined';
@@ -14,7 +14,6 @@ interface IProjectsEmptyStateProps {
 }
 
 export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
-    const navigate = useNavigate();
     // F-007 — this hint rendered unconditionally, telling an Owner who already
     // has a credential to go and add one, and naming a PAT even when the saved
     // credential is a GitHub App.
@@ -31,9 +30,8 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
             title="No projects yet."
             description={
                 <>
-                    Point Atlas at a git URL and we&apos;ll clone it into your workspace folder in
-                    the background — no shell, no commands, no leaked tokens. Your stored credential
-                    is decrypted in-memory just for the clone.
+                    A project holds your Tasks and the repos they work on. Create one, then add its
+                    repos — Atlas clones each into your workspace folder in the background.
                 </>
             }
             primaryAction={
@@ -42,8 +40,8 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
                     title="Add your first project"
                     description={
                         <>
-                            Paste a GitHub, GitLab, or Bitbucket URL. Pick a saved credential.
-                            We&apos;ll do the rest.
+                            Give it a name and a 3-letter issue key. You&apos;ll add its repos
+                            next.
                         </>
                     }
                     cta={{
@@ -65,22 +63,21 @@ export function ProjectsEmptyState({ onNewProject }: IProjectsEmptyStateProps) {
                         }}
                     >
                         <Box component="span" sx={{ fontWeight: 600 }}>
-                            No credentials yet?
+                            Cloning a private repo?
                         </Box>{' '}
-                        Add a Personal Access Token in{' '}
+                        Add a credential in{' '}
                         <Box
-                            component="a"
-                            onClick={() => navigate('/settings/credentials')}
+                            component={RouterLink}
+                            to="/settings/credentials"
                             sx={{
                                 color: ATLAS_PALETTE.brandBlue,
-                                cursor: 'pointer',
                                 fontWeight: 500,
                             }}
                         >
                             Settings → Credentials
                         </Box>{' '}
-                        first. Atlas encrypts them with AES-256-GCM and never writes them to disk in
-                        plaintext.
+                        before you add the repo. Atlas encrypts it with AES-256-GCM and never writes
+                        it to disk in plaintext.
                     </Alert>
                 ) : undefined
             }

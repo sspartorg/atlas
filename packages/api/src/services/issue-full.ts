@@ -14,9 +14,12 @@ import type {
     IssueStatus,
 } from '@atlas/shared';
 
+// The detail pages (and MCP get_item) use this dictionary for names, avatars
+// and the assignee picker. Prompts stay out: they were ~115 KB of a ~121 KB
+// Task response. Agent screens read the prompt from GET /api/agents/:id.
 async function getAgentsAll(): Promise<IAgent[]> {
     const rows = await db.selectFrom('agents').selectAll().execute();
-    return rows as unknown as IAgent[];
+    return rows.map((r) => ({ ...r, prompt_md: '' })) as unknown as IAgent[];
 }
 
 async function getTaskById(id: string): Promise<ITask | null> {

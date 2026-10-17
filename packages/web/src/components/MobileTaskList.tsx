@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import type { ITaskListItem, IProject } from '@atlas/shared';
 import { StatusChip } from './StatusChip.js';
@@ -63,11 +64,14 @@ export function MobileTaskList({ rows, projects, agents, ownerName, ownerAccent 
                         : null;
                     const isLive = row.status === 'in_progress';
                     return (
-                        <Box
+                        <ButtonBase
                             key={row.id}
-                            role="button"
+                            component="div"
                             onClick={() => navigate(`/tasks/${row.id}`)}
                             sx={{
+                                width: '100%',
+                                textAlign: 'left',
+                                justifyContent: 'flex-start',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 3,
@@ -75,7 +79,7 @@ export function MobileTaskList({ rows, projects, agents, ownerName, ownerAccent 
                                 py: 3,
                                 minHeight: TOUCH.rowMin,
                                 borderBottom:
-                                    i === rows.length - 1
+                                    i === paged.visible.length - 1
                                         ? 'none'
                                         : `1px solid ${ATLAS_PALETTE.slate06}`,
                                 cursor: 'pointer',
@@ -217,7 +221,7 @@ export function MobileTaskList({ rows, projects, agents, ownerName, ownerAccent 
                                     </Box>
                                 )}
                             </Box>
-                        </Box>
+                        </ButtonBase>
                     );
                 })}
             </Box>

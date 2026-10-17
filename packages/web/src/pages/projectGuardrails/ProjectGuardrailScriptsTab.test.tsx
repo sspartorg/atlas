@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import { server } from '../../test-setup.js';
 import { renderWithProviders } from '../../test-utils/renderWithProviders.js';
@@ -24,6 +24,14 @@ function makeScript(over: Record<string, unknown> = {}) {
 }
 
 describe('ProjectGuardrailScriptsTab', () => {
+    it('shows a plain "Loading…" (no mojibake) while scripts load', () => {
+        server.use(
+            http.get(`${BASE}/projects/p1/guardrail-scripts`, () => new Promise<never>(() => {}))
+        );
+        renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
+        expect(screen.getByText('Loading…')).toBeInTheDocument();
+    });
+
     it('renders the empty state when no project-scoped scripts exist', async () => {
         server.use(http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json([])));
         renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
@@ -173,12 +181,12 @@ describe('ProjectGuardrailScriptsTab', () => {
         // Open edit modal
         fireEvent.click(screen.getByText('Delete Me'));
         await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
-        // Find delete button
-        const delBtn = screen.queryByRole('button', { name: /delete|remove/i });
-        if (delBtn) {
-            fireEvent.click(delBtn);
-            await waitFor(() => expect(deleted).toBe(true), { timeout: 3000 });
-        }
+        fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+        // Nothing is deleted until the confirm is accepted.
+        expect(deleted).toBe(false);
+        const confirm = await screen.findByRole('dialog', { name: 'Delete this script?' });
+        fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+        await waitFor(() => expect(deleted).toBe(true), { timeout: 3000 });
     });
 
     it('Add script suggests overridable workspace script slugs (minus ones this project already overrides) with an override note', async () => {
@@ -254,5 +262,17 @@ describe('ProjectGuardrailScriptsTab', () => {
         // When description is empty, no description Typography is rendered
         // (the component returns null for the description block)
         expect(screen.queryByText('Lint check just for p1')).not.toBeInTheDocument();
+    });
+});
+
+describe('load failure', () => {
+    it('says it could not load, with Retry, instead of spinning or showing the empty state', async () => {
+        server.use(http.get(`${BASE}/projects/p1/guardrail-scripts`, () => HttpResponse.json({ error: 'boom' }, { status: 500 })));
+        renderWithProviders(<ProjectGuardrailScriptsTab projectId="p1" />);
+        expect(await screen.findByText(/Could not load scripts/)).toBeInTheDocument();
+        let calls = 0;
+        server.use(http.get(/.*/, () => { calls += 1; return HttpResponse.json({ error: 'boom' }, { status: 500 }); }));
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        await waitFor(() => expect(calls).toBeGreaterThan(0));
     });
 });

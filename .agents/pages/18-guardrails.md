@@ -13,30 +13,29 @@ The page uses a MUI `Tabs` component with **local `useState`** (no URL `?tab=` d
 Default tab is `rules`. Switching tabs is purely local state; there is no URL change.
 
 ## States
-- **Loading**: spinner (lines 104-110)
-- **Populated**: tabs header + tab content + modal (lines 115-276)
+- **Loading**: spinner (also shown forever if `GET /api/guardrails` fails — no error branch yet)
+- **Populated**: tabs header + tab content + modal
 
 ## UI elements
 **Header**
 - Title + description (explains block / ask_owner / warn severities)
 - Stats line: `{N} categories · {M} rules · {P} dirty`
 
-**Tabs bar** — MUI scrollable `Tabs` with `Rules N` and `Scripts N` tabs (lines 159-172).
+**Tabs bar** — MUI scrollable `Tabs` with `Rules N` and `Scripts N` tabs.
 
 **Categories** (Rules tab only) — one card per `GUARDRAIL_CATEGORIES` value (file_system, secrets_credentials, git_branches, side_effects_network, escalation_scope).
 
 `GuardrailCategoryCard`:
-- Per-rule rows showing rule body + severity chip + enabled state
+- Per-rule rows (`GuardrailRuleRow`, a native `<button>` via `ButtonBase`) showing rule text + optional detail + severity chip. Workspace rules have no enabled flag
 - **Add rule** button per category → `openAdd(category)` → opens `GuardrailModal`
-- **Edit rule** per row → `openEdit(rule)` → opens `GuardrailModal` in edit mode
-- **Delete rule** per row → confirmation → `handleDelete()` (lines 87-92)
+- Clicking (or Enter/Space on) a row → `openEdit(rule)` → `GuardrailModal` in edit mode. Delete lives only inside that modal (trash icon → "Delete this rule?" confirm, which names the category by its label, e.g. "Side Effects & Network")
 
 **Right rail (`GuardrailRightRail`)** — help / info copy.
 
-**Sticky action bar** (lines 188-236)
-- Status text: "{N} rule(s) changed this session · Saved {T} by Owner"
-- **Discard** (line 213) → clears the dirty counter only (does not roll back edits) → toast "Dirty marker cleared"
-- **Save Guard-rails** (line 221) → `handleSaveAll()` (lines 94-98) → `POST /api/guardrails/save` → toast "Guard-rails saved"
+**Sticky action bar**
+- Status text: "{N} rule(s) changed this session · Saved {T} by Owner" ("by Owner" is hard-coded)
+- **Discard** → clears the dirty counter only (does not roll back edits) → toast "Dirty marker cleared"
+- **Save Guard-rails** → `handleSaveAll()` → `POST /api/guardrails/save` → toast "Guard-rails saved"; a failure toasts "Could not save guard-rails" with the error. Each add/edit/delete already persisted; Save only stamps `published_at`
 
 ## Why these affordances exist
 - **Category grouping** — Rules cluster by risk surface; matches the Owner's mental model so "what does this agent do with secrets" is answered by one card.
@@ -46,13 +45,15 @@ Default tab is `rules`. Switching tabs is purely local state; there is no URL ch
 - **Backtick-wrapping hint** — Agents parse rule bodies; emphasizing the convention prevents rules that look human-readable but get ignored by the prompt-builder.
 
 ## Modals / drawers
-**`GuardrailModal`** (lines 238-244)
-- Category radio buttons (one per category)
-- Rule text field (required) — explains backtick-wrapping for code refs (lines 177-193)
+**`GuardrailModal`** (dialog named by its heading "Add rule" / "Edit rule"; close button `aria-label` "Close")
+- Category picker: one `ButtonBase` button per category with `aria-pressed`
+- Rule text field (required) — explains backtick-wrapping for code refs
 - Optional Detail field
-- Severity radio buttons: BLOCK / ASK_OWNER / WARN
-- Validation error alert
-- **Cancel** / **Add Rule** (or **Save Changes**) — calls `POST /api/guardrails` or `PATCH /api/guardrails/:id`
+- Severity picker: three `ButtonBase` cards with `aria-pressed`; chips read BLOCK / ASK OWNER / WARN
+- Validation / server error alert. A failed delete keeps the modal open with the error (it used to close silently)
+- **Cancel** / **Add rule** (+ icon) or **Save changes** (no icon) — calls `POST /api/guardrails` or `PATCH /api/guardrails/:id`
+
+**Scripts tab (`GuardrailScriptsTab`)** — script cards are native buttons → `ScriptModal`; "Loading…" while loading; `ScriptModal` **Delete** asks "Delete this script?" before deleting.
 
 ## Hooks used
 - `useGuardrails` (`GET /guardrails`)
@@ -73,7 +74,8 @@ Default tab is `rules`. Switching tabs is purely local state; there is no URL ch
 ## Edge cases / quirks
 - **Discard** only clears the *session dirty counter*; it does NOT roll back actual mutations. This is a known quirk (see coming-soon list) — be careful if a user expects Discard to undo.
 - The dirty counter increments on add / edit / delete and **is cleared on Save** — `Guardrails.tsx:92` calls `setDirtyCount(0)` inside `handleSaveAll`. (This doc previously claimed the opposite; corrected 2026-09-20.) **Discard** is the genuine quirk: it clears the counter without rolling back mutations.
-- `relativeTime()` for the "saved at" label is a local helper (lines 23-35), not the shared one.
+- `relativeTime()` for the "saved at" label is the shared one from `utils/time.ts` ("14m ago").
+- `DELETE /api/guardrails/:id` returns 204 even for an unknown id.
 
 ## Connectivity
 - **Pages**: [Project Guard-rails](04-project-guardrails.md) — per-project variant layered on top of these; [Settings](19-settings.md) — adjacent admin surface.

@@ -30,6 +30,9 @@ describe('ReorderSubTasksDialog', () => {
                 onClose={onClose}
             />
         );
+        expect(screen.getByRole('heading', { name: 'Reorder sub-tasks' })).toBeInTheDocument();
+        expect(screen.getByText(/skipping any that are in review or done/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Save order' })).toBeDisabled();
         expect(screen.getByRole('button', { name: 'Move ATL-2 up' })).toBeDisabled();
         await user.click(screen.getByRole('button', { name: 'Move ATL-3 up' }));
         await user.click(screen.getByRole('button', { name: 'Save order' }));

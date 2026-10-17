@@ -31,10 +31,11 @@ export function useTestJira() {
     return useMutation({ mutationFn: () => api.jira.test() });
 }
 
-export function useSyncJira() {
+/** With a `projectId`, syncs only that project's sources and Tasks. */
+export function useSyncJira(projectId?: string) {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: () => api.jira.sync(),
+        mutationFn: () => (projectId ? api.jira.syncProject(projectId) : api.jira.sync()),
         // A sync creates Tasks and notifications and stamps last_sync_*.
         onSettled: () => qc.invalidateQueries(),
     });

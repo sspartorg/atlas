@@ -1,5 +1,6 @@
 import { useState, memo } from 'react';
 import Box from '@mui/material/Box';
+import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
@@ -14,11 +15,12 @@ import {
 } from '../../hooks/useGuardrails.js';
 import { useToast } from '../../hooks/useToast.js';
 import { ATLAS_PALETTE } from '../../theme/tokens.js';
+import { RetryAlert } from '../../components/ApiErrorAlert.js';
 import { ScriptModal, type ScriptModalValues } from '../../components/ScriptModal.js';
 
-// Phase 1.5b â€” Atlas-level Scripts tab. Scripts are independent of
+// Phase 1.5b — Atlas-level Scripts tab. Scripts are independent of
 // Articles: this tab shows a flat list of script cards (name +
-// description only â€” no body preview to keep render cheap), an
+// description only — no body preview to keep render cheap), an
 // "Add script" button, and a shared modal for create/edit. Click any
 // card to open the modal in edit mode.
 
@@ -30,12 +32,14 @@ const ScriptCard = memo(function ScriptCard({
     onClick: () => void;
 }) {
     return (
-        <Box
-            role="button"
+        <ButtonBase
             onClick={onClick}
             sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
+                justifyContent: 'flex-start',
+                width: '100%',
+                textAlign: 'left',
                 gap: 2,
                 p: 2.5,
                 border: `1px solid ${ATLAS_PALETTE.slate10}`,
@@ -94,12 +98,12 @@ const ScriptCard = memo(function ScriptCard({
                     </Typography>
                 ) : null}
             </Box>
-        </Box>
+        </ButtonBase>
     );
 });
 
 export function GuardrailScriptsTab() {
-    const { data: scripts = [], isLoading } = useGuardrailScripts();
+    const { data: scripts = [], isLoading, isError, error, refetch } = useGuardrailScripts();
     const create = useCreateGuardrailScript();
     const update = useUpdateGuardrailScript();
     const del = useDeleteGuardrailScript();
@@ -129,7 +133,7 @@ export function GuardrailScriptsTab() {
         body_ps1: string;
     }) {
         if (editing?.id) {
-            // Slug is immutable on update â€” strip `id` from the patch body.
+            // Slug is immutable on update — strip `id` from the patch body.
             const { id: _unused, ...patch } = data;
             void _unused;
             await update.mutateAsync({ id: editing.id, patch });
@@ -171,9 +175,11 @@ export function GuardrailScriptsTab() {
                     Add script
                 </Button>
             </Stack>
-            {isLoading ? (
+            {isError ? (
+                <RetryAlert error={error} label="Could not load scripts" onRetry={() => void refetch()} />
+            ) : isLoading ? (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Loadingâ€¦
+                    Loading…
                 </Typography>
             ) : scripts.length === 0 ? (
                 <Box
