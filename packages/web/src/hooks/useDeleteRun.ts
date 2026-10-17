@@ -9,8 +9,8 @@ import { api } from '../api/api.js';
 // refreshes immediately:
 //
 //   ['agents', agentId, 'runs']          — Agent Detail Runs tab
-//   ['projects', ?, 'agent-runs']        — Project History tab
-//   ['runs']                             — any future global run view
+//   ['runs']                             — every run list: project History /
+//                                          Recent activity, item runs, active runs
 //   ['agents']                           — sidenav counts / activity
 //   ['tasks' / 'sub-tasks']              — broad invalidate, the
 //      affected item is unknown to the caller (DELETE returns 204)
@@ -27,12 +27,8 @@ export function useDeleteRun(agentId: string) {
             void qc.invalidateQueries({ queryKey: ['projects'] });
             void qc.invalidateQueries({ queryKey: ['tasks'] });
             void qc.invalidateQueries({ queryKey: ['sub-tasks'] });
-            // Follow-up audit: the run-detail query (['agent-run', runId])
-            // and any item-scoped agent-runs list (['items', itemId,
-            // 'agent-runs']) previously kept the deleted row in the cache
-            // until manual navigation. `removeQueries` on the specific
-            // run-detail key evicts it immediately; the item-level
-            // list is broad-invalidated via the parent prefixes below.
+            // The run-detail query (['agent-run', runId]) kept the deleted
+            // row until manual navigation; `removeQueries` evicts it.
             qc.removeQueries({ queryKey: ['agent-run', runId] });
             void qc.invalidateQueries({ queryKey: ['items'] });
         },

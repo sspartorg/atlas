@@ -35,13 +35,7 @@ const CREDENTIAL = {
     updated_at: '2026-01-01T00:00:00.000Z',
 };
 
-const ROW_ACTIONS = [
-    'Edit',
-    'Auto-fetch schedule…',
-    'Pull from remote…',
-    'Open folder',
-    'Remove',
-];
+const ROW_ACTIONS = ['Edit', 'Auto-fetch schedule…', 'Pull from remote…', 'Open folder', 'Remove'];
 
 /** Serves the list from a mutable array so a POST / DELETE shows on refetch. */
 function mockRepos(initial: IProjectRepo[]) {
@@ -92,6 +86,24 @@ async function fillConnectForm() {
 }
 
 describe('ProjectReposCard', () => {
+    it('a failed repo load says so with Retry, and Retry recovers', async () => {
+        let fail = true;
+        mockRepos([]);
+        server.use(
+            http.get(`${BASE}/projects/p1/repos`, () =>
+                fail
+                    ? HttpResponse.json({ error: 'db down' }, { status: 500 })
+                    : HttpResponse.json([])
+            )
+        );
+        renderCard();
+        expect(await screen.findByText(/Could not load the repos/)).toBeInTheDocument();
+        expect(screen.queryByText('No repos yet')).not.toBeInTheDocument();
+        fail = false;
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByText('No repos yet')).toBeInTheDocument();
+    });
+
     it('lists the repos; no repo is primary and every row offers the same actions', async () => {
         mockRepos([API, WEB]);
         renderCard();
@@ -210,8 +222,9 @@ describe('ProjectReposCard', () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
                 body = await request.json();
+                const { clone_id } = body as { clone_id: string };
                 return HttpResponse.json(
-                    { clone_id: 'c9', destination: '/ws/acme-web' },
+                    { clone_id, destination: '/ws/acme-web' },
                     { status: 202 }
                 );
             })
@@ -234,12 +247,14 @@ describe('ProjectReposCard', () => {
             repo_url: 'https://github.com/acme/web.git',
             credential_id: 'cred-1',
             default_branch: 'main',
+            clone_id: expect.stringMatching(/^[0-9a-f]{32}$/),
         });
+        const cloneId = (body as { clone_id: string }).clone_id;
 
         rows.push(WEB);
         const pushSse = (window as Window & { __pushSse?: (e: object) => void }).__pushSse;
         act(() =>
-            pushSse?.({ type: 'clone_completed', cloneId: 'c9', status: 'ready', repo: WEB })
+            pushSse?.({ type: 'clone_completed', cloneId, status: 'ready', repo: WEB })
         );
 
         await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());

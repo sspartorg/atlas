@@ -22,6 +22,13 @@ describe('GenerateAiScaffoldDialog', () => {
         expect(screen.getByText('atlas')).toBeInTheDocument();
     });
 
+    it('names the branch the run really pushes (atlas/wf/…), not atlas/ai-readiness', async () => {
+        server.use(reposAre(makeProjectRepo({ id: 'r1', name: 'atlas', git_path: '/tmp/x' })));
+        renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={() => {}} />);
+        expect(await screen.findByText('atlas/wf/…')).toBeInTheDocument();
+        expect(screen.queryByText('atlas/ai-readiness')).not.toBeInTheDocument();
+    });
+
     it('fires onClose when Cancel is clicked', () => {
         const onClose = vi.fn();
         renderWithProviders(<GenerateAiScaffoldDialog project={project} open onClose={onClose} />);

@@ -224,6 +224,29 @@ describe('POST /api/projects', () => {
         expect(res.statusCode).toBe(400);
     });
 
+    it('returns 400 for a whitespace-only name and stores a padded one trimmed', async () => {
+        const blank = await app.inject({
+            method: 'POST',
+            url: '/api/projects',
+            payload: { name: '   ', issue_key_prefix: 'MYP' },
+        });
+        expect(blank.statusCode).toBe(400);
+        const padded = await app.inject({
+            method: 'POST',
+            url: '/api/projects',
+            payload: { name: '  My Project  ', issue_key_prefix: 'MYP' },
+        });
+        expect(padded.statusCode).toBe(201);
+        const { id, name } = JSON.parse(padded.body);
+        expect(name).toBe('My Project');
+        const rename = await app.inject({
+            method: 'PATCH',
+            url: `/api/projects/${id}`,
+            payload: { name: ' ' },
+        });
+        expect(rename.statusCode).toBe(400);
+    });
+
     it('returns 400 for invalid prefix (too long)', async () => {
         const res = await app.inject({
             method: 'POST',
@@ -1297,6 +1320,30 @@ describe('project repos (ADR 0018)', () => {
         expect(call[0].destination).toMatch(/dhe-quest-api$/);
         const done = await call[1]({ git_url: 'https://github.com/org/api', git_path: call[0].destination });
         expect(done.repo?.name).toBe('api');
+    });
+
+    it('passes the client-chosen clone_id to the runner, and refuses a malformed one', async () => {
+        await insertProject('p1', 'ATL', { name: 'Dhe Quest', git_path: '/ws/dhe' });
+        await insertTestCredential();
+        await testDb.updateTable('settings').set({ workspace_path: '/ws' }).where('id', '=', 1).execute();
+        const { startClone } = await import('../services/clone-runner.js');
+        const payload = { mode: 'clone', name: 'api', repo_url: 'https://github.com/org/api', credential_id: 'cred-1' };
+        const ok = await app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/repos',
+            payload: { ...payload, clone_id: 'client-clone-1234' },
+        });
+        expect(ok.statusCode).toBe(202);
+        expect(startClone).toHaveBeenLastCalledWith(
+            expect.objectContaining({ clone_id: 'client-clone-1234' }),
+            expect.any(Function),
+        );
+        const bad = await app.inject({
+            method: 'POST',
+            url: '/api/projects/p1/repos',
+            payload: { ...payload, name: 'api2', clone_id: 'no spaces/allowed' },
+        });
+        expect(bad.statusCode).toBe(400);
     });
 
     it('edits and removes any repo, and drops a removed repo from Tasks', async () => {

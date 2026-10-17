@@ -1,8 +1,9 @@
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { promisify } from 'util';
 import { writeFileSync, mkdirSync, existsSync, createWriteStream, rmSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fakeGithubGitEnv } from './helpers/fake-github.js';
 
 const execFileP = promisify(execFile);
 // Playwright loads globalSetup as ESM in 1.40+; __dirname isn't
@@ -192,6 +193,12 @@ function startApi(): ChildProcess {
                 ...(existsSync(join(PUSH_TLS_DIR, 'cert.pem')) ? { NODE_EXTRA_CA_CERTS: join(PUSH_TLS_DIR, 'cert.pem') } : {}),
                 // team-config.spec.ts publishes to a local bare repo over file://.
                 ATLAS_TEAM_CONFIG_ALLOW_FILE_URLS: '1',
+                // Add repo specs clone / connect github.com/atlas-e2e/* from
+                // local bare repos (helpers/fake-github.ts).
+                ...fakeGithubGitEnv(),
+                // ...and their workflows' "open a PR" step reaches a fake `gh`
+                // (fixtures/fake-gh) instead of api.github.com.
+                PATH: `${join(REPO_ROOT, 'e2e', 'fixtures', 'fake-gh')}${delimiter}${process.env['PATH'] ?? ''}`,
             },
             shell: process.platform === 'win32',
             // POSIX: lead a process group so teardown can stop pnpm AND the

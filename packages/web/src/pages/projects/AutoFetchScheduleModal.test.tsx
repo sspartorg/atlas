@@ -76,6 +76,17 @@ describe('AutoFetchScheduleModal — open clean render', () => {
         expect(screen.getByText('Auto-fetch schedule')).toBeInTheDocument();
     });
 
+    it('names its Close button, switches and text fields', async () => {
+        renderWithProviders(
+            <AutoFetchScheduleModal open project={project} repo={repo} onClose={vi.fn()} />
+        );
+        expect(await screen.findByRole('switch', { name: 'Enable scheduled auto-fetch' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+        expect(screen.getByRole('textbox', { name: 'Time of day' })).toBeInTheDocument();
+        expect(screen.getByRole('textbox', { name: 'Branch' })).toBeInTheDocument();
+        expect(screen.getAllByRole('switch').every((s) => s.getAttribute('aria-label'))).toBe(true);
+    });
+
     it('pulls the REPO’s branch, not the project’s', async () => {
         server.use(
             http.get(`${BASE}/projects/p1/repos/r2/schedule`, () =>

@@ -30,6 +30,8 @@ export interface StartCloneInput {
     issue_key_prefix: string;
     default_branch: string;
     destination: string;
+    /** Client-chosen job id (it subscribes before the POST); else a fresh UUID. */
+    clone_id?: string | undefined;
 }
 
 /**
@@ -43,7 +45,7 @@ export async function startClone(input: StartCloneInput, onCloned?: OnCloned): P
     const cred = await credentialsService.get(input.credential_id);
     if (!cred) throw new Error(`Credential ${input.credential_id} not found`);
 
-    const cloneId = randomUUID();
+    const cloneId = input.clone_id ?? randomUUID();
     const token = await credentialsService.getToken(input.credential_id);
     const authedUrl = injectToken(input.repo_url, cred.username, token);
 

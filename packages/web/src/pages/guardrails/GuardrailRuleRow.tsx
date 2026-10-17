@@ -37,7 +37,9 @@ export const GuardrailRuleRow = memo(function GuardrailRuleRow({ rule, onEdit }:
             {/* Row 1: title (1 line, ellipsis) + severity chip pinned right */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
                 <Typography
+                    component="span"
                     sx={{
+                        display: 'block',
                         flex: 1,
                         minWidth: 0,
                         fontSize: 13,
@@ -58,7 +60,9 @@ export const GuardrailRuleRow = memo(function GuardrailRuleRow({ rule, onEdit }:
             {/* Row 2: detail — unlimited lines, wraps naturally */}
             {rule.detail && (
                 <Typography
+                    component="span"
                     sx={{
+                        display: 'block',
                         fontSize: 12,
                         color: ATLAS_PALETTE.slate60,
                         lineHeight: 1.55,

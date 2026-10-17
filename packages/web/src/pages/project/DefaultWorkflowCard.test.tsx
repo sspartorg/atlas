@@ -19,6 +19,28 @@ function useWorkflowList() {
 }
 
 describe('DefaultWorkflowCard', () => {
+    it('a failed workflow load says so with Retry instead of showing None', async () => {
+        let fail = true;
+        server.use(
+            http.get(`${BASE}/workflows`, () =>
+                fail
+                    ? HttpResponse.json({ error: 'boom' }, { status: 500 })
+                    : HttpResponse.json([QUICK])
+            )
+        );
+        renderWithProviders(
+            <DefaultWorkflowCard project={makeProject({ default_workflow_id: 'wf-quick' })} />
+        );
+        expect(await screen.findByText(/Could not load workflows/)).toBeInTheDocument();
+        expect(
+            screen.queryByRole('combobox', { name: 'Default workflow' })
+        ).not.toBeInTheDocument();
+        fail = false;
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        const select = await screen.findByRole('combobox', { name: 'Default workflow' });
+        await waitFor(() => expect(select).toHaveTextContent('Quick change'));
+    });
+
     it('shows the current default and offers only workflows that take this project’s Tasks', async () => {
         useWorkflowList();
         renderWithProviders(
@@ -44,7 +66,9 @@ describe('DefaultWorkflowCard', () => {
             http.patch(`${BASE}/projects/p1`, async ({ request }) => {
                 const body = (await request.json()) as { default_workflow_id: string | null };
                 bodies.push(body);
-                return HttpResponse.json(makeProject({ default_workflow_id: body.default_workflow_id }));
+                return HttpResponse.json(
+                    makeProject({ default_workflow_id: body.default_workflow_id })
+                );
             })
         );
         // The prop stays put (no parent refetch here), so the select keeps
@@ -75,6 +99,7 @@ describe('DefaultWorkflowCard', () => {
         );
         renderWithProviders(<DefaultWorkflowCard project={makeProject()} />);
         const select = await screen.findByRole('combobox', { name: 'Default workflow' });
+        await waitFor(() => expect(select).not.toHaveAttribute('aria-disabled'));
         fireEvent.mouseDown(select);
         fireEvent.click(await screen.findByRole('option', { name: 'Quick change' }));
         expect(await screen.findByText(/does not take Tasks/)).toBeInTheDocument();

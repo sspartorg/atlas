@@ -184,7 +184,7 @@ export const IssueKeyPrefixSchema = z
 // server just isn't saving my change" with no error surface.
 export const CreateProjectSchema = z
     .object({
-        name: z.string().min(1).max(200),
+        name: z.string().trim().min(1).max(200),
         issue_key_prefix: IssueKeyPrefixSchema,
         description: z.string().default(''),
         status: z.string().default('active'),
@@ -223,7 +223,7 @@ export const JiraStatusMapSchema = z
 
 export const UpdateProjectSchema = z
     .object({
-        name: z.string().min(1).max(200).optional(),
+        name: z.string().trim().min(1).max(200).optional(),
         description: z.string().optional(),
         status: z.string().min(1).optional(),
         guardrails_md: z.string().optional(),
@@ -609,6 +609,8 @@ export const CreateProjectRepoSchema = z.discriminatedUnion('mode', [
             repo_url: GithubRepoUrlSchema,
             credential_id: z.string().min(1),
             default_branch: z.string().min(1).default('main'),
+            // Client-chosen so it can subscribe before the POST; see newJobId.
+            clone_id: JobIdSchema.optional(),
         })
         .strict(),
     z

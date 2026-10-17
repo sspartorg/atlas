@@ -24,6 +24,30 @@ describe('ProjectHeader', () => {
         expect(screen.getAllByText('Acme').length).toBeGreaterThan(0);
     });
 
+    it('keeps the project name as the page h1 at every width (sr-only on phones, never display:none)', () => {
+        renderWithProviders(
+            <ProjectHeader
+                project={makeProject({ id: 'p1', name: 'Acme' })}
+                repos={[]}
+                displayId="ACM"
+                guardrailsActive={false}
+                lastActivity="just now"
+                onRename={vi.fn()}
+                onEditGuardrails={vi.fn()}
+                onViewRepos={vi.fn()}
+                onManageSecrets={vi.fn()}
+                onDelete={vi.fn()}
+            />
+        );
+        const h1 = screen.getByRole('heading', { level: 1, name: 'Acme' });
+        // jsdom ignores media queries, so read the emitted CSS: no rule for the
+        // h1's classes may hide it (display:none takes it out of the a11y tree).
+        const classes = [...h1.classList].map((c) => `.${c}`);
+        const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules].map((r) => r.cssText));
+        const hiding = rules.filter((r) => classes.some((c) => r.includes(c)) && /display:\s*none/.test(r));
+        expect(hiding).toEqual([]);
+    });
+
     // ADR 0018 — a project holds 0..N equal repos. The header used to
     // special-case exactly one and print its URL + branch, which read as "the
     // project's repo"; with a repo-less project now the normal first state,

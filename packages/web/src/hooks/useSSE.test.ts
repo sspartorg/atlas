@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { server } from '../test-setup.js';
 import { makeWrapper } from '../test-utils/renderWithProviders.js';
 import { useSSE, useSSEStatus } from './useSSE.js';
-import { useAgentRun } from './useAgents.js';
+import { useAgentRun, useItemAgentRuns, useProjectAgentRuns } from './useAgents.js';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Helper: push a fake SSE event via the test harness
@@ -64,6 +64,38 @@ describe('useSSE', () => {
         );
 
         await waitFor(() => expect(result.current).toBe('in_progress'));
+    });
+
+    // Project History / Recent activity and an item's run list refetch on
+    // every run event, not only on Refresh.
+    it.each([
+        ['run_queued'],
+        ['agent_status'],
+        ['run_completed'],
+        ['run_error'],
+    ])('%s refetches the project and item run lists', async (type) => {
+        let projectCalls = 0;
+        let itemCalls = 0;
+        server.use(
+            http.get('http://localhost:3000/api/run', ({ request }) => {
+                const u = new URL(request.url);
+                if (u.searchParams.get('project_id')) projectCalls += 1;
+                if (u.searchParams.get('issue_id')) itemCalls += 1;
+                return HttpResponse.json([]);
+            }),
+        );
+        function useProbe() {
+            useSSE();
+            return [useProjectAgentRuns('p1').isSuccess, useItemAgentRuns('ATL-1').isSuccess];
+        }
+        const { result } = renderHook(() => useProbe(), { wrapper: makeWrapper() });
+        await waitFor(() => expect(result.current).toEqual([true, true]));
+        const [p0, i0] = [projectCalls, itemCalls];
+
+        act(() => pushSse({ type, agentId: 'A1', runId: 'R1', status: 'in_progress' }));
+
+        await waitFor(() => expect(projectCalls).toBe(p0 + 1));
+        await waitFor(() => expect(itemCalls).toBe(i0 + 1));
     });
 
     // ── run_completed ──────────────────────────────────────────────────────

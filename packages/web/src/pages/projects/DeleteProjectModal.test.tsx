@@ -80,6 +80,18 @@ describe('DeleteProjectModal — confirm view', () => {
         expect(screen.getByText('Delete project and content')).toBeInTheDocument();
     });
 
+    it('names its Close button and both mode radios, and a radio picks its mode', async () => {
+        renderWithProviders(
+            <DeleteProjectModal open project={project} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+        expect(screen.getByRole('radio', { name: 'Remove from Atlas only' })).toBeChecked();
+        const purge = screen.getByRole('radio', { name: 'Delete project and content' });
+        fireEvent.click(purge);
+        expect(purge).toBeChecked();
+        expect(screen.getByRole('radio', { name: 'Remove from Atlas only' })).not.toBeChecked();
+    });
+
     it('Cancel button calls onClose', async () => {
         const onClose = vi.fn();
         renderWithProviders(

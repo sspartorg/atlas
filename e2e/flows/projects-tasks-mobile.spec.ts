@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { goto } from '../helpers/nav.js';
+import { projectAction } from '../helpers/projects.js';
 
 // Every Projects and Tasks route at phone widths (390px — the mobile-chrome
 // project — and 360px) and on the iPad project (834px): the page never scrolls
@@ -115,6 +116,60 @@ test.describe('Projects and Tasks @mobile', () => {
         await expect(page).toHaveURL(/\/tasks\/new$/);
     });
 });
+
+// Every Projects dialog, opened on the seed project: it fits the screen and the page behind does not scroll sideways.
+const DIALOGS: Array<{ name: string; open: (p: Page) => Promise<void> }> = [
+    { name: 'Rename project', open: async (p) => { await goto(p, P); await projectAction(p, 'Rename project…'); } },
+    { name: 'Delete project', open: async (p) => { await goto(p, P); await projectAction(p, 'Delete project…'); } },
+    { name: 'Project Secrets', open: async (p) => { await goto(p, P); await projectAction(p, 'Manage Secrets'); } },
+    { name: 'Add guard-rail', open: async (p) => { await goto(p, `${P}?tab=guardrails`); await p.getByRole('button', { name: 'Add rule' }).first().click(); } },
+    { name: 'Add repo (connect)', open: async (p) => { await goto(p, `${P}?tab=repos`); await p.getByRole('button', { name: 'Add repo' }).click(); await p.getByRole('button', { name: 'Use existing folder' }).click(); } },
+    ...(['Edit', 'Auto-fetch schedule', 'Pull from remote'] as const).map((item) => ({
+        name: item,
+        open: async (p: Page) => {
+            await goto(p, `${P}?tab=repos`);
+            await p.getByRole('button', { name: 'Actions for project' }).click();
+            await p.getByRole('menuitem', { name: new RegExp(`^${item}`) }).click();
+        },
+    })),
+    { name: 'Setup scripts', open: async (p) => { await goto(p, `${P}?tab=setup`); await p.getByRole('button', { name: 'Edit setup scripts for project' }).click(); } },
+];
+
+async function dialogFits(page: Page, name: string) {
+    const dialog = page.getByRole('dialog').last();
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    const width = page.viewportSize()?.width ?? 0;
+    expect(box, name).toBeTruthy();
+    expect(box!.x, `${name} left edge`).toBeGreaterThanOrEqual(-1);
+    expect(box!.x + box!.width, `${name} right edge`).toBeLessThanOrEqual(width + 1);
+    expect(await sideways(page), `${name} at ${width}px`).toEqual({ scroll: 0, offenders: [] });
+    await page.keyboard.press('Escape');
+}
+
+for (const tag of ['@mobile', '@ipad'] as const) {
+    test.describe(`Projects dialogs ${tag}`, () => {
+        for (const d of DIALOGS) {
+            test(`${d.name} fits the screen ${tag}`, async ({ page }) => {
+                await d.open(page);
+                await dialogFits(page, d.name);
+            });
+        }
+
+        test(`a failed Tasks load and its Retry fit the screen ${tag}`, async ({ page }) => {
+            let fail = true;
+            await page.route('**/api/tasks**', (r) => (fail && r.request().method() === 'GET' ? r.fulfill({ status: 500, json: { error: 'tasks exploded' } }) : r.continue()));
+            await goto(page, '/tasks', { allow: [/500|Internal Server Error/] });
+            const retry = page.getByRole('button', { name: 'Retry' });
+            await expect(retry).toBeVisible({ timeout: 20_000 });
+            expect(await sideways(page)).toEqual({ scroll: 0, offenders: [] });
+            await retry.click({ trial: true });
+            fail = false;
+            await retry.click();
+            await expect(page.getByText('E2E linked task').first()).toBeVisible();
+        });
+    });
+}
 
 test.describe('Projects and Tasks @ipad', () => {
     for (const r of ROUTES) {

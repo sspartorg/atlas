@@ -43,6 +43,16 @@ const name = () => screen.getByLabelText(/^name/i);
 const cloneButton = () => screen.getByRole('button', { name: 'Clone repo' });
 
 describe('AddRepoDialog', () => {
+    it('names the credential picker and makes "manage in Settings" a real button', async () => {
+        const onClose = renderDialog();
+        await screen.findByText(/My PAT/);
+        expect(screen.getByRole('combobox', { name: 'Git credential' })).toBeInTheDocument();
+        const manage = screen.getByRole('button', { name: 'manage in Settings' });
+        expect(manage.tagName).toBe('BUTTON');
+        fireEvent.click(manage);
+        expect(onClose).toHaveBeenCalled();
+    });
+
     it('clone mode: the name follows the URL and the branch defaults to main', async () => {
         renderDialog();
         fireEvent.change(url(), { target: { value: 'https://github.com/acme/Orion_Web.git' } });
@@ -84,7 +94,8 @@ describe('AddRepoDialog', () => {
         server.use(
             http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
                 body = await request.json();
-                return HttpResponse.json({ clone_id: 'c1', destination: '/ws/web' }, { status: 202 });
+                const { clone_id } = body as { clone_id: string };
+                return HttpResponse.json({ clone_id, destination: '/ws/web' }, { status: 202 });
             })
         );
         const onClose = renderDialog();
@@ -94,22 +105,47 @@ describe('AddRepoDialog', () => {
         fireEvent.click(cloneButton());
 
         expect(await screen.findByText('Cloning…')).toBeInTheDocument();
+        const cloneId = (body as { clone_id: string }).clone_id;
+        expect(cloneId).toMatch(/^[0-9a-f]{32}$/);
         expect(body).toEqual({
             mode: 'clone',
             name: 'web',
             repo_url: 'https://github.com/acme/web.git',
             credential_id: 'cred-1',
             default_branch: 'develop',
+            clone_id: cloneId,
         });
         // Busy: no way out until the clone ends.
         expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
 
         pushSse({
             type: 'clone_completed',
-            cloneId: 'c1',
+            cloneId,
             status: 'ready',
             repo: makeProjectRepo({ name: 'web' }),
         });
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(screen.getByText('Repo added — web')).toBeInTheDocument();
+    });
+
+    it('a clone that finishes before the POST answers still completes (subscribed first)', async () => {
+        server.use(
+            http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
+                const { clone_id } = (await request.json()) as { clone_id: string };
+                // The runner's clone_completed beats the 202.
+                pushSse({
+                    type: 'clone_completed',
+                    cloneId: clone_id,
+                    status: 'ready',
+                    repo: makeProjectRepo({ name: 'web' }),
+                });
+                return HttpResponse.json({ clone_id, destination: '/ws/web' }, { status: 202 });
+            })
+        );
+        const onClose = renderDialog();
+        fireEvent.change(url(), { target: { value: 'https://github.com/acme/web.git' } });
+        await waitFor(() => expect(cloneButton()).toBeEnabled());
+        fireEvent.click(cloneButton());
         await waitFor(() => expect(onClose).toHaveBeenCalled());
         expect(screen.getByText('Repo added — web')).toBeInTheDocument();
     });
@@ -131,10 +167,12 @@ describe('AddRepoDialog', () => {
     });
 
     it('shows a failed clone and goes back to the form on "Edit details"', async () => {
+        let cloneId = '';
         server.use(
-            http.post(`${BASE}/projects/p1/repos`, () =>
-                HttpResponse.json({ clone_id: 'c2', destination: '/ws/web' }, { status: 202 })
-            )
+            http.post(`${BASE}/projects/p1/repos`, async ({ request }) => {
+                cloneId = ((await request.json()) as { clone_id: string }).clone_id;
+                return HttpResponse.json({ clone_id: cloneId, destination: '/ws/web' }, { status: 202 });
+            })
         );
         renderDialog();
         fireEvent.change(url(), { target: { value: 'https://github.com/acme/web.git' } });
@@ -142,7 +180,7 @@ describe('AddRepoDialog', () => {
         fireEvent.click(cloneButton());
         await screen.findByText('Cloning…');
 
-        pushSse({ type: 'clone_error', cloneId: 'c2', status: 'error', errorDetail: 'auth failed' });
+        pushSse({ type: 'clone_error', cloneId, status: 'error', errorDetail: 'auth failed' });
         expect(await screen.findByText('auth failed')).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole('button', { name: /edit details/i }));

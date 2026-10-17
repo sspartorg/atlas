@@ -9,6 +9,15 @@ describe('MarkdownPreview', () => {
         expect(screen.getByText(/Empty document/)).toBeInTheDocument();
     });
 
+    it('renders headings as real heading elements, one level under the card title', () => {
+        renderWithProviders(<MarkdownPreview source={'# One\n\n## Two\n\n### Three\n\n#### Four\n\n###### Six'} />);
+        expect(screen.getByRole('heading', { level: 3, name: 'One' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 4, name: 'Two' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 5, name: 'Three' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 6, name: 'Four' })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 6, name: 'Six' })).toBeInTheDocument();
+    });
+
     it('renders h1/h2/h3 + paragraph + bullets', () => {
         renderWithProviders(
             <MarkdownPreview

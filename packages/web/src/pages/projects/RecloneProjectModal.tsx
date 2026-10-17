@@ -289,7 +289,7 @@ export function RecloneProjectModal({ open, project, repo, displayId, onClose }:
                     </Typography>
                 </Box>
                 {view !== 'running' && (
-                    <IconButton onClick={handleClose} size="small">
+                    <IconButton onClick={handleClose} size="small" aria-label="Close">
                         <CloseRounded sx={{ color: ATLAS_PALETTE.slate60 }} />
                     </IconButton>
                 )}

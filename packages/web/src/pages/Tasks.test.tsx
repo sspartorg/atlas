@@ -59,6 +59,38 @@ function baseHandlers() {
 }
 
 describe('Tasks page', () => {
+    it('a failed task load says so with Retry, not an empty list; Retry recovers', async () => {
+        let fail = true;
+        server.use(
+            http.get(`${BASE}/tasks`, () =>
+                fail
+                    ? HttpResponse.json({ error: 'boom' }, { status: 500 })
+                    : HttpResponse.json([
+                          makeTaskListItem({ id: 'ATL-1', title: 'Refunds automation' }),
+                      ])
+            ),
+            ...baseHandlers()
+        );
+        renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
+        expect(await screen.findByText(/Could not load tasks/)).toBeInTheDocument();
+        expect(screen.queryByText(/No tasks/)).not.toBeInTheDocument();
+        fail = false;
+        fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+        expect(await screen.findByText('Refunds automation')).toBeInTheDocument();
+    });
+
+    it('a failed project load says so, not "No projects yet"', async () => {
+        server.use(
+            http.get(`${BASE}/projects`, () =>
+                HttpResponse.json({ error: 'boom' }, { status: 500 })
+            ),
+            ...baseHandlers()
+        );
+        renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
+        expect(await screen.findByText(/Could not load projects/)).toBeInTheDocument();
+        expect(screen.queryByText('No projects yet')).not.toBeInTheDocument();
+    });
+
     it('renders the All chip after data resolves', async () => {
         server.use(...baseHandlers());
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks'] });
@@ -339,7 +371,9 @@ describe('Tasks page', () => {
                 ])
             ),
             // The global stats no longer drive the subtitle.
-            http.get(`${BASE}/tasks/stats`, () => HttpResponse.json({ total: 9, awaiting_pickup: 7 })),
+            http.get(`${BASE}/tasks/stats`, () =>
+                HttpResponse.json({ total: 9, awaiting_pickup: 7 })
+            ),
             ...defaultHandlers
         );
         renderWithProviders(<Tasks />, { initialEntries: ['/tasks?project=Atlas&q=Queued'] });
@@ -450,7 +484,13 @@ describe('Tasks page', () => {
     it('a refused Kanban move shows one toast with the API reason', async () => {
         server.use(
             http.get(`${BASE}/tasks`, () =>
-                HttpResponse.json([makeTaskListItem({ id: 'ATL-1', title: 'Refunds automation', status: 'in_review' })])
+                HttpResponse.json([
+                    makeTaskListItem({
+                        id: 'ATL-1',
+                        title: 'Refunds automation',
+                        status: 'in_review',
+                    }),
+                ])
             ),
             ...baseHandlers(),
             http.patch(`${BASE}/tasks/:id/status`, () =>
@@ -458,7 +498,10 @@ describe('Tasks page', () => {
                     {
                         error: 'Cannot close ATL-1: 1 open child(ren): ATL-9',
                         kind: 'conflict',
-                        details: { parent_id: 'ATL-1', open_children: [{ id: 'ATL-9', status: 'in_progress' }] },
+                        details: {
+                            parent_id: 'ATL-1',
+                            open_children: [{ id: 'ATL-9', status: 'in_progress' }],
+                        },
                     },
                     { status: 422 }
                 )

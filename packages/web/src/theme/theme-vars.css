@@ -148,22 +148,22 @@
        against the dark canvas — see the matching block under
        [data-theme="dark"] below. */
     --atlas-status-draft-bg: #eef1f4;
-    --atlas-status-draft-fg: #727a87;
+    --atlas-status-draft-fg: #656c78;
     --atlas-status-draft-dot: #94a0ae;
     --atlas-status-ready-bg: #e0edf8;
-    --atlas-status-ready-fg: #4d87b0;
+    --atlas-status-ready-fg: #3e6d8e;
     --atlas-status-ready-dot: #5fa3d0;
     --atlas-status-in_progress-bg: #e5e8f4;
     --atlas-status-in_progress-fg: #5960ab;
     --atlas-status-in_progress-dot: #7b83d4;
     --atlas-status-waiting_for_info-bg: #fbe5c9;
-    --atlas-status-waiting_for_info-fg: #a06a30;
+    --atlas-status-waiting_for_info-fg: #8c5d2a;
     --atlas-status-waiting_for_info-dot: #d4914a;
     --atlas-status-in_review-bg: #f1e5ef;
-    --atlas-status-in_review-fg: #92558d;
+    --atlas-status-in_review-fg: #8d5288;
     --atlas-status-in_review-dot: #b57bb0;
     --atlas-status-done-bg: #ddece2;
-    --atlas-status-done-fg: #4a7c5c;
+    --atlas-status-done-fg: #437154;
     --atlas-status-done-dot: #6ea67e;
 }
 
@@ -289,22 +289,22 @@
        pastel chip reads as a calm tint on white and as a bright tag
        against the dark canvas. Single palette, both themes. */
     --atlas-status-draft-bg: #eef1f4;
-    --atlas-status-draft-fg: #727a87;
+    --atlas-status-draft-fg: #656c78;
     --atlas-status-draft-dot: #94a0ae;
     --atlas-status-ready-bg: #e0edf8;
-    --atlas-status-ready-fg: #4d87b0;
+    --atlas-status-ready-fg: #3e6d8e;
     --atlas-status-ready-dot: #5fa3d0;
     --atlas-status-in_progress-bg: #e5e8f4;
     --atlas-status-in_progress-fg: #5960ab;
     --atlas-status-in_progress-dot: #7b83d4;
     --atlas-status-waiting_for_info-bg: #fbe5c9;
-    --atlas-status-waiting_for_info-fg: #a06a30;
+    --atlas-status-waiting_for_info-fg: #8c5d2a;
     --atlas-status-waiting_for_info-dot: #d4914a;
     --atlas-status-in_review-bg: #f1e5ef;
-    --atlas-status-in_review-fg: #92558d;
+    --atlas-status-in_review-fg: #8d5288;
     --atlas-status-in_review-dot: #b57bb0;
     --atlas-status-done-bg: #ddece2;
-    --atlas-status-done-fg: #4a7c5c;
+    --atlas-status-done-fg: #437154;
     --atlas-status-done-dot: #6ea67e;
 }
 

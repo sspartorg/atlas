@@ -317,7 +317,7 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                     </Typography>
                 </Box>
                 {view !== 'deleting' && (
-                    <IconButton onClick={handleClose} size="small">
+                    <IconButton onClick={handleClose} size="small" aria-label="Close">
                         <CloseRounded sx={{ color: ATLAS_PALETTE.slate60 }} />
                     </IconButton>
                 )}
@@ -377,7 +377,10 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                         >
                             <Radio
                                 checked={mode === 'unregister'}
+                                onChange={() => setMode('unregister')}
+                                name="delete-mode"
                                 size="small"
+                                slotProps={{ input: { 'aria-label': 'Remove from Atlas only' } }}
                                 sx={{ p: 0, mt: 0.5 }}
                             />
                             <Box sx={{ flex: 1 }}>
@@ -426,7 +429,14 @@ export function DeleteProjectModal({ open, project, displayId, onClose }: Props)
                                 cursor: 'pointer',
                             }}
                         >
-                            <Radio checked={mode === 'purge'} size="small" sx={{ p: 0, mt: 0.5 }} />
+                            <Radio
+                                checked={mode === 'purge'}
+                                onChange={() => setMode('purge')}
+                                name="delete-mode"
+                                size="small"
+                                slotProps={{ input: { 'aria-label': 'Delete project and content' } }}
+                                sx={{ p: 0, mt: 0.5 }}
+                            />
                             <Box sx={{ flex: 1 }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <Typography

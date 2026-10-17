@@ -118,6 +118,8 @@ function LabeledField({ label, hint, tag, value, onChange, readOnly, mono }: Lab
                     },
                 }}
                 inputProps={{
+                    // The label above is a Typography, not an InputLabel: name the field.
+                    'aria-label': label,
                     style: mono ? { fontFamily: MONO, fontSize: 13 } : { fontSize: 13 },
                 }}
                 sx={{
@@ -167,6 +169,7 @@ function GuardRow({ label, sub, checked, onChange, disabled }: GuardRowProps) {
                 checked={checked}
                 onChange={(_, v) => onChange(v)}
                 disabled={Boolean(disabled)}
+                slotProps={{ input: { 'aria-label': label } }}
             />
         </Box>
     );
@@ -277,7 +280,7 @@ export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) 
                             in the background
                         </Typography>
                     </Box>
-                    <IconButton onClick={onClose} size="small" sx={{ mt: -0.5 }}>
+                    <IconButton onClick={onClose} size="small" aria-label="Close" sx={{ mt: -0.5 }}>
                         <CloseRounded />
                     </IconButton>
                 </Box>
@@ -306,6 +309,7 @@ export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) 
                             <Switch
                                 checked={enabled}
                                 onChange={(_, v) => update('enabled', v)}
+                                slotProps={{ input: { 'aria-label': 'Enable scheduled auto-fetch' } }}
                                 sx={{ mt: -0.5 }}
                             />
                             <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -488,7 +492,8 @@ export function AutoFetchScheduleModal({ open, project, repo, onClose }: Props) 
                                 sx={{
                                     textTransform: 'none',
                                     fontWeight: 600,
-                                    bgcolor: ATLAS_PALETTE.success,
+                                    // The primary-button fill (white on success green was 2.9:1).
+                                    bgcolor: ATLAS_PALETTE.green,
                                     '&:hover': { bgcolor: ATLAS_PALETTE.greenDark },
                                     px: 2.5,
                                 }}

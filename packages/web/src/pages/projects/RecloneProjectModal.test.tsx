@@ -84,6 +84,13 @@ describe('RecloneProjectModal — confirm view', () => {
         expect(screen.getByText('Acme')).toBeInTheDocument();
     });
 
+    it('names its Close button', () => {
+        renderWithProviders(
+            <RecloneProjectModal open project={project} repo={repo} displayId="ACM" onClose={vi.fn()} />
+        );
+        expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    });
+
     it('shows git status once loaded', async () => {
         renderWithProviders(
             <RecloneProjectModal

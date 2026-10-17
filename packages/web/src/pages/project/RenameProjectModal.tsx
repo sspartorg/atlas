@@ -127,7 +127,7 @@ export function RenameProjectModal({ open, project, displayId, onClose }: Props)
                             are unaffected.
                         </Typography>
                     </Box>
-                    <IconButton onClick={onClose} size="small" disabled={updateProject.isPending}>
+                    <IconButton onClick={onClose} size="small" aria-label="Close" disabled={updateProject.isPending}>
                         <CloseRounded />
                     </IconButton>
                 </Box>

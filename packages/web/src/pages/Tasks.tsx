@@ -27,6 +27,7 @@ import type { IssueStatus, ITaskListItem } from '@atlas/shared';
 import { PageFab, useSetPageTitle } from '../components/shell/index.js';
 import { useIsMobile } from '../hooks/useIsMobile.js';
 import { PageHeader } from '../components/PageHeader.js';
+import { RetryAlert } from '../components/ApiErrorAlert.js';
 
 // Search matches the id too, so "ETM-1" finds the Task (as the link picker does).
 function matchesSearch(t: ITaskListItem, q: string): boolean {
@@ -53,7 +54,7 @@ export function Tasks() {
     const searchQuery = params.get('q') ?? '';
     const showArchived = params.get('include_archived') === 'true';
 
-    const { data: projects = [] } = useProjects();
+    const { data: projects = [], error: projectsError, refetch: refetchProjects } = useProjects();
     const { data: agents = [] } = useAgents();
     const { data: settings } = useSettings();
 
@@ -63,7 +64,12 @@ export function Tasks() {
         : undefined;
     const projectId = project?.id;
 
-    const { data: scopedTasks = [], isLoading } = useTasks(projectId, showArchived);
+    const {
+        data: scopedTasks = [],
+        isLoading,
+        error: tasksError,
+        refetch: refetchTasks,
+    } = useTasks(projectId, showArchived);
 
     const ownerName = settings?.owner_name ?? 'Owner';
     const ownerAccent = settings?.accent_color ?? ATLAS_PALETTE.slate;
@@ -188,6 +194,13 @@ export function Tasks() {
                         />
                     ))}
                 </Box>
+            ) : projectsError || (tasksError && scopedTasks.length === 0) ? (
+                // A failed load is not an empty list.
+                <RetryAlert
+                    error={projectsError ?? tasksError}
+                    label={projectsError ? 'Could not load projects' : 'Could not load tasks'}
+                    onRetry={() => void (projectsError ? refetchProjects() : refetchTasks())}
+                />
             ) : projects.length === 0 ? (
                 <Box
                     sx={{
